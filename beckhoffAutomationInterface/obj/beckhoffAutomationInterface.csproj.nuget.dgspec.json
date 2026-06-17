@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj",
+        "projectName": "beckhoffAutomationInterface",
+        "projectPath": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj",
+        "packagesPath": "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\BhanuKiranChaluvadi\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "framework": "net48",
+            "targetAlias": "net48",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.300"
+      },
+      "frameworks": {
+        "net48": {
+          "framework": "net48",
+          "targetAlias": "net48",
+          "dependencies": {
+            "EnvDTE": {
+              "target": "Package",
+              "version": "[8.0.2, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301\\RuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win-x64": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

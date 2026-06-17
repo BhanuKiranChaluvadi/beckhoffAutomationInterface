@@ -1,0 +1,143 @@
+{
+  "version": 4,
+  "targets": {
+    "net48": {
+      "EnvDTE/8.0.2": {
+        "type": "package",
+        "dependencies": {
+          "stdole": "7.0.3302"
+        },
+        "compile": {
+          "lib/net10/EnvDTE.dll": {}
+        },
+        "runtime": {
+          "lib/net10/EnvDTE.dll": {}
+        }
+      },
+      "stdole/7.0.3302": {
+        "type": "package",
+        "compile": {
+          "lib/net10/stdole.dll": {}
+        },
+        "runtime": {
+          "lib/net10/stdole.dll": {}
+        }
+      }
+    },
+    "net48/win-x64": {
+      "EnvDTE/8.0.2": {
+        "type": "package",
+        "dependencies": {
+          "stdole": "7.0.3302"
+        },
+        "compile": {
+          "lib/net10/EnvDTE.dll": {}
+        },
+        "runtime": {
+          "lib/net10/EnvDTE.dll": {}
+        }
+      },
+      "stdole/7.0.3302": {
+        "type": "package",
+        "compile": {
+          "lib/net10/stdole.dll": {}
+        },
+        "runtime": {
+          "lib/net10/stdole.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "EnvDTE/8.0.2": {
+      "sha512": "u8Blk4h4kYywOVR5kgApLe1gbEj5BDAhK1k21nYv1gDmmISS3efziVN1j6REoiqROk7XuMX2Kk87Kv0whFqLBA==",
+      "type": "package",
+      "path": "envdte/8.0.2",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "envdte.8.0.2.nupkg.sha512",
+        "envdte.nuspec",
+        "lib/net10/EnvDTE.dll"
+      ]
+    },
+    "stdole/7.0.3302": {
+      "sha512": "2314LjTYA+nRknLNzqKY/qrJH21jKhEp/bMTOCTPyidoVYI+3EtyI73Y91NOzCFP2OgzeYnk+uKbTWWuGIMLjA==",
+      "type": "package",
+      "path": "stdole/7.0.3302",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/net10/stdole.dll",
+        "stdole.7.0.3302.nupkg.sha512",
+        "stdole.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net48": [
+      "EnvDTE >= 8.0.2"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj",
+      "projectName": "beckhoffAutomationInterface",
+      "projectPath": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj",
+      "packagesPath": "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\BhanuKiranChaluvadi\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net48"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net48": {
+          "framework": "net48",
+          "targetAlias": "net48",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.300"
+    },
+    "frameworks": {
+      "net48": {
+        "framework": "net48",
+        "targetAlias": "net48",
+        "dependencies": {
+          "EnvDTE": {
+            "target": "Package",
+            "version": "[8.0.2, )"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301\\RuntimeIdentifierGraph.json"
+      }
+    },
+    "runtimes": {
+      "win-x64": {
+        "#import": []
+      }
+    }
+  }
+}
