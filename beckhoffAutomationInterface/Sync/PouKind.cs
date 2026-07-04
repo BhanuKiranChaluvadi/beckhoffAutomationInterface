@@ -6,9 +6,11 @@ namespace BeckhoffAutomationInterface.Sync
         Program,
         FunctionBlock,
         Function,
+        Interface,
         Method,
         EnumDut,
         StructDut,
+        AliasDut,
         Gvl
     }
 }

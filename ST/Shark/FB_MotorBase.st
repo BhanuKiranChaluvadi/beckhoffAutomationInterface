@@ -1,0 +1,9 @@
+{abstract}
+FUNCTION_BLOCK FB_MotorBase
+VAR
+END_VAR
+
+{abstract}
+METHOD Stop : BOOL
+VAR_INPUT
+END_VAR

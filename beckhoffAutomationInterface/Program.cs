@@ -51,6 +51,32 @@ namespace BeckhoffAutomationInterface
             throw new TimeoutException("Visual Studio did not finish loading within the timeout period.");
         }
 
+        /// <summary>
+        /// Retries a COM call that can transiently fail with RPC_E_SERVERCALL_RETRYLATER
+        /// (0x8001010A) when Visual Studio's background compiler/IntelliSense is still
+        /// busy right after a large batch of tree changes (observed after syncing 16+
+        /// PLC objects in one pass, immediately followed by a library reference call).
+        /// </summary>
+        static void RetryOnBusy(Action action, string description)
+        {
+            int elapsed = 0;
+            while (true)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (COMException ex) when ((uint)ex.HResult == RPC_E_SERVERCALL_RETRYLATER && elapsed < VS_LOAD_TIMEOUT_MS)
+                {
+                    Console.WriteLine("{0}: Visual Studio is busy ({1}), retrying in 1s... ({2}s elapsed)",
+                        Now(), description, elapsed / 1000);
+                    Thread.Sleep(VS_LOAD_RETRY_INTERVAL_MS);
+                    elapsed += VS_LOAD_RETRY_INTERVAL_MS;
+                }
+            }
+        }
+
         static void Main(string[] args)
         {
             // Configuration
@@ -95,6 +121,27 @@ namespace BeckhoffAutomationInterface
             WaitForVsToLoad(dte);
             Console.WriteLine("{0}: Visual Studio is ready.", Now());
 
+            try
+            {
+                RunSync(dte, standardPlcProjectTemplate, plcName, solutionName, solutionDirectory,
+                    solutionFilePath, stSourceFolder, twincatTemplate, pousTreePath, dutsTreePath,
+                    gvlsTreePath, referencesTreePath, libraryManifestPath);
+            }
+            finally
+            {
+                // Ensure Visual Studio always shuts down, even on failure \u2014 otherwise every
+                // run (successful or not) leaks a devenv.exe process, which eventually causes
+                // COM calls to fail with RPC_E_SERVERCALL_RETRYLATER as instances pile up.
+                Console.WriteLine("{0}: Closing Visual Studio...", Now());
+                dte.Quit();
+            }
+        }
+
+        static void RunSync(EnvDTE80.DTE2 dte, string standardPlcProjectTemplate, string plcName,
+            string solutionName, string solutionDirectory, string solutionFilePath, string stSourceFolder,
+            string twincatTemplate, string pousTreePath, string dutsTreePath, string gvlsTreePath,
+            string referencesTreePath, string libraryManifestPath)
+        {
             EnvDTE.Project project;
             ITcSysManager sysManager;
 
@@ -185,7 +232,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Syncing {1} library reference(s)...", Now(), desiredLibraries.Count);
             ITcSmTreeItem referencesItem = sysManager.LookupTreeItem(referencesTreePath);
             ITcPlcLibraryManager libManager = (ITcPlcLibraryManager)referencesItem;
-            LibrarySyncReport libraryReport = LibrarySyncEngine.Sync(libManager, desiredLibraries);
+            LibrarySyncReport libraryReport = null;
+            RetryOnBusy(() => libraryReport = LibrarySyncEngine.Sync(libManager, desiredLibraries), "syncing library references");
 
             foreach (string name in libraryReport.Added) Console.WriteLine("    + added    {0}", name);
             foreach (string name in libraryReport.Removed) Console.WriteLine("    - removed  {0}", name);
@@ -196,7 +244,8 @@ namespace BeckhoffAutomationInterface
 
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());
-            BuildReport buildReport = BuildRunner.Build(dte);
+            BuildReport buildReport = null;
+            RetryOnBusy(() => buildReport = BuildRunner.Build(dte), "building solution");
 
             if (buildReport.Success)
             {

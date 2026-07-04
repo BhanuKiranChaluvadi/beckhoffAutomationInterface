@@ -15,19 +15,27 @@ namespace BeckhoffAutomationInterface.Sync
 
         public string DeclarationText { get; }
 
-        /// <summary>Null for DUTs (ENUM/STRUCT), which have no implementation section.</summary>
+        /// <summary>Null for DUTs (ENUM/STRUCT/ALIAS), which have no implementation section.</summary>
         public string ImplementationText { get; }
 
-        public StPouSource(string name, PouKind kind, string ownerName, string declarationText, string implementationText)
+        /// <summary>
+        /// For Kind == AliasDut: the aliased base type (e.g. "LREAL"), required by
+        /// TwinCAT's CreateChild as the vInfo parameter. For Kind == FunctionBlock
+        /// or Interface: the EXTENDS target, if any (null otherwise).
+        /// </summary>
+        public string BaseType { get; }
+
+        public StPouSource(string name, PouKind kind, string ownerName, string declarationText, string implementationText, string baseType = null)
         {
             Name = name;
             Kind = kind;
             OwnerName = ownerName;
             DeclarationText = declarationText;
             ImplementationText = implementationText;
+            BaseType = baseType;
         }
 
-        public bool IsDut => Kind == PouKind.EnumDut || Kind == PouKind.StructDut;
+        public bool IsDut => Kind == PouKind.EnumDut || Kind == PouKind.StructDut || Kind == PouKind.AliasDut;
         public bool IsMethod => Kind == PouKind.Method;
         public bool IsGvl => Kind == PouKind.Gvl;
     }

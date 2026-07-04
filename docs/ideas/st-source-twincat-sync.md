@@ -151,6 +151,64 @@ create (GVL + library added), then two idempotent re-syncs (both reporting
 0 created/added, correct "updated" counts, no spurious errors), all with a
 clean build.
 
+## Extended 2026-07-05 (later same day): INTERFACE, ALIAS type, EXTENDS, abstract methods, PUBLIC/PRIVATE
+Added the remaining OOP-flavored IEC 61131-3 constructs, all validated
+against the live Shark project (`I_Motor`, `T_MotorSpeed`, `FB_MotorBase`):
+- **INTERFACE** (`TREEITEMTYPE_PLCITF` = 618) with inline `METHOD` signatures
+  (no body) using `TREEITEMTYPE_PLCITFMETH` (610) — a *different* type id
+  than FB methods (609). Same single-file convention as FUNCTION_BLOCK
+  (`I_Motor.st` contains `INTERFACE I_Motor ... METHOD Init ... METHOD
+  Reset ...`); `StFileParser` now shares one `FindMethodBoundaries`/
+  `ParseMethodSegments` helper between FB and INTERFACE parsing.
+- **ALIAS DUT** (`TYPE T_MotorSpeed : LREAL; END_TYPE`) — detected when a
+  `TYPE` file contains neither `STRUCT` nor `(` (enum literal list).
+- **EXTENDS** for FUNCTION_BLOCK and INTERFACE, and **IMPLEMENTS** for
+  FUNCTION_BLOCK — `StPouSource.BaseType` now carries the EXTENDS/alias
+  target, extracted via regex from the header line.
+- **Abstract FUNCTION_BLOCK/METHOD** — just an `{attribute 'abstract'}`-style
+  pragma (`{abstract}`) before the keyword; no engine changes needed since
+  attribute-pragma lines were already preserved as part of the declaration.
+- **PUBLIC/PRIVATE method modifiers** (`METHOD PUBLIC Init : BOOL`) — fixed
+  `MethodHeaderRegex` to skip an optional access-modifier keyword before
+  capturing the method name (previously "PUBLIC"/"PRIVATE" would have been
+  misparsed as the method name itself).
+
+Three more real bugs found only by running against TwinCAT, each with a
+different, non-obvious `CreateChild` `vInfo` requirement:
+- **INTERFACE requires a non-null base-class string even with no EXTENDS**
+  — `""` means "no base interface"; passing `null` throws "Base class not
+  specified!".
+- **ALIAS requires the aliased base type name as `vInfo`** (e.g. `"LREAL"`)
+  — omitting it throws the same "Base class not specified!" error.
+  (`{attribute}`-style pragmas on aliases weren't the issue; the missing
+  base type was.)
+- **FUNCTION_BLOCK is the opposite of INTERFACE**: it requires `null` when
+  there's no EXTENDS (passing `""` throws "Must specify valid information
+  for parsing in the string") and the actual base FB name only when EXTENDS
+  is present. So the same `vInfo` rule cannot be shared across kinds —
+  `PouSyncEngine` now branches per-kind explicitly.
+
+Also found and fixed two reliability issues unrelated to any single kind:
+- **`Program.cs` never called `dte.Quit()`**, even on success — every run
+  (crashed or not) leaked a `devenv.exe` process. Five had accumulated
+  across this session's testing, and once enough piled up, COM calls
+  started failing with `RPC_E_SERVERCALL_RETRYLATER` ("the application is
+  busy") purely from resource contention. Fixed with a `try/finally`
+  around the whole sync so VS always closes.
+- **`RPC_E_SERVERCALL_RETRYLATER` can also happen transiently right after
+  a large sync** (16 objects in one pass), while VS's background
+  compiler/IntelliSense is still catching up, causing the very next COM
+  call (`AddLibrary`) to fail. Generalized the existing `WaitForVsToLoad`
+  retry pattern into a `RetryOnBusy(action, description)` helper and
+  wrapped the library-sync and build steps with it.
+
+After all fixes, a clean run synced all 16 objects (FB with EXTENDS +
+IMPLEMENTS + abstract override + public/private methods, an interface with
+methods, an alias, two DUTs, a GVL, a program, and a function) with 0
+errors, and a second consecutive run reported 0 created / 16 updated / 0
+deleted with no transient failures and a clean VS shutdown (no leaked
+processes).
+
 ## MVP Scope
 One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.

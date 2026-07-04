@@ -1,0 +1,2 @@
+TYPE T_MotorSpeed : LREAL;
+END_TYPE

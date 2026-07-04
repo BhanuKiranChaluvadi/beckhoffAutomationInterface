@@ -10,12 +10,12 @@ namespace BeckhoffAutomationInterface.Sync
     /// Reconciles a folder of .st files against a TwinCAT PLC project: creates
     /// missing PLC objects, updates existing ones, and deletes any that no
     /// longer have a corresponding .st file. Handles four tiers:
-    ///   1. Top-level POUs (PROGRAM/FUNCTION_BLOCK/FUNCTION) under the POUs folder.
-    ///   2. Top-level DUTs (ENUM/STRUCT) under the DUTs folder.
+    ///   1. Top-level POUs (PROGRAM/FUNCTION_BLOCK/FUNCTION/INTERFACE) under the POUs folder.
+    ///   2. Top-level DUTs (ENUM/STRUCT/ALIAS) under the DUTs folder.
     ///   3. Top-level GVLs under the GVLs folder.
-    ///   4. METHODs, which are children of their owning FUNCTION_BLOCK (not the
-    ///      POUs folder directly), synced/pruned per-FB after the FBs themselves
-    ///      have been created/updated.
+    ///   4. METHODs, which are children of their owning FUNCTION_BLOCK or
+    ///      INTERFACE (not the POUs folder directly), synced/pruned per-owner
+    ///      after the owner itself has been created/updated.
     ///
     /// Validated end-to-end in docs/ideas/st-source-twincat-sync.md (2026-07-04):
     /// text injection via ITcPlcDeclaration/ITcPlcImplementation, object creation
@@ -63,8 +63,28 @@ namespace BeckhoffAutomationInterface.Sync
 
             foreach (StPouSource source in desired)
             {
+                Console.WriteLine("    ... syncing {0} '{1}' (type={2})...", source.Kind, source.Name, (int)KindToTreeItemType(source.Kind));
                 string path = $"{parentTreePath}^{source.Name}";
-                ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), out bool isNew);
+                // Some tree item kinds require a non-null "base class" in CreateChild's vInfo,
+                // and the exact rule differs by kind (found only by testing against real TwinCAT):
+                //   - ALIAS: the aliased base type (e.g. "LREAL") is always mandatory.
+                //   - INTERFACE: requires a specified string even with no EXTENDS \u2014 "" means
+                //     "no base interface"; passing null throws "Base class not specified!".
+                //   - FUNCTION_BLOCK: the opposite \u2014 requires null when there's no EXTENDS
+                //     (passing "" throws "Must specify valid information for parsing"), and the
+                //     actual base FB name when EXTENDS is present.
+                // Everything else (PROGRAM/FUNCTION/ENUM/STRUCT/GVL) accepts null.
+                object vInfo;
+                if (source.Kind == PouKind.AliasDut)
+                    vInfo = source.BaseType;
+                else if (source.Kind == PouKind.Interface)
+                    vInfo = source.BaseType ?? "";
+                else if (source.Kind == PouKind.FunctionBlock)
+                    vInfo = source.BaseType;
+                else
+                    vInfo = null;
+
+                ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), vInfo, out bool isNew);
 
                 ((ITcPlcDeclaration)item).DeclarationText = source.DeclarationText;
                 if (source.ImplementationText != null)
@@ -76,45 +96,60 @@ namespace BeckhoffAutomationInterface.Sync
             DeleteOrphans(folder, desiredNames, report);
         }
 
-        void SyncMethods(List<StPouSource> desiredFunctionBlocks, List<StPouSource> desiredMethods, SyncReport report)
+        void SyncMethods(List<StPouSource> desiredOwners, List<StPouSource> desiredMethods, SyncReport report)
         {
-            var fbNames = new HashSet<string>(
-                desiredFunctionBlocks.Where(s => s.Kind == PouKind.FunctionBlock).Select(s => s.Name));
+            var ownerKindByName = desiredOwners
+                .Where(s => s.Kind == PouKind.FunctionBlock || s.Kind == PouKind.Interface)
+                .ToDictionary(s => s.Name, s => s.Kind);
 
             var methodsByOwner = desiredMethods
                 .GroupBy(m => m.OwnerName)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            foreach (string unknownOwner in methodsByOwner.Keys.Except(fbNames))
+            foreach (string unknownOwner in methodsByOwner.Keys.Except(ownerKindByName.Keys))
                 throw new InvalidOperationException(
-                    $"Method file(s) reference unknown FUNCTION_BLOCK owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
+                    $"Method file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 
-            foreach (string fbName in fbNames)
+            foreach (var owner in ownerKindByName)
             {
-                string ownerPath = $"{_pousTreePath}^{fbName}";
+                string ownerName = owner.Key;
+                bool isInterfaceOwner = owner.Value == PouKind.Interface;
+                TREEITEMTYPES methodType = isInterfaceOwner
+                    ? TREEITEMTYPES.TREEITEMTYPE_PLCITFMETH
+                    : TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD;
+
+                string ownerPath = $"{_pousTreePath}^{ownerName}";
                 ITcSmTreeItem ownerItem = _sysManager.LookupTreeItem(ownerPath);
 
-                List<StPouSource> methodsForFb = methodsByOwner.TryGetValue(fbName, out var list)
+                List<StPouSource> methodsForOwner = methodsByOwner.TryGetValue(ownerName, out var list)
                     ? list
                     : new List<StPouSource>();
-                var desiredMethodNames = new HashSet<string>(methodsForFb.Select(m => m.Name));
+                var desiredMethodNames = new HashSet<string>(methodsForOwner.Select(m => m.Name));
 
-                foreach (StPouSource method in methodsForFb)
+                foreach (StPouSource method in methodsForOwner)
                 {
                     string path = $"{ownerPath}^{method.Name}";
-                    ITcSmTreeItem item = CreateOrGet(ownerItem, path, method.Name, TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD, out bool isNew);
+                    ITcSmTreeItem item = CreateOrGet(ownerItem, path, method.Name, methodType, null, out bool isNew);
 
                     ((ITcPlcDeclaration)item).DeclarationText = method.DeclarationText;
-                    ((ITcPlcImplementation)item).ImplementationText = method.ImplementationText;
+                    try
+                    {
+                        ((ITcPlcImplementation)item).ImplementationText = method.ImplementationText;
+                    }
+                    catch (InvalidCastException) when (isInterfaceOwner)
+                    {
+                        // Interface method signatures have no implementation body in TwinCAT;
+                        // some TwinCAT versions don't expose ITcPlcImplementation on them at all.
+                    }
 
-                    (isNew ? report.Created : report.Updated).Add($"{fbName}.{method.Name}");
+                    (isNew ? report.Created : report.Updated).Add($"{ownerName}.{method.Name}");
                 }
 
-                DeleteOrphans(ownerItem, desiredMethodNames, report, prefix: fbName + ".");
+                DeleteOrphans(ownerItem, desiredMethodNames, report, prefix: ownerName + ".");
             }
         }
 
-        ITcSmTreeItem CreateOrGet(ITcSmTreeItem parent, string path, string name, TREEITEMTYPES kind, out bool isNew)
+        ITcSmTreeItem CreateOrGet(ITcSmTreeItem parent, string path, string name, TREEITEMTYPES kind, object vInfo, out bool isNew)
         {
             try
             {
@@ -125,7 +160,7 @@ namespace BeckhoffAutomationInterface.Sync
             catch (COMException)
             {
                 isNew = true;
-                return parent.CreateChild(name, (int)kind, "", null);
+                return parent.CreateChild(name, (int)kind, "", vInfo);
             }
         }
 
@@ -154,8 +189,10 @@ namespace BeckhoffAutomationInterface.Sync
                 case PouKind.Program: return TREEITEMTYPES.TREEITEMTYPE_PLCPOUPROG;
                 case PouKind.FunctionBlock: return TREEITEMTYPES.TREEITEMTYPE_PLCPOUFB;
                 case PouKind.Function: return TREEITEMTYPES.TREEITEMTYPE_PLCPOUFUNC;
+                case PouKind.Interface: return TREEITEMTYPES.TREEITEMTYPE_PLCITF;
                 case PouKind.EnumDut: return TREEITEMTYPES.TREEITEMTYPE_PLCDUTENUM;
                 case PouKind.StructDut: return TREEITEMTYPES.TREEITEMTYPE_PLCDUTSTRUCT;
+                case PouKind.AliasDut: return TREEITEMTYPES.TREEITEMTYPE_PLCDUTALIAS;
                 case PouKind.Gvl: return TREEITEMTYPES.TREEITEMTYPE_PLCGVL;
                 default: throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported top-level PouKind.");
             }
