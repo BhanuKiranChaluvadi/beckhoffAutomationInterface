@@ -63,6 +63,9 @@ namespace BeckhoffAutomationInterface
             string twincatTemplate = @"C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\PrjTemplate\TwinCAT Project.tsproj";
             string pousTreePath = string.Format("TIPC^{0}^{0} Project^POUs", plcName);
             string dutsTreePath = string.Format("TIPC^{0}^{0} Project^DUTs", plcName);
+            string gvlsTreePath = string.Format("TIPC^{0}^{0} Project^GVLs", plcName);
+            string referencesTreePath = string.Format("TIPC^{0}^{0} Project^References", plcName);
+            string libraryManifestPath = Path.Combine(stSourceFolder, "libraries.xml");
 
             // Pre-flight checks
             if (!File.Exists(twincatTemplate))
@@ -164,7 +167,7 @@ namespace BeckhoffAutomationInterface
             var desiredPous = StFileParser.ParseFolder(stSourceFolder);
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            var syncEngine = new PouSyncEngine(sysManager, pousTreePath, dutsTreePath);
+            var syncEngine = new PouSyncEngine(sysManager, pousTreePath, dutsTreePath, gvlsTreePath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);
 
             foreach (string name in syncReport.Created) Console.WriteLine("    + created  {0}", name);
@@ -174,6 +177,22 @@ namespace BeckhoffAutomationInterface
             project.Save();
             Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted).",
                 Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count);
+
+            // Sync library references from libraries.xml (config data, not .st source)
+            Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), libraryManifestPath);
+            var desiredLibraries = LibraryManifestParser.Parse(libraryManifestPath);
+
+            Console.WriteLine("{0}: Syncing {1} library reference(s)...", Now(), desiredLibraries.Count);
+            ITcSmTreeItem referencesItem = sysManager.LookupTreeItem(referencesTreePath);
+            ITcPlcLibraryManager libManager = (ITcPlcLibraryManager)referencesItem;
+            LibrarySyncReport libraryReport = LibrarySyncEngine.Sync(libManager, desiredLibraries);
+
+            foreach (string name in libraryReport.Added) Console.WriteLine("    + added    {0}", name);
+            foreach (string name in libraryReport.Removed) Console.WriteLine("    - removed  {0}", name);
+
+            project.Save();
+            Console.WriteLine("{0}: Library sync complete ({1} added, {2} removed).",
+                Now(), libraryReport.Added.Count, libraryReport.Removed.Count);
 
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());

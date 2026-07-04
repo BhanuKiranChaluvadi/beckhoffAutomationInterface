@@ -117,13 +117,48 @@ After consolidating the FB + its two methods into a single `FB_Motor.st`
 file, a re-run correctly matched all three as updates (not create/delete)
 and still built clean.
 
+## Extended 2026-07-05: GVLs and library references
+Added the last two pieces of the original "config-as-data for everything
+else" idea, both validated against the live Shark project:
+- **GVL** — detected via a file whose first keyword is `VAR_GLOBAL` (e.g.
+  `GVL_Shark.st`); like DUTs, a GVL has no Implementation section, so only
+  `DeclarationText` (the whole file, including any `{attribute ...}` pragma)
+  is set. Synced into the project's `GVLs` folder via `TREEITEMTYPE_PLCGVL`
+  (615) — same `PouSyncEngine.SyncTopLevel` machinery as POUs/DUTs, just a
+  third tier and tree path.
+- **Library references** — not IEC source, so they don't fit the `.st`
+  convention; instead a small `libraries.xml` manifest (`<Library Name="..."
+  Version="..." Company="..." />`) is parsed by `LibraryManifestParser` and
+  reconciled by `LibrarySyncEngine` against `ITcPlcLibraryManager`
+  (`sysManager.LookupTreeItem("TIPC^Shark^Shark Project^References")` cast to
+  `ITcPlcLibraryManager`), using `AddLibrary`/`RemoveReference`.
+
+Two real bugs were found and fixed only by actually running this against
+TwinCAT (not guessable from docs alone):
+- **`ITcPlcReferences` is 0-based** — unlike `ITcSmTreeItem.Child`/`ErrorItems`
+  (both 1-based), enumerating it with a 1-based loop threw
+  `ArgumentOutOfRangeException`. Fixed to `for (int i = 0; i < references.Count; i++)`.
+- **Our own duplicate-reference pre-check (reading `.References`) can be
+  stale/incomplete right after (re)opening a project.** A second run against
+  an already-synced project threw `ArgumentException: Managed Library
+  '...' already contained!` from `AddLibrary` itself, even though our
+  pre-check said it wasn't present. Fixed by treating that specific
+  exception as an idempotent no-op — `AddLibrary`'s internal check is more
+  authoritative than our own collection read.
+
+After both fixes, three consecutive runs against the live project confirmed:
+create (GVL + library added), then two idempotent re-syncs (both reporting
+0 created/added, correct "updated" counts, no spurious errors), all with a
+clean build.
+
 ## MVP Scope
 One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.
 - In: file->POU create/update/delete engine, direct text injection,
   build trigger, console pass/fail + error output, drift check.
-- Out (for now): GVLs, library references, IO mapping/activation,
-  watch mode, CLI/CI packaging, multi-target/team features.
+- Out (for now): IO mapping/activation, watch mode, CLI/CI packaging,
+  multi-target/team features. (GVLs and library references, originally
+  listed here as deferred, are now implemented — see above.)
 
 ## Not Doing (and Why)
 - Full-project rebuild on every run — too slow/destructive once I/O

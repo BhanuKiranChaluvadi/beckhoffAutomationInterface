@@ -8,6 +8,7 @@ namespace BeckhoffAutomationInterface.Sync
         Function,
         Method,
         EnumDut,
-        StructDut
+        StructDut,
+        Gvl
     }
 }

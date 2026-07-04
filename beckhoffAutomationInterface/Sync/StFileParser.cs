@@ -56,7 +56,7 @@ namespace BeckhoffAutomationInterface.Sync
                 name = fileName.Substring(dotIndex + 1);
             }
 
-            if (kind == PouKind.EnumDut || kind == PouKind.StructDut)
+            if (kind == PouKind.EnumDut || kind == PouKind.StructDut || kind == PouKind.Gvl)
                 return new List<StPouSource> { new StPouSource(name, kind, null, source.Trim(), null) };
 
             (string declaration, string implementation) = SplitAtLastEndVar(source, stFilePath, name);
@@ -157,6 +157,7 @@ namespace BeckhoffAutomationInterface.Sync
                 if (upper.StartsWith("FUNCTION")) return PouKind.Function;
                 if (upper.StartsWith("PROGRAM")) return PouKind.Program;
                 if (upper.StartsWith("METHOD")) return PouKind.Method;
+                if (upper.StartsWith("VAR_GLOBAL")) return PouKind.Gvl;
                 if (upper.StartsWith("TYPE"))
                     return source.ToUpperInvariant().Contains("STRUCT") ? PouKind.StructDut : PouKind.EnumDut;
 

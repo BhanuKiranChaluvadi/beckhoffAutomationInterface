@@ -9,10 +9,11 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>
     /// Reconciles a folder of .st files against a TwinCAT PLC project: creates
     /// missing PLC objects, updates existing ones, and deletes any that no
-    /// longer have a corresponding .st file. Handles three tiers:
+    /// longer have a corresponding .st file. Handles four tiers:
     ///   1. Top-level POUs (PROGRAM/FUNCTION_BLOCK/FUNCTION) under the POUs folder.
     ///   2. Top-level DUTs (ENUM/STRUCT) under the DUTs folder.
-    ///   3. METHODs, which are children of their owning FUNCTION_BLOCK (not the
+    ///   3. Top-level GVLs under the GVLs folder.
+    ///   4. METHODs, which are children of their owning FUNCTION_BLOCK (not the
     ///      POUs folder directly), synced/pruned per-FB after the FBs themselves
     ///      have been created/updated.
     ///
@@ -26,23 +27,27 @@ namespace BeckhoffAutomationInterface.Sync
         readonly ITcSysManager _sysManager;
         readonly string _pousTreePath;
         readonly string _dutsTreePath;
+        readonly string _gvlsTreePath;
 
-        public PouSyncEngine(ITcSysManager sysManager, string pousTreePath, string dutsTreePath)
+        public PouSyncEngine(ITcSysManager sysManager, string pousTreePath, string dutsTreePath, string gvlsTreePath)
         {
             _sysManager = sysManager;
             _pousTreePath = pousTreePath;
             _dutsTreePath = dutsTreePath;
+            _gvlsTreePath = gvlsTreePath;
         }
 
         public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources)
         {
             var report = new SyncReport();
 
-            List<StPouSource> topLevelPous = desiredSources.Where(s => !s.IsDut && !s.IsMethod).ToList();
+            List<StPouSource> topLevelPous = desiredSources.Where(s => !s.IsDut && !s.IsMethod && !s.IsGvl).ToList();
             List<StPouSource> duts = desiredSources.Where(s => s.IsDut).ToList();
+            List<StPouSource> gvls = desiredSources.Where(s => s.IsGvl).ToList();
 
             SyncTopLevel(_pousTreePath, topLevelPous, report);
             SyncTopLevel(_dutsTreePath, duts, report);
+            SyncTopLevel(_gvlsTreePath, gvls, report);
             SyncMethods(topLevelPous, desiredSources.Where(s => s.IsMethod).ToList(), report);
 
             return report;
@@ -151,6 +156,7 @@ namespace BeckhoffAutomationInterface.Sync
                 case PouKind.Function: return TREEITEMTYPES.TREEITEMTYPE_PLCPOUFUNC;
                 case PouKind.EnumDut: return TREEITEMTYPES.TREEITEMTYPE_PLCDUTENUM;
                 case PouKind.StructDut: return TREEITEMTYPES.TREEITEMTYPE_PLCDUTSTRUCT;
+                case PouKind.Gvl: return TREEITEMTYPES.TREEITEMTYPE_PLCGVL;
                 default: throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unsupported top-level PouKind.");
             }
         }

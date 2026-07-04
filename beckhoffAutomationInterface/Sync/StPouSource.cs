@@ -29,5 +29,6 @@ namespace BeckhoffAutomationInterface.Sync
 
         public bool IsDut => Kind == PouKind.EnumDut || Kind == PouKind.StructDut;
         public bool IsMethod => Kind == PouKind.Method;
+        public bool IsGvl => Kind == PouKind.Gvl;
     }
 }
