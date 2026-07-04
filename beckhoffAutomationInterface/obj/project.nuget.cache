@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "agEERcqgGq0=",
+  "dgSpecHash": "Ed3VTpkCmvY=",
   "success": true,
   "projectFilePath": "C:\\Users\\BhanuKiranChaluvadi\\Documents\\Tutorials\\beckhoffAutomationInterface\\beckhoffAutomationInterface\\beckhoffAutomationInterface.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\envdte\\8.0.2\\envdte.8.0.2.nupkg.sha512",
+    "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\envdte80\\8.0.2\\envdte80.8.0.2.nupkg.sha512",
     "C:\\Users\\BhanuKiranChaluvadi\\.nuget\\packages\\stdole\\7.0.3302\\stdole.7.0.3302.nupkg.sha512"
   ],
   "logs": []

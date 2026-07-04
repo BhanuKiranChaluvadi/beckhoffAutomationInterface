@@ -13,10 +13,12 @@
     <Reference Include="Interop.TCatSysManager">
       <HintPath>Interop.TCatSysManager.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="EnvDTE" Version="8.0.2" />
+    <PackageReference Include="EnvDTE80" Version="8.0.2" />
   </ItemGroup>
 
 </Project>

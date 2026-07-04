@@ -14,6 +14,18 @@
           "lib/net10/EnvDTE.dll": {}
         }
       },
+      "EnvDTE80/8.0.2": {
+        "type": "package",
+        "dependencies": {
+          "EnvDTE": "8.0.2"
+        },
+        "compile": {
+          "lib/net10/EnvDTE80.dll": {}
+        },
+        "runtime": {
+          "lib/net10/EnvDTE80.dll": {}
+        }
+      },
       "stdole/7.0.3302": {
         "type": "package",
         "compile": {
@@ -35,6 +47,18 @@
         },
         "runtime": {
           "lib/net10/EnvDTE.dll": {}
+        }
+      },
+      "EnvDTE80/8.0.2": {
+        "type": "package",
+        "dependencies": {
+          "EnvDTE": "8.0.2"
+        },
+        "compile": {
+          "lib/net10/EnvDTE80.dll": {}
+        },
+        "runtime": {
+          "lib/net10/EnvDTE80.dll": {}
         }
       },
       "stdole/7.0.3302": {
@@ -61,6 +85,18 @@
         "lib/net10/EnvDTE.dll"
       ]
     },
+    "EnvDTE80/8.0.2": {
+      "sha512": "coShi4GE7i+nWDyL+yV0ErebWntmwz/OQxtqiJZCLbADxsJVF4//QbywfdQRYjGP4uyJZuceEqD4+r0CeYFhow==",
+      "type": "package",
+      "path": "envdte80/8.0.2",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "envdte80.8.0.2.nupkg.sha512",
+        "envdte80.nuspec",
+        "lib/net10/EnvDTE80.dll"
+      ]
+    },
     "stdole/7.0.3302": {
       "sha512": "2314LjTYA+nRknLNzqKY/qrJH21jKhEp/bMTOCTPyidoVYI+3EtyI73Y91NOzCFP2OgzeYnk+uKbTWWuGIMLjA==",
       "type": "package",
@@ -76,7 +112,8 @@
   },
   "projectFileDependencyGroups": {
     "net48": [
-      "EnvDTE >= 8.0.2"
+      "EnvDTE >= 8.0.2",
+      "EnvDTE80 >= 8.0.2"
     ]
   },
   "packageFolders": {
@@ -127,6 +164,10 @@
         "targetAlias": "net48",
         "dependencies": {
           "EnvDTE": {
+            "target": "Package",
+            "version": "[8.0.2, )"
+          },
+          "EnvDTE80": {
             "target": "Package",
             "version": "[8.0.2, )"
           }

@@ -51,6 +51,10 @@
             "EnvDTE": {
               "target": "Package",
               "version": "[8.0.2, )"
+            },
+            "EnvDTE80": {
+              "target": "Package",
+              "version": "[8.0.2, )"
             }
           },
           "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.301\\RuntimeIdentifierGraph.json"
