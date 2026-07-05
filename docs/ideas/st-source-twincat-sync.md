@@ -264,6 +264,79 @@ errors, and a second consecutive run reported 0 created / 16 updated / 0
 deleted with no transient failures and a clean VS shutdown (no leaked
 processes).
 
+## Extended 2026-07-05 (later same day): IO hardware tree creation \u2014 BREAKTHROUGH
+Following up on the "add an EL IO card" question, discovered the actual
+working recipe for creating real EtherCAT hardware tree items, live
+against the Shark project:
+
+- **The key fix was `vInfo`, not the type constant.** Earlier attempts to
+  create an EK1100 coupler passed `vInfo = null` (matching the pattern used
+  for PROGRAM/FUNCTION_BLOCK creation) and failed with `Invalid item sub
+  type`. The actual fix: pass the **product name as a plain string** for
+  `vInfo` (e.g. `"EK1100"`, `"EL1008"`). Once that was tried, **all** of
+  the following succeeded:
+  - `ioDevicesRoot.CreateChild("Device 1 (EtherCAT)", 94 /* TSM_DEV_TYPE_ETHERCAT */, "", null)`
+    \u2014 EtherCAT master device (vInfo can stay `null` here; it's a device,
+    not a specific hardware model).
+  - `device.CreateChild("Term 1 (EK1100)", 6 /* TREEITEMTYPE_TERM */, "", "EK1100")`
+    \u2014 **succeeded**, as a child of the master device.
+  - `coupler.CreateChild("Term 2 (EL1008)", 6, "", "EL1008")` and
+    `coupler.CreateChild("Term 3 (EL2008)", 6, "", "EL2008")` \u2014 **both
+    succeeded**, as children of the EK1100 coupler \u2014 matching the exact
+    real-world E-bus topology (Master \u2192 Coupler \u2192 Terminals) the user
+    asked about. The generic `TREEITEMTYPE_TERM = 6` type works for *any*
+    Beckhoff product as long as `vInfo` is its product name string; the
+    legacy per-model `TCSYSMANAGERBOXTYPES`/`TCSYSMANAGERDEVICETYPES` enums
+    are unnecessary for terminals (only used for the master's own device
+    type, `TSM_DEV_TYPE_ETHERCAT = 94`).
+  - This means the full topology the user described \u2014 *EtherCAT Master \u2192
+    EK1100 coupler \u2192 arbitrary EL cards* \u2014 **is fully scriptable** via
+    `CreateChild`, generalizable to a declarative manifest (same pattern as
+    `libraries.xml`): a small XML/text file listing Device \u2192 Box \u2192
+    Terminal entries by product name, reconciled by a new `IoSyncEngine`
+    analogous to `LibrarySyncEngine`. **Not yet built** \u2014 recorded here as
+    the next concrete increment once the remaining risk below is resolved.
+- **Individual channels are still not separate tree items pre-activation.**
+  `elTerminal.ChildCount == 0` for a freshly created EL1008 in an
+  unconfigured project \u2014 channels (e.g. "Channel 1", "Input") only likely
+  appear as distinct `ITcSmTreeItem`s after the configuration is activated
+  on a real/simulated target, or possibly only via the IDE's own linking
+  UI. This still blocks fully automating `LinkVariables`.
+- **`LinkVariables` PLC-side path still fails, with a new clue.** Retried
+  with a real terminal now in the tree (IO-side argument =
+  `TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)`) against three
+  PLC-side path candidates \u2014 all failed:
+  - `"GVL_Shark.bMotorRunSensor"` (bare ADS-style) \u2014 not found.
+  - `".GVL_Shark.bMotorRunSensor"` (leading dot) \u2014 not found.
+  - `"TIPC^Shark^Shark Project^GVLs^GVL_Shark^bMotorRunSensor"` (tree path)
+    \u2014 not found, but with a telling difference: the error specifically
+    says **`(Shark Project failed)`**, meaning resolution broke down at
+    that particular segment. Combined with Beckhoff's own TC2 sample path
+    for `LinkVariables` (`"TIPC^Project1^Standard^Outputs^MyOutput"`,
+    where `"Standard"` is a **task name**, not a GVL folder) this strongly
+    suggests the PLC-side argument must reference a **PLC task's
+    Inputs/Outputs mapping node** (a per-task tree location that appears
+    once variables are mapped to a task), not the GVL declaration tree at
+    all. This remains unresolved \u2014 next step would be to find/guess the
+    task tree path convention (e.g. `TIPC^Shark^Shark Project^Standard^
+    Inputs^...`) and retry, or reverse-engineer it from a manually-linked
+    project's `.tsproj` XML.
+- **Operational risk confirmed again, and mitigated in the spike
+  discipline**: every spike in this round created the full Device/Coupler/
+  Terminal tree, tested what it needed to test, then **always deleted the
+  master device before the build step** \u2014 specifically to avoid
+  re-triggering the earlier-discovered blocking "needs sync master" popup.
+  **Not yet tested**: whether leaving terminals attached (vs. a bare empty
+  master) is enough to satisfy that validation and avoid the popup. This
+  is the next thing to check before any IoSyncEngine can safely *persist*
+  created hardware across a real build.
+
+**Conclusion**: hardware topology creation (Device/Box/Terminal) is now a
+solved problem \u2014 ready to become a real, shippable manifest + sync engine.
+Actual variable linking (`LinkVariables`) is still blocked on finding the
+correct PLC-side (task mapping) path format, and on confirming whether an
+unlinked-but-populated I/O tree still blocks unattended builds.
+
 ## MVP Scope
 One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.
