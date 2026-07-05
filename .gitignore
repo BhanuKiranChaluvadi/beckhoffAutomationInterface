@@ -1,0 +1,6 @@
+bin/
+obj/
+*.tmp
+run*.txt
+parseOnly.txt
+helper/

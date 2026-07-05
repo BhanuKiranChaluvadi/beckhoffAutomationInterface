@@ -47,6 +47,7 @@ namespace BeckhoffAutomationInterface.Sync
         static readonly Regex MemberHeaderRegex = new Regex(@"^\s*(?:METHOD|PROPERTY)\s", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex FunctionBlockHeaderRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex FunctionBlockExtendsRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex ProgramHeaderRegex = new Regex(@"^\s*PROGRAM\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex InterfaceHeaderRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex InterfaceExtendsRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex AliasBaseTypeRegex = new Regex(@"TYPE\s+\w+\s*:\s*(\w+)\s*;", RegexOptions.IgnoreCase);
@@ -62,6 +63,8 @@ namespace BeckhoffAutomationInterface.Sync
                 return ParseFunctionBlockFile(stFilePath, source);
             if (kind == PouKind.Interface)
                 return ParseInterfaceFile(stFilePath, source);
+            if (kind == PouKind.Program)
+                return ParseProgramFile(stFilePath, source);
 
             string ownerName = null;
             string name = fileName;
@@ -145,6 +148,37 @@ namespace BeckhoffAutomationInterface.Sync
             (string fbDeclaration, string fbImplementation) = SplitAtLastEndVar(fbSegment, filePath, fbName);
             results.Add(new StPouSource(fbName, PouKind.FunctionBlock, null, fbDeclaration, fbImplementation, fbExtends));
             results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, fbName));
+            return results;
+        }
+
+        /// <summary>
+        /// Splits a PROGRAM file into the program's own StPouSource plus one
+        /// StPouSource per inline METHOD/PROPERTY section. PROGRAMs commonly carry
+        /// private helper METHODs inline (e.g. "PROGRAM PRG_X ... METHOD PRIVATE
+        /// _Init ... END_METHOD END_PROGRAM"); without this split, the whole file
+        /// was previously treated as one big VAR/END_VAR-delimited blob, dumping
+        /// the program's executable body AND the inline methods' headers/bodies
+        /// into the PROGRAM's own declaration/implementation text (and leaving a
+        /// literal "METHOD ..." line in the middle of the implementation, which
+        /// TwinCAT rejects as an "Unexpected statement").
+        /// </summary>
+        static List<StPouSource> ParseProgramFile(string filePath, string source)
+        {
+            string[] lines = source.Replace("\r\n", "\n").Split('\n');
+            List<int> methodStarts = FindMethodBoundaries(lines);
+
+            int prgSegmentEnd = methodStarts.Count > 0 ? methodStarts[0] : lines.Length;
+            string prgSegment = string.Join("\n", lines, 0, prgSegmentEnd);
+
+            var prgNameMatch = ProgramHeaderRegex.Match(prgSegment);
+            if (!prgNameMatch.Success)
+                throw new FormatException($"Could not find 'PROGRAM <Name>' header in '{filePath}'.");
+            string prgName = prgNameMatch.Groups[1].Value;
+
+            var results = new List<StPouSource>();
+            (string prgDeclaration, string prgImplementation) = SplitAtLastEndVar(prgSegment, filePath, prgName);
+            results.Add(new StPouSource(prgName, PouKind.Program, null, prgDeclaration, prgImplementation));
+            results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, prgName));
             return results;
         }
 

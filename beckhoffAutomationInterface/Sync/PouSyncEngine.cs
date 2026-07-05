@@ -65,7 +65,9 @@ namespace BeckhoffAutomationInterface.Sync
                 ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), CreationVInfo(source.Kind), out bool isNew);
                 placed.Add((source, item, isNew));
 
-                if (source.Kind == PouKind.FunctionBlock || source.Kind == PouKind.Interface)
+                // PROGRAM is a valid method/property owner too — PROGRAMs commonly carry
+                // inline private helper METHODs (e.g. "METHOD PRIVATE _Init").
+                if (source.Kind == PouKind.FunctionBlock || source.Kind == PouKind.Interface || source.Kind == PouKind.Program)
                 {
                     _ownerItems[source.Name] = item;
                     if (source.Kind == PouKind.Interface)
