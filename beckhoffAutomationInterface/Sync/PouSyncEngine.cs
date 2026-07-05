@@ -288,24 +288,6 @@ namespace BeckhoffAutomationInterface.Sync
             return null;
         }
 
-        static void DeleteOrphans(ITcSmTreeItem parent, HashSet<string> desiredNames, SyncReport report, string prefix = "")
-        {
-            int childCount = parent.ChildCount;
-            var orphaned = new List<string>();
-            for (int i = 1; i <= childCount; i++)
-            {
-                string existingName = parent.get_Child(i).Name;
-                if (!desiredNames.Contains(existingName))
-                    orphaned.Add(existingName);
-            }
-
-            foreach (string name in orphaned)
-            {
-                parent.DeleteChild(name);
-                report.Deleted.Add(prefix + name);
-            }
-        }
-
         static TREEITEMTYPES KindToTreeItemType(PouKind kind)
         {
             switch (kind)
