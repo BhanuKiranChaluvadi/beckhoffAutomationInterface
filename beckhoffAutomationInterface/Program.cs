@@ -24,6 +24,7 @@ namespace BeckhoffAutomationInterface
         const int VS_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for VS to load
         const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
+        static bool _buildOnly;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
@@ -135,6 +136,10 @@ namespace BeckhoffAutomationInterface
             {
                 Environment.Exit(ParseOnly(stSourceFolder));
             }
+
+            // --build-only: skip the (slow) .st sync + library + IO steps and just open the
+            // existing project, build, and report errors — for fast iteration on build feedback.
+            _buildOnly = args.Contains("--build-only");
 
             // Pre-flight checks
             if (!File.Exists(twincatTemplate))
@@ -308,6 +313,8 @@ namespace BeckhoffAutomationInterface
             dte.Solution.SaveAs(solutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
 
+            if (!_buildOnly)
+            {
             // Sync .st files -> POUs (create/update/delete)
             Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), stSourceFolder);
             var desiredPous = StFileParser.ParseFolder(stSourceFolder);
@@ -399,6 +406,7 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
                     Now(), linkReport.Linked.Count, linkReport.Failed.Count);
             }
+            } // end if (!_buildOnly)
 
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());

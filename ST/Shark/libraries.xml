@@ -6,4 +6,5 @@
 	<Library Name="Tc2_ModbusRTU"   Version="*" Company="Beckhoff Automation GmbH" />
 	<Library Name="Tc3_EventLogger" Version="*" Company="Beckhoff Automation GmbH" />
 	<Library Name="Tc3_JsonXml"     Version="*" Company="Beckhoff Automation GmbH" />
+    <Library Name="Tc2_TempController"     Version="*" Company="Beckhoff Automation GmbH" />
 </Libraries>

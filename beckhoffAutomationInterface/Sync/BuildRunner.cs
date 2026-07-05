@@ -16,7 +16,11 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>Pass/fail result of a solution build, with any reported compiler errors/warnings.</summary>
     class BuildReport
     {
-        public bool Success => Errors.Count == 0;
+        /// <summary>Authoritative pass/fail from SolutionBuild.LastBuildInfo (number of failed
+        /// projects == 0). TwinCAT PLC compile errors do NOT reliably arrive at ErrorLevel
+        /// High in the DTE error list, so counting error items is not a trustworthy signal.</summary>
+        public bool Succeeded { get; set; }
+        public bool Success => Succeeded;
         public List<BuildError> Errors { get; } = new List<BuildError>();
         public List<BuildError> Warnings { get; } = new List<BuildError>();
     }
@@ -88,10 +92,21 @@ namespace BeckhoffAutomationInterface.Sync
                         "master requires at least one variable linked to a task variable.", timeoutMs / 60000));
 
             var report = new BuildReport();
-            int itemCount = dte.ToolWindows.ErrorList.ErrorItems.Count;
+            // Authoritative pass/fail: number of projects that failed to build. TwinCAT PLC
+            // compile errors are NOT reliably flagged at ErrorLevel High in the error list,
+            // so we must not infer success from "0 high-level error items".
+            report.Succeeded = dte.Solution.SolutionBuild.LastBuildInfo == 0;
+
+            EnvDTE80.ErrorList errorList = dte.ToolWindows.ErrorList;
+            EnvDTE80.ErrorItems errorItems = errorList.ErrorItems;
+            int itemCount = errorItems.Count;
             for (int i = 1; i <= itemCount; i++)
             {
-                dynamic item = dte.ToolWindows.ErrorList.ErrorItems.Item(i);
+                // Use the strongly-typed EnvDTE80.ErrorItem rather than `dynamic`: the raw
+                // COM object is a __ComObject that C# dynamic can't late-bind ("does not
+                // contain a definition for 'ErrorLevel'"), which only surfaces once there is
+                // at least one error/warning to enumerate.
+                EnvDTE80.ErrorItem item = errorItems.Item(i);
                 var buildError = new BuildError
                 {
                     Level = item.ErrorLevel.ToString(),
@@ -100,7 +115,9 @@ namespace BeckhoffAutomationInterface.Sync
                     Line = item.Line
                 };
 
-                if ((int)item.ErrorLevel == VsBuildErrorLevelHigh)
+                // When the build failed, surface every message as an error to fix (their
+                // ErrorLevel is unreliable); when it passed, keep the level-based split.
+                if (!report.Succeeded || (int)item.ErrorLevel == VsBuildErrorLevelHigh)
                     report.Errors.Add(buildError);
                 else
                     report.Warnings.Add(buildError);

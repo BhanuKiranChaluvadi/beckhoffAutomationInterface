@@ -40,6 +40,11 @@ namespace BeckhoffAutomationInterface.Sync
         // any run of such modifiers so the captured group is always the actual name.
         const string Modifiers = @"(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL|ABSTRACT|FINAL)\s+)*";
         static readonly Regex MethodHeaderRegex = new Regex(@"^\s*METHOD\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex PropertyHeaderRegex = new Regex(@"^\s*PROPERTY\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // Captures a property's return type after the colon, e.g. "LREAL" or "STRING(50)".
+        static readonly Regex PropertyReturnTypeRegex = new Regex(@"^\s*PROPERTY\s+" + Modifiers + @"\w+\s*:\s*(.+?)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // A member boundary is the start of either a METHOD or a PROPERTY section.
+        static readonly Regex MemberHeaderRegex = new Regex(@"^\s*(?:METHOD|PROPERTY)\s", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex FunctionBlockHeaderRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex FunctionBlockExtendsRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex InterfaceHeaderRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
@@ -171,16 +176,16 @@ namespace BeckhoffAutomationInterface.Sync
         }
 
         /// <summary>
-        /// Finds line indices where inline METHOD sections start, absorbing any
-        /// immediately preceding attribute-pragma / blank lines into that
-        /// method's section (so its attributes stay attached to it).
+        /// Finds line indices where inline METHOD or PROPERTY sections start, absorbing
+        /// any immediately preceding attribute-pragma / blank lines into that section (so
+        /// its attributes stay attached to it).
         /// </summary>
         static List<int> FindMethodBoundaries(string[] lines)
         {
-            var methodStarts = new List<int>();
+            var starts = new List<int>();
             for (int i = 0; i < lines.Length; i++)
             {
-                if (!MethodHeaderRegex.IsMatch(lines[i]))
+                if (!MemberHeaderRegex.IsMatch(lines[i]))
                     continue;
 
                 int start = i;
@@ -193,28 +198,80 @@ namespace BeckhoffAutomationInterface.Sync
                         break;
                 }
 
-                if (methodStarts.Count == 0 || start > methodStarts[methodStarts.Count - 1])
-                    methodStarts.Add(start);
+                if (starts.Count == 0 || start > starts[starts.Count - 1])
+                    starts.Add(start);
             }
-            return methodStarts;
+            return starts;
         }
 
-        static IEnumerable<StPouSource> ParseMethodSegments(string filePath, string[] lines, List<int> methodStarts, string ownerName)
+        static IEnumerable<StPouSource> ParseMethodSegments(string filePath, string[] lines, List<int> memberStarts, string ownerName)
         {
-            for (int m = 0; m < methodStarts.Count; m++)
+            for (int m = 0; m < memberStarts.Count; m++)
             {
-                int segStart = methodStarts[m];
-                int segEnd = (m + 1 < methodStarts.Count) ? methodStarts[m + 1] : lines.Length;
-                string methodSegment = string.Join("\n", lines, segStart, segEnd - segStart);
+                int segStart = memberStarts[m];
+                int segEnd = (m + 1 < memberStarts.Count) ? memberStarts[m + 1] : lines.Length;
+                string segment = string.Join("\n", lines, segStart, segEnd - segStart);
 
-                var methodNameMatch = MethodHeaderRegex.Match(methodSegment);
-                if (!methodNameMatch.Success)
-                    throw new FormatException($"Could not find 'METHOD <Name>' header in a section of '{filePath}'.");
-                string methodName = methodNameMatch.Groups[1].Value;
+                var propMatch = PropertyHeaderRegex.Match(segment);
+                var methodMatch = MethodHeaderRegex.Match(segment);
+                // Whichever keyword appears first in the segment wins (a segment is one member).
+                bool isProperty = propMatch.Success &&
+                    (!methodMatch.Success || propMatch.Index <= methodMatch.Index);
 
-                (string methodDeclaration, string methodImplementation) = SplitAtLastEndVar(methodSegment, filePath, methodName);
-                yield return new StPouSource(methodName, PouKind.Method, ownerName, methodDeclaration, methodImplementation);
+                if (isProperty)
+                {
+                    yield return ParseProperty(filePath, segment, propMatch.Groups[1].Value, ownerName);
+                }
+                else
+                {
+                    if (!methodMatch.Success)
+                        throw new FormatException($"Could not find 'METHOD/PROPERTY <Name>' header in a section of '{filePath}'.");
+                    string methodName = methodMatch.Groups[1].Value;
+                    (string decl, string impl) = SplitAtLastEndVar(segment, filePath, methodName);
+                    yield return new StPouSource(methodName, PouKind.Method, ownerName, decl, impl);
+                }
             }
+        }
+
+        /// <summary>
+        /// Parses a PROPERTY section into its header declaration plus the GET / SET accessor
+        /// bodies, e.g.:
+        ///   PROPERTY PUBLIC Setpoint : LREAL
+        ///       GET  Setpoint := _x;  END_GET
+        ///       SET  _x := Setpoint;  END_SET
+        ///   END_PROPERTY
+        /// The declaration is everything before the first GET/SET; GET/SET bodies exclude the
+        /// GET/END_GET/SET/END_SET keywords.
+        /// </summary>
+        static StPouSource ParseProperty(string filePath, string segment, string propName, string ownerName)
+        {
+            string[] lines = segment.Replace("\r\n", "\n").Split('\n');
+
+            int getStart = -1, getEnd = -1, setStart = -1, setEnd = -1, firstAccessor = lines.Length;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string t = lines[i].Trim();
+                if (t.Equals("GET", StringComparison.OrdinalIgnoreCase) || t.StartsWith("GET ", StringComparison.OrdinalIgnoreCase))
+                { getStart = i; if (i < firstAccessor) firstAccessor = i; }
+                else if (t.Equals("END_GET", StringComparison.OrdinalIgnoreCase)) getEnd = i;
+                else if (t.Equals("SET", StringComparison.OrdinalIgnoreCase) || t.StartsWith("SET ", StringComparison.OrdinalIgnoreCase))
+                { setStart = i; if (i < firstAccessor) firstAccessor = i; }
+                else if (t.Equals("END_SET", StringComparison.OrdinalIgnoreCase)) setEnd = i;
+            }
+
+            string declaration = string.Join("\n", lines, 0, firstAccessor).Trim();
+            string getText = (getStart >= 0 && getEnd > getStart)
+                ? string.Join("\n", lines, getStart + 1, getEnd - getStart - 1).Trim()
+                : null;
+            string setText = (setStart >= 0 && setEnd > setStart)
+                ? string.Join("\n", lines, setStart + 1, setEnd - setStart - 1).Trim()
+                : null;
+
+            // The property's return type (after the colon) is required by CreateChild's vInfo.
+            var typeMatch = PropertyReturnTypeRegex.Match(declaration);
+            string returnType = typeMatch.Success ? typeMatch.Groups[1].Value.Trim() : "BOOL";
+
+            return new StPouSource(propName, PouKind.Property, ownerName, declaration, null, returnType, getText, setText);
         }
 
         static (string declaration, string implementation) SplitAtLastEndVar(string source, string filePath, string sectionName)

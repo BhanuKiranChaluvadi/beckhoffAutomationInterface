@@ -45,8 +45,9 @@ namespace BeckhoffAutomationInterface.Sync
         {
             var report = new SyncReport();
 
-            List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod).ToList();
+            List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod && !s.IsProperty).ToList();
             List<StPouSource> methods = desiredSources.Where(s => s.IsMethod).ToList();
+            List<StPouSource> properties = desiredSources.Where(s => s.IsProperty).ToList();
 
             // Two passes so cross-type references (FB EXTENDS/IMPLEMENTS, INTERFACE EXTENDS,
             // ALIAS base type) always resolve regardless of file order:
@@ -72,22 +73,35 @@ namespace BeckhoffAutomationInterface.Sync
                 }
             }
 
+            // Create methods and properties BEFORE setting the owner FBs' declaration text.
+            // A FUNCTION_BLOCK's "IMPLEMENTS I_X" declaration is only consistent once its
+            // methods/properties exist; setting IMPLEMENTS on a member-less FB makes TwinCAT
+            // try to auto-generate the interface members and can crash devenv (RPC failed).
+            SyncMethods(methods, report);
+            SyncProperties(properties, report);
+
             foreach (var p in placed)
             {
-                ((ITcPlcDeclaration)p.Item).DeclarationText = p.Source.DeclarationText;
-                if (p.Source.ImplementationText != null)
-                    ((ITcPlcImplementation)p.Item).ImplementationText = p.Source.ImplementationText;
+                try
+                {
+                    ((ITcPlcDeclaration)p.Item).DeclarationText = p.Source.DeclarationText;
+                    if (p.Source.ImplementationText != null)
+                        ((ITcPlcImplementation)p.Item).ImplementationText = p.Source.ImplementationText;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("    !! failed setting text for {0} '{1}': {2}",
+                        p.Source.Kind, p.Source.RelativeFolder + "/" + p.Source.Name, ex.Message);
+                    throw;
+                }
 
                 (p.IsNew ? report.Created : report.Updated).Add(p.Source.RelativeFolder.Length > 0
                     ? p.Source.RelativeFolder + "/" + p.Source.Name
                     : p.Source.Name);
             }
 
-            SyncMethods(methods, report);
-
             return report;
         }
-
         /// <summary>
         /// The vInfo to pass to CreateChild when creating a base-less shell. We never pass a
         /// user-defined base type here (it may not exist yet); the real base comes from the
@@ -156,8 +170,6 @@ namespace BeckhoffAutomationInterface.Sync
                     ? TREEITEMTYPES.TREEITEMTYPE_PLCITFMETH
                     : TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD;
 
-                var desiredMethodNames = new HashSet<string>(kv.Value.Select(m => m.Name));
-
                 foreach (StPouSource method in kv.Value)
                 {
                     string path = ownerItem.PathName + "^" + method.Name;
@@ -176,7 +188,70 @@ namespace BeckhoffAutomationInterface.Sync
                     (isNew ? report.Created : report.Updated).Add($"{ownerName}.{method.Name}");
                 }
 
-                DeleteOrphans(ownerItem, desiredMethodNames, report, prefix: ownerName + ".");
+                // NOTE: no orphan pruning of an owner's children here \u2014 a FUNCTION_BLOCK's
+                // children include both METHODs and PROPERTYs, so pruning "everything not in
+                // the method set" would delete the properties (and vice-versa).
+            }
+        }
+
+        /// <summary>
+        /// Creates/updates PROPERTYs under their owning FUNCTION_BLOCK / INTERFACE. Each
+        /// property is a tree item (PLCPROP=611 for FBs, PLCITFPROP=612 for interfaces) whose
+        /// DeclarationText is the "PROPERTY Name : Type" header, with Get (613/654) and Set
+        /// (614/655) accessor children carrying the getter/setter bodies as their
+        /// ImplementationText (interface accessors have no body).
+        /// </summary>
+        void SyncProperties(List<StPouSource> desiredProperties, SyncReport report)
+        {
+            var propsByOwner = desiredProperties
+                .GroupBy(p => p.OwnerName)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (string unknownOwner in propsByOwner.Keys.Except(_ownerItems.Keys))
+                throw new InvalidOperationException(
+                    $"Property file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
+
+            foreach (var kv in propsByOwner)
+            {
+                string ownerName = kv.Key;
+                ITcSmTreeItem ownerItem = _ownerItems[ownerName];
+                bool isItf = _interfaceOwners.Contains(ownerName);
+                var propType = (TREEITEMTYPES)(isItf ? 612 : 611);
+                var getType = (TREEITEMTYPES)(isItf ? 654 : 613);
+                var setType = (TREEITEMTYPES)(isItf ? 655 : 614);
+
+                foreach (StPouSource prop in kv.Value)
+                {
+                    string propPath = ownerItem.PathName + "^" + prop.Name;
+                    // A property's return type (carried in BaseType) is required as vInfo.
+                    ITcSmTreeItem propItem = CreateOrGet(ownerItem, propPath, prop.Name, propType, prop.BaseType, out bool isNew);
+                    ((ITcPlcDeclaration)propItem).DeclarationText = prop.DeclarationText;
+
+                    if (prop.GetText != null)
+                    {
+                        ITcSmTreeItem getItem = CreateOrGet(propItem, propPath + "^Get", "Get", getType, null, out _);
+                        SetAccessorBody(getItem, prop.GetText, isItf);
+                    }
+                    if (prop.SetText != null)
+                    {
+                        ITcSmTreeItem setItem = CreateOrGet(propItem, propPath + "^Set", "Set", setType, null, out _);
+                        SetAccessorBody(setItem, prop.SetText, isItf);
+                    }
+
+                    (isNew ? report.Created : report.Updated).Add($"{ownerName}.{prop.Name}");
+                }
+            }
+        }
+
+        static void SetAccessorBody(ITcSmTreeItem accessor, string body, bool isInterface)
+        {
+            try
+            {
+                ((ITcPlcImplementation)accessor).ImplementationText = body;
+            }
+            catch (InvalidCastException) when (isInterface)
+            {
+                // Interface property accessors have no implementation body.
             }
         }
 
@@ -190,9 +265,38 @@ namespace BeckhoffAutomationInterface.Sync
             }
             catch (COMException)
             {
-                isNew = true;
-                return parent.CreateChild(name, (int)kind, "", vInfo);
+                try
+                {
+                    isNew = true;
+                    return parent.CreateChild(name, (int)kind, "", vInfo);
+                }
+                catch (COMException) when (kind == TREEITEMTYPES.TREEITEMTYPE_PLCPOUPROG)
+                {
+                    // PLC object names are globally unique, so a create can collide with an
+                    // object of the same name that already exists elsewhere \u2014 most commonly
+                    // the standard template's "MAIN" (in the POUs folder), which a root-level
+                    // MAIN.st would duplicate. Find and reuse the existing one so its text is
+                    // updated in place instead of failing.
+                    ITcSmTreeItem existing = FindDescendantByName(_folderCache[_projectRootPath], name);
+                    if (existing == null) throw;
+                    isNew = false;
+                    return existing;
+                }
             }
+        }
+
+        /// <summary>Depth-first search for a descendant tree item with the given name.</summary>
+        static ITcSmTreeItem FindDescendantByName(ITcSmTreeItem parent, string name)
+        {
+            for (int i = 1; i <= parent.ChildCount; i++)
+            {
+                ITcSmTreeItem child = parent.get_Child(i);
+                if (string.Equals(child.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return child;
+                ITcSmTreeItem found = FindDescendantByName(child, name);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         static void DeleteOrphans(ITcSmTreeItem parent, HashSet<string> desiredNames, SyncReport report, string prefix = "")
