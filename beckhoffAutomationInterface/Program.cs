@@ -26,6 +26,7 @@ namespace BeckhoffAutomationInterface
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
         static bool _buildOnly;
         static bool _probeEventClass;
+        static bool _testEventClass;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
@@ -142,6 +143,7 @@ namespace BeckhoffAutomationInterface
             // existing project, build, and report errors — for fast iteration on build feedback.
             _buildOnly = args.Contains("--build-only");
             _probeEventClass = args.Contains("--probe-eventclass");
+            _testEventClass = args.Contains("--test-eventclass");
 
             // Pre-flight checks
             if (!File.Exists(twincatTemplate))
@@ -315,7 +317,7 @@ namespace BeckhoffAutomationInterface
             dte.Solution.SaveAs(solutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
 
-            if (args.Contains("--test-eventclass"))
+            if (_testEventClass)
             {
                 ITcSmTreeItem typeSystem = sysManager.LookupTreeItem("TIRC^Type System");
                 string dataTypeXml =
