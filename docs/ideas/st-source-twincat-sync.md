@@ -298,26 +298,54 @@ current MAIN.st as the test case.
   expects for a PLC-side variable (vs. the `TIPC^...^GVLs^...` declaration
   path that works for `LookupTreeItem`/`CreateChild`)?
 - Does adding a real (or virtual/simulated) EtherCAT IO device/terminal to
-  the Shark project's I/O tree make `LinkVariables` succeed? **Analysis
-  (2026-07-05, not yet tested)**: likely necessary but **not sufficient by
-  itself**. The spike above proved the *PLC-side* argument already fails
-  `LookupTreeItem` at the variable level (only the containing GVL/POU
-  resolves) — that's independent of whether a valid IO-side target exists.
-  Adding an EL terminal would give a legitimate, resolvable path for the
-  *IO-side* argument (e.g. `TIPC^Shark^I/O^Devices^Device 1 (EtherCAT)^
-  Term 1 (EK1100)^Channel 1^Input`), but the PLC-side argument would still
-  need to be whatever non-tree-path format `LinkVariables` actually
-  expects for a GVL variable (hypothesized above to be a plain ADS symbol
-  path, e.g. `GVL_Shark.bMotorRunSensor`, not a `TIPC^...` path).
-  **Next real test**: add a terminal to the I/O tree (TwinCAT lets you
-  insert EtherCAT terminals manually without scanning real hardware, e.g.
-  right-click I/O > Devices > Add New Item > EtherCAT), build, then try
-  `LinkVariables` with the PLC side as a bare ADS-style symbol string (no
-  `TIPC^` prefix) against the new terminal's real tree path. Also worth
-  inspecting the generated `.tsproj` XML after manually linking a variable
-  via the IDE itself — that's the most reliable way to reverse-engineer
-  the exact linked-variable path syntax TwinCAT uses internally, without
-  more blind guessing.
+  the Shark project's I/O tree make `LinkVariables` succeed? **Tested
+  2026-07-05, partial result**: reflection on the local
+  Interop.TCatSysManager.dll found `TCSYSMANAGERDEVICETYPES` (has
+  `TSM_DEV_TYPE_ETHERCAT = 94`) and `TCSYSMANAGERBOXTYPES` (has
+  `TSM_BOX_TYPE_EK1100 = 9092`) — fixed legacy TC2-era type-ID enums.
+  Live test against the real Shark project:
+  - `sysManager.LookupTreeItem("TIID")` (the I/O Devices root) **succeeds**.
+  - `ioDevices.CreateChild("Device 1 (EtherCAT)", 94, "", null)`
+    **succeeds** — creates a real EtherCAT master device at
+    `TIID^Device 1 (EtherCAT)`.
+  - `device.CreateChild("Term 1 (EK1100)", 9092, "", null)` **fails**:
+    `COMException: Invalid item sub type`. The legacy `TCSYSMANAGERBOXTYPES`
+    enum is not a valid box sub-type scheme for a modern EtherCAT master's
+    slaves — EtherCAT terminals (EK couplers, EL terminals) must be added
+    a different way, almost certainly by selecting a device from the ESI
+    catalog (an XML-based `vInfo`, not a fixed numeric constant). This
+    engine has not yet reverse-engineered that XML schema.
+  - Also note: `TCSYSMANAGERBOXTYPES` only has ~200 entries and covers
+    older Lightbus/Profibus/CANopen/older Bus Terminal-era hardware (BK/BC
+    couplers, a handful of EL67xx fieldbus gateways) — it does **not**
+    include common modern EL-series IO terminals like EL1008/EL2008 at
+    all. Even if EK1100 creation had worked, adding actual digital IO
+    terminals would need the ESI-catalog route regardless.
+  - **Important operational discovery**: leaving an EtherCAT master device
+    in the project with **no slaves/no linked variables** makes TwinCAT
+    pop a **blocking native modal dialog** on the next `Build` — *"Device
+    'Device 1 (EtherCAT)' needs sync master (at least one variable linked
+    to a tasked variable)"* — which hangs the whole automated run (and any
+    unattended CI-style usage) until a human manually dismisses it. This
+    was observed directly: the build step hung for ~20 minutes until the
+    popup was closed by hand. **This means partially-configured/orphaned
+    I/O devices are actively dangerous for this engine's unattended-build
+    goal** — any future IO-tree sync engine must guarantee it never leaves
+    a device in an incomplete state across a `Save()`+`Build()`, or must
+    delete incomplete devices before building. The orphaned test device
+    was removed via `ioDevices.DeleteChild("Device 1 (EtherCAT)")` in a
+    follow-up run, which cleanly fixed the build (no popup, 0 errors).
+  - **Conclusion**: EtherCAT master *device* creation is confirmed
+    automatable via a fixed type constant. Coupler/terminal creation is
+    not automatable via any fixed constant found so far — it needs the
+    ESI-catalog XML approach, which requires further reverse-engineering
+    (e.g. manually add one EK1100 + one EL1008 in the IDE, then use
+    `ProduceXml` on each to capture the exact XML schema TwinCAT uses
+    internally, and replay that as `vInfo` for `CreateChild`). Until that
+    schema is known, this engine cannot safely auto-provision terminals,
+    and must never leave a master device without slaves/links across a
+    build step.
+
 - How will conflicting edits be handled once this becomes a team/GitHub
   workflow (two people editing the same POU in parallel)?
 
