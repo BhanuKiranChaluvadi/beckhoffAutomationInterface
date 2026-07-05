@@ -301,6 +301,14 @@ namespace BeckhoffAutomationInterface.Sync
                 ? string.Join("\n", lines, setStart + 1, setEnd - setStart - 1).Trim()
                 : null;
 
+            // A bare "PROPERTY Name : Type" with no GET/SET block at all (common for
+            // read-only INTERFACE property signatures, which declare no body anyway) still
+            // needs at least one accessor object created, or TwinCAT rejects the property
+            // with "The property defines neither a get nor a set accessor." Default such
+            // properties to a (bodyless, for interfaces) Get accessor.
+            if (getText == null && setText == null)
+                getText = "";
+
             // The property's return type (after the colon) is required by CreateChild's vInfo.
             var typeMatch = PropertyReturnTypeRegex.Match(declaration);
             string returnType = typeMatch.Success ? typeMatch.Groups[1].Value.Trim() : "BOOL";
