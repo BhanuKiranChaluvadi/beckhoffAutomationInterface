@@ -19,7 +19,10 @@ ELSE
 	fSpeed 	:= 0;
 END_IF
 
-stStatus.bRunning 	:= (eState = E_MotorState.Running);
+// Drive the physical enable output from the start command, and only report
+// "Running" once the physical run-sensor input confirms it
+GVL_Shark.bMotorEnableOutput 	:= bStart;
+stStatus.bRunning 				:= (eState = E_MotorState.Running) AND GVL_Shark.bMotorRunSensor;
 stStatus.nErrorCode := 0;
 
 METHOD PUBLIC Init : BOOL
