@@ -126,68 +126,7 @@ namespace BeckhoffAutomationInterface
 
         static void RunSync(EnvDTE80.DTE2 dte, RunOptions options)
         {
-            EnvDTE.Project project;
-            ITcSysManager sysManager;
-
-            if (File.Exists(options.SolutionFilePath))
-            {
-                // Incremental path: reopen the existing project instead of recreating it,
-                // so the TwinCAT project persists across repeated sync runs.
-                Console.WriteLine("{0}: Opening existing solution at '{1}'...", Now(), options.SolutionFilePath);
-                dte.Solution.Open(options.SolutionFilePath);
-                project = dte.Solution.Projects.Item(1);
-                sysManager = (ITcSysManager)project.Object;
-
-                try
-                {
-                    sysManager.LookupTreeItem(options.PousTreePath);
-                }
-                catch (COMException)
-                {
-                    Console.WriteLine("{0}: PLC project '{1}' missing from existing solution, creating it...", Now(), options.ProjectName);
-                    ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
-                    plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
-                }
-            }
-            else
-            {
-                // First-run bootstrap: create the solution, TwinCAT project, and PLC project.
-                Console.WriteLine("{0}: No existing solution found; bootstrapping a new one at '{1}'...", Now(), options.SolutionDirectory);
-                Directory.CreateDirectory(options.SolutionDirectory);
-
-                dte.Solution.Create(options.SolutionDirectory, options.ProjectName);
-                dte.Solution.SaveAs(options.SolutionFilePath);
-
-                string twincatProjectPath = Path.Combine(options.SolutionDirectory, options.ProjectName);
-                Console.WriteLine("{0}: Adding TwinCAT project from template...", Now());
-                try
-                {
-                    project = dte.Solution.AddFromTemplate(options.TwinCatTemplate, twincatProjectPath, options.ProjectName);
-                }
-                catch (COMException ex) when (ex.Message.Contains("template") || ex.Message.Contains("cannot be found"))
-                {
-                    Console.Error.WriteLine("ERROR: TwinCAT XAE extension is not registered in Visual Studio 2022.");
-                    Console.Error.WriteLine("Run the following command as Administrator to repair:");
-                    Console.Error.WriteLine("  MsiExec.exe /f{{23005E9B-9FED-4C05-B4EB-6AC0ECC0BA7F}}");
-                    throw;
-                }
-
-                sysManager = (ITcSysManager)project.Object;
-                Console.WriteLine("{0}: TwinCAT project created successfully.", Now());
-
-                // Add PLC project — fixes "PLC subsystem initialization failed" caused by the
-                // empty <Project/> template which has no PLC configuration node.
-                Console.WriteLine("{0}: Adding PLC project '{1}'...", Now(), options.ProjectName);
-                ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
-                if (plcConfig == null)
-                    throw new InvalidOperationException("TIPC tree item not found. TwinCAT PLC node is missing from the project.");
-
-                ITcSmTreeItem plcProject = plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
-                if (plcProject == null)
-                    throw new InvalidOperationException("CreateChild returned null. PLC project could not be created from template: " + options.StandardPlcProjectTemplate);
-
-                Console.WriteLine("{0}: PLC project '{1}' added.", Now(), options.ProjectName);
-            }
+            (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(dte, options);
 
             project.Save();
             dte.Solution.SaveAs(options.SolutionFilePath);
