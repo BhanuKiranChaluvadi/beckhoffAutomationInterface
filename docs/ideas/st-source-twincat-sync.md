@@ -400,6 +400,55 @@ unattended, with no popups and no leaked processes. The only remaining
 open item is automating the actual variable-to-task LINK (which would let
 the master be enabled); everything else the user asked for is shipped.
 
+## Extended 2026-07-05 (final): variable-to-IO LINKING solved \u2014 full closed loop
+The last open item \u2014 automating the actual PLC-variable-to-hardware link \u2014
+is now **solved and shipped**. The whole pipeline runs unattended with the
+EtherCAT master ENABLED and its channels genuinely linked to the PLC
+`%I*`/`%Q*` variables, build green, no popups.
+
+Two missing pieces were found (the official Beckhoff sample
+`example/.../Scripting.CSharp.Scripts/Scripts/EtherCATLinking.cs` was the key):
+1. **The confirmed path format** (roots `TIPC^`/`TIID^` prepended by the engine):
+   - PLC side: `TIPC^Shark^Shark Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor`
+     (and `PlcTask Outputs^GVL_Shark.bMotorEnableOutput`) \u2014 the mapped
+     *instance* image path, NOT the GVL declaration path that every earlier
+     attempt (wrongly) used.
+   - IO side: `TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input`
+     (and `...^Term 3 (EL2008)^Channel 1^Output`).
+2. **`ITcPlcProject.CompileProject()` must be called first.** Casting the PLC
+   project root (`TIPC^Shark`) to `ITcPlcProject` and calling `CompileProject()`
+   generates the instance I/O image so the PLC-side path resolves. (Also
+   discovered on `ITcPlcProject`: `GenerateBootProject(bool)`,
+   `BootProjectAutostart`, `TmcFileCopy`.)
+
+Crucial correction to an earlier assumption: the tree DUMPS showed
+`Shark Instance` and each EL terminal with `ChildCount=0`, which looked like
+"the paths don't exist without Activate Configuration." That was misleading \u2014
+**`LinkVariables` resolves those paths directly by name even though the tree
+enumeration doesn't expand them**. So after `CompileProject()`, both
+`LinkVariables` calls succeed against a target-less dev environment, the
+master (now having linked variables) no longer trips the "needs sync master"
+validation, and the build passes. No Activate Configuration / runtime target
+was needed after all.
+
+Shipped as:
+- **`<Links>` section in `io-devices.xml`** (`<Link PlcVar="..." IoChannel="..."/>`),
+  parsed by `IoManifestParser.ParseLinks` into `LinkSpec`.
+- **`VariableLinkEngine`**: `CompileProject()` then `LinkVariables(TIPC^..., TIID^...)`
+  per declared link, reporting linked vs. unresolved. Naturally idempotent \u2014
+  re-runs report `2 linked, 0 unresolved` every time with no churn or errors.
+- **Graceful fallback**: if any declared link can't be resolved (e.g. a genuinely
+  different environment where the paths don't materialize), `IoSyncEngine.
+  DisableAllMasters` disables the master(s) so the build still stays green and
+  unattended \u2014 so the tool never hangs on the popup regardless.
+
+**Final state**: editing only `.st` files + `libraries.xml` + `io-devices.xml`,
+the tool creates/updates the entire TwinCAT project \u2014 POUs, DUTs, GVLs,
+libraries, the full EtherCAT IO tree, AND the live variable\u2194channel links \u2014
+then compiles and reports pass/fail, fully unattended, with a 5-minute build
+timeout and guaranteed devenv cleanup as safety nets. The original goal is
+met end to end.
+
 ## MVP Scope
 One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.

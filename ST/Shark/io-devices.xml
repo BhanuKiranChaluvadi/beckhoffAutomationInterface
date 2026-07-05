@@ -1,15 +1,28 @@
 <IoTree>
 	<!--
-	  Disabled="true": the EtherCAT master is created and its full bus topology
-	  (EK1100 coupler + EL terminals) is populated in the I/O tree, but the master
-	  is marked disabled so TwinCAT skips the "needs sync master" build validation.
-	  An enabled master with no variable linked to a task blocks the build with a
-	  modal dialog. Flip to Disabled="false" once variable-linking is automated.
+	  Disabled="false": attempt to run the master ENABLED and link its channels to
+	  the PLC %I*/%Q* variables (see <Links> below). If the links can't be resolved
+	  (the PLC instance image and EtherCAT channels only appear as tree items after
+	  Activate Configuration on a real/simulated target), the tool automatically
+	  disables the master so the build still passes unattended.
 	-->
-	<Device Name="Device 1 (EtherCAT)" Disabled="true">
+	<Device Name="Device 1 (EtherCAT)" Disabled="false">
 		<Box Name="Term 1 (EK1100)" Product="EK1100">
 			<Terminal Name="Term 2 (EL1008)" Product="EL1008" />
 			<Terminal Name="Term 3 (EL2008)" Product="EL2008" />
 		</Box>
 	</Device>
+
+	<!--
+	  PLC-variable <-> IO-channel links. Path format (roots TIPC^/TIID^ are added by
+	  the engine) is confirmed from Beckhoff's official EtherCATLinking.cs sample:
+	    PlcVar   = "<Plc> Instance^PlcTask Inputs|Outputs^<GVL/PROGRAM>.<var>"
+	    IoChannel= "<Device>^<Coupler>^<Terminal>^Channel N^Input|Output"
+	-->
+	<Links>
+		<Link PlcVar="Shark Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor"
+		      IoChannel="Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input" />
+		<Link PlcVar="Shark Instance^PlcTask Outputs^GVL_Shark.bMotorEnableOutput"
+		      IoChannel="Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)^Channel 1^Output" />
+	</Links>
 </IoTree>

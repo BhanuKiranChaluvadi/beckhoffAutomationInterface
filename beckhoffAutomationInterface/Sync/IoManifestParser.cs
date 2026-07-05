@@ -52,5 +52,21 @@ namespace BeckhoffAutomationInterface.Sync
             boxEl.Elements("Terminal")
                 .Select(t => new IoTerminalSpec((string)t.Attribute("Name"), (string)t.Attribute("Product")))
                 .ToList());
+
+        /// <summary>Parses the optional &lt;Links&gt; section: PLC-variable-to-IO-channel links.</summary>
+        public static List<LinkSpec> ParseLinks(string manifestFilePath)
+        {
+            if (!File.Exists(manifestFilePath))
+                return new List<LinkSpec>();
+
+            XDocument doc = XDocument.Load(manifestFilePath);
+            return doc.Root
+                .Elements("Links")
+                .Elements("Link")
+                .Select(e => new LinkSpec(
+                    (string)e.Attribute("PlcVar"),
+                    (string)e.Attribute("IoChannel")))
+                .ToList();
+        }
     }
 }

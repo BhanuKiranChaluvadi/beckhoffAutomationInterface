@@ -28,9 +28,10 @@ namespace BeckhoffAutomationInterface.Sync
     /// BLOCKING native "needs sync master (at least one variable linked to a tasked
     /// variable)" dialog on Build whenever an EtherCAT master has no linked
     /// variables \u2014 confirmed true even with terminals attached, not just an empty
-    /// master. Until LinkVariables' correct PLC-side path is found, persisting any
-    /// device via this engine WILL block unattended/automated builds until a human
-    /// manually dismisses that dialog.
+    /// master. This is resolved by VariableLinkEngine (which links the master's
+    /// channels to the PLC %I*/%Q* variables so the validation is satisfied); if
+    /// links can't be resolved, IoSyncEngine.DisableAllMasters disables the master
+    /// as a fallback so unattended builds still pass.
     /// </summary>
     static class IoSyncEngine
     {
@@ -77,6 +78,30 @@ namespace BeckhoffAutomationInterface.Sync
             }
 
             return report;
+        }
+
+        /// <summary>
+        /// Safety fallback: disables every EtherCAT master (direct child of TIID) so an
+        /// unlinked master can't block the build with the "needs sync master" dialog.
+        /// Used when declared variable links couldn't be resolved (e.g. no runtime
+        /// target to activate against). Returns the names of devices it disabled.
+        /// </summary>
+        public static List<string> DisableAllMasters(ITcSysManager sysManager)
+        {
+            var disabled = new List<string>();
+            ITcSmTreeItem ioRoot = sysManager.LookupTreeItem("TIID");
+            string directPrefix = ioRoot.PathName + "^";
+            for (int i = 1; i <= ioRoot.ChildCount; i++)
+            {
+                ITcSmTreeItem device = ioRoot.get_Child(i);
+                if (device.PathName != directPrefix + device.Name) continue; // genuine direct child only
+                if (device.Disabled != DISABLED_STATE.SMDS_DISABLED)
+                {
+                    device.Disabled = DISABLED_STATE.SMDS_DISABLED;
+                    disabled.Add(device.Name);
+                }
+            }
+            return disabled;
         }
 
         /// <summary>

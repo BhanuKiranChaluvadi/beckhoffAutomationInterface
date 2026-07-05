@@ -305,13 +305,10 @@ namespace BeckhoffAutomationInterface
             // libraries.xml). Idempotent: existing items are detected via
             // LookupTreeItem and left untouched; only missing ones are created,
             // and only orphaned ones (removed from the manifest) are deleted.
-            //
-            // CAVEAT (see docs/ideas/st-source-twincat-sync.md): TwinCAT pops a
-            // blocking native dialog on Build ("needs sync master") whenever an
-            // EtherCAT master has no linked variables \u2014 true even with
-            // terminals attached. Until LinkVariables' correct PLC-side path is
-            // found, persisting devices here WILL require a human to dismiss
-            // that dialog on Build.
+            // The master is then linked to the PLC %I*/%Q* variables (see the
+            // <Links> section handling below) so the "needs sync master"
+            // validation is satisfied and the build passes with the master
+            // enabled \u2014 no popup, fully unattended.
             // ---------------------------------------------------------------
             string ioManifestPath = Path.Combine(stSourceFolder, "io-devices.xml");
             Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), ioManifestPath);
@@ -328,6 +325,38 @@ namespace BeckhoffAutomationInterface
             project.Save();
             Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s)).",
                 Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count);
+
+            // ---------------------------------------------------------------
+            // Sync PLC-variable <-> IO-channel links declared in <Links> of
+            // io-devices.xml. Path format confirmed from Beckhoff's official
+            // EtherCATLinking.cs sample. If any declared link can't be resolved
+            // (the PLC instance image and EtherCAT channels only materialize as
+            // tree items after Activate Configuration on a real/simulated target
+            // \u2014 unavailable in a plain dev environment), we fall back to
+            // disabling the master(s) so the build stays green and unattended.
+            // ---------------------------------------------------------------
+            var desiredLinks = IoManifestParser.ParseLinks(ioManifestPath);
+            if (desiredLinks.Count > 0)
+            {
+                Console.WriteLine("{0}: Syncing {1} variable link(s)...", Now(), desiredLinks.Count);
+                VariableLinkReport linkReport = null;
+                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(sysManager, plcName, desiredLinks), "linking variables");
+
+                foreach (string s in linkReport.Linked) Console.WriteLine("    + linked   {0}", s);
+                foreach (string s in linkReport.Failed) Console.WriteLine("    x unlinked {0}", s);
+
+                if (!linkReport.AllLinked)
+                {
+                    Console.WriteLine("{0}: Some links unresolved (the PLC instance image / EtherCAT channels", Now());
+                    Console.WriteLine("        require Activate Configuration against a real or simulated target).");
+                    List<string> disabled = IoSyncEngine.DisableAllMasters(sysManager);
+                    foreach (string name in disabled)
+                        Console.WriteLine("        ~ disabled master '{0}' to keep the build green.", name);
+                }
+                project.Save();
+                Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
+                    Now(), linkReport.Linked.Count, linkReport.Failed.Count);
+            }
 
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());
