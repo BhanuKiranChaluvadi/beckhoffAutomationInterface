@@ -24,8 +24,6 @@ namespace BeckhoffAutomationInterface
         const int VS_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for VS to load
         const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
-        static bool _buildOnly;
-        static bool _eventsOnly;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
@@ -116,56 +114,36 @@ namespace BeckhoffAutomationInterface
         [STAThread]
         static void Main(string[] args)
         {
-            // Configuration
-            const string standardPlcProjectTemplate = "Standard PLC Template.plcproj";
-            const string plcName = "Shark";
-            const string solutionName = "Shark";
-            string solutionDirectory = @"C:\Users\BhanuKiranChaluvadi\Documents\TwinCAT\Shark";
-            string solutionFilePath = Path.Combine(solutionDirectory, solutionName + ".sln");
-            string stSourceFolder = @"C:\Users\BhanuKiranChaluvadi\Documents\Tutorials\beckhoffAutomationInterface\ST\Shark";
-            string twincatTemplate = @"C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\PrjTemplate\TwinCAT Project.tsproj";
-            string pousTreePath = string.Format("TIPC^{0}^{0} Project^POUs", plcName);
-            string dutsTreePath = string.Format("TIPC^{0}^{0} Project^DUTs", plcName);
-            string gvlsTreePath = string.Format("TIPC^{0}^{0} Project^GVLs", plcName);
-            string projectRootPath = string.Format("TIPC^{0}^{0} Project", plcName);
-            string referencesTreePath = string.Format("TIPC^{0}^{0} Project^References", plcName);
-            string libraryManifestPath = Path.Combine(stSourceFolder, "libraries.xml");
-            string eventManifestPath = Path.Combine(stSourceFolder, "events.xml");
-            string tsprojFilePath = Path.Combine(solutionDirectory, plcName, plcName + ".tsproj");
+            RunOptions options = RunOptions.Parse(args);
+            Console.WriteLine("{0}: Source='{1}'  Dest='{2}'  Project='{3}'", Now(), options.SourceFolder, options.DestinationFolder, options.ProjectName);
 
             // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser
             // issues surface in seconds (not after a ~40s VS round-trip). Run with --parse-only.
-            if (args.Contains("--parse-only"))
+            if (options.ParseOnly)
             {
-                Environment.Exit(ParseOnly(stSourceFolder));
+                Environment.Exit(ParseOnly(options.SourceFolder));
             }
-
-            // --build-only: skip the (slow) .st sync + library + IO steps and just open the
-            // existing project, build, and report errors — for fast iteration on build feedback.
-            _buildOnly = args.Contains("--build-only");
-            _eventsOnly = args.Contains("--events-only");
 
             // Event Classes (events.xml) are a .tsproj-level config item with no known
             // Automation Interface creation path (see EventClassSync) — sync them by editing
             // the .tsproj file directly, which MUST happen before Visual Studio opens the
             // project (devenv holds its own in-memory copy and would overwrite this on save).
-            if ((!_buildOnly || _eventsOnly) && File.Exists(tsprojFilePath))
+            if ((!options.BuildOnly || options.EventsOnly) && File.Exists(options.TsprojFilePath))
             {
-                var desiredEventClasses = EventManifestParser.Parse(eventManifestPath);
+                var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
                 if (desiredEventClasses.Count > 0)
                 {
-                    Console.WriteLine("{0}: Syncing {1} event class(es) into '{2}'...", Now(), desiredEventClasses.Count, tsprojFilePath);
-                    EventClassSync.Sync(tsprojFilePath, desiredEventClasses);
+                    Console.WriteLine("{0}: Syncing {1} event class(es) into '{2}'...", Now(), desiredEventClasses.Count, options.TsprojFilePath);
+                    EventClassSync.Sync(options.TsprojFilePath, desiredEventClasses);
                     Console.WriteLine("{0}: Event class sync complete.", Now());
                 }
             }
 
-
             // Pre-flight checks
-            if (!File.Exists(twincatTemplate))
+            if (!File.Exists(options.TwinCatTemplate))
             {
                 Console.Error.WriteLine("ERROR: TwinCAT project template not found at:");
-                Console.Error.WriteLine("  {0}", twincatTemplate);
+                Console.Error.WriteLine("  {0}", options.TwinCatTemplate);
                 Console.Error.WriteLine("Ensure TwinCAT 3.1 XAE is installed.");
                 Environment.Exit(1);
             }
@@ -211,9 +189,7 @@ namespace BeckhoffAutomationInterface
 
             try
             {
-                RunSync(dte, standardPlcProjectTemplate, plcName, solutionName, solutionDirectory,
-                    solutionFilePath, stSourceFolder, twincatTemplate, pousTreePath, dutsTreePath,
-                    gvlsTreePath, projectRootPath, referencesTreePath, libraryManifestPath);
+                RunSync(dte, options);
             }
             finally
             {
@@ -261,48 +237,45 @@ namespace BeckhoffAutomationInterface
             catch { /* already gone \u2014 the happy path */ }
         }
 
-        static void RunSync(EnvDTE80.DTE2 dte, string standardPlcProjectTemplate, string plcName,
-            string solutionName, string solutionDirectory, string solutionFilePath, string stSourceFolder,
-            string twincatTemplate, string pousTreePath, string dutsTreePath, string gvlsTreePath,
-            string projectRootPath, string referencesTreePath, string libraryManifestPath)
+        static void RunSync(EnvDTE80.DTE2 dte, RunOptions options)
         {
             EnvDTE.Project project;
             ITcSysManager sysManager;
 
-            if (File.Exists(solutionFilePath))
+            if (File.Exists(options.SolutionFilePath))
             {
                 // Incremental path: reopen the existing project instead of recreating it,
                 // so the TwinCAT project persists across repeated sync runs.
-                Console.WriteLine("{0}: Opening existing solution at '{1}'...", Now(), solutionFilePath);
-                dte.Solution.Open(solutionFilePath);
+                Console.WriteLine("{0}: Opening existing solution at '{1}'...", Now(), options.SolutionFilePath);
+                dte.Solution.Open(options.SolutionFilePath);
                 project = dte.Solution.Projects.Item(1);
                 sysManager = (ITcSysManager)project.Object;
 
                 try
                 {
-                    sysManager.LookupTreeItem(pousTreePath);
+                    sysManager.LookupTreeItem(options.PousTreePath);
                 }
                 catch (COMException)
                 {
-                    Console.WriteLine("{0}: PLC project '{1}' missing from existing solution, creating it...", Now(), plcName);
+                    Console.WriteLine("{0}: PLC project '{1}' missing from existing solution, creating it...", Now(), options.ProjectName);
                     ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
-                    plcConfig.CreateChild(plcName, 0, "", standardPlcProjectTemplate);
+                    plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
                 }
             }
             else
             {
                 // First-run bootstrap: create the solution, TwinCAT project, and PLC project.
-                Console.WriteLine("{0}: No existing solution found; bootstrapping a new one at '{1}'...", Now(), solutionDirectory);
-                Directory.CreateDirectory(solutionDirectory);
+                Console.WriteLine("{0}: No existing solution found; bootstrapping a new one at '{1}'...", Now(), options.SolutionDirectory);
+                Directory.CreateDirectory(options.SolutionDirectory);
 
-                dte.Solution.Create(solutionDirectory, solutionName);
-                dte.Solution.SaveAs(solutionFilePath);
+                dte.Solution.Create(options.SolutionDirectory, options.ProjectName);
+                dte.Solution.SaveAs(options.SolutionFilePath);
 
-                string twincatProjectPath = Path.Combine(solutionDirectory, plcName);
+                string twincatProjectPath = Path.Combine(options.SolutionDirectory, options.ProjectName);
                 Console.WriteLine("{0}: Adding TwinCAT project from template...", Now());
                 try
                 {
-                    project = dte.Solution.AddFromTemplate(twincatTemplate, twincatProjectPath, plcName);
+                    project = dte.Solution.AddFromTemplate(options.TwinCatTemplate, twincatProjectPath, options.ProjectName);
                 }
                 catch (COMException ex) when (ex.Message.Contains("template") || ex.Message.Contains("cannot be found"))
                 {
@@ -317,36 +290,36 @@ namespace BeckhoffAutomationInterface
 
                 // Add PLC project — fixes "PLC subsystem initialization failed" caused by the
                 // empty <Project/> template which has no PLC configuration node.
-                Console.WriteLine("{0}: Adding PLC project '{1}'...", Now(), plcName);
+                Console.WriteLine("{0}: Adding PLC project '{1}'...", Now(), options.ProjectName);
                 ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
                 if (plcConfig == null)
                     throw new InvalidOperationException("TIPC tree item not found. TwinCAT PLC node is missing from the project.");
 
-                ITcSmTreeItem plcProject = plcConfig.CreateChild(plcName, 0, "", standardPlcProjectTemplate);
+                ITcSmTreeItem plcProject = plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
                 if (plcProject == null)
-                    throw new InvalidOperationException("CreateChild returned null. PLC project could not be created from template: " + standardPlcProjectTemplate);
+                    throw new InvalidOperationException("CreateChild returned null. PLC project could not be created from template: " + options.StandardPlcProjectTemplate);
 
-                Console.WriteLine("{0}: PLC project '{1}' added.", Now(), plcName);
+                Console.WriteLine("{0}: PLC project '{1}' added.", Now(), options.ProjectName);
             }
 
             project.Save();
-            dte.Solution.SaveAs(solutionFilePath);
+            dte.Solution.SaveAs(options.SolutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
 
-            if (_eventsOnly)
+            if (options.EventsOnly)
             {
                 Console.WriteLine("{0}: --events-only: skipping POU/library/IO sync and build.", Now());
                 return;
             }
 
-            if (!_buildOnly)
+            if (!options.BuildOnly)
             {
             // Sync .st files -> POUs (create/update/delete)
-            Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), stSourceFolder);
-            var desiredPous = StFileParser.ParseFolder(stSourceFolder);
+            Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), options.SourceFolder);
+            var desiredPous = StFileParser.ParseFolder(options.SourceFolder);
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            var syncEngine = new PouSyncEngine(sysManager, projectRootPath);
+            var syncEngine = new PouSyncEngine(sysManager, options.ProjectRootPath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);
 
             foreach (string name in syncReport.Created) Console.WriteLine("    + created  {0}", name);
@@ -358,11 +331,11 @@ namespace BeckhoffAutomationInterface
                 Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count);
 
             // Sync library references from libraries.xml (config data, not .st source)
-            Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), libraryManifestPath);
-            var desiredLibraries = LibraryManifestParser.Parse(libraryManifestPath);
+            Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), options.LibraryManifestPath);
+            var desiredLibraries = LibraryManifestParser.Parse(options.LibraryManifestPath);
 
             Console.WriteLine("{0}: Syncing {1} library reference(s)...", Now(), desiredLibraries.Count);
-            ITcSmTreeItem referencesItem = sysManager.LookupTreeItem(referencesTreePath);
+            ITcSmTreeItem referencesItem = sysManager.LookupTreeItem(options.ReferencesTreePath);
             ITcPlcLibraryManager libManager = (ITcPlcLibraryManager)referencesItem;
             LibrarySyncReport libraryReport = null;
             RetryOnBusy(() => libraryReport = LibrarySyncEngine.Sync(libManager, desiredLibraries), "syncing library references");
@@ -385,7 +358,7 @@ namespace BeckhoffAutomationInterface
             // validation is satisfied and the build passes with the master
             // enabled \u2014 no popup, fully unattended.
             // ---------------------------------------------------------------
-            string ioManifestPath = Path.Combine(stSourceFolder, "io-devices.xml");
+            string ioManifestPath = options.IoManifestPath;
             Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), ioManifestPath);
             var desiredIoDevices = IoManifestParser.Parse(ioManifestPath);
 
@@ -415,7 +388,7 @@ namespace BeckhoffAutomationInterface
             {
                 Console.WriteLine("{0}: Syncing {1} variable link(s)...", Now(), desiredLinks.Count);
                 VariableLinkReport linkReport = null;
-                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(sysManager, plcName, desiredLinks), "linking variables");
+                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(sysManager, options.ProjectName, desiredLinks), "linking variables");
 
                 foreach (string s in linkReport.Linked) Console.WriteLine("    + linked   {0}", s);
                 foreach (string s in linkReport.Failed) Console.WriteLine("    x unlinked {0}", s);
@@ -432,7 +405,7 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
                     Now(), linkReport.Linked.Count, linkReport.Failed.Count);
             }
-            } // end if (!_buildOnly)
+            } // end if (!options.BuildOnly)
 
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());
