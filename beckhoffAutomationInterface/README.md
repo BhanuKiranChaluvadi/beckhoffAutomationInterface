@@ -28,7 +28,15 @@ dotnet run
 
 ### Run the Executable Directly
 ```powershell
-.\bin\Debug\net48\beckhoffAutomationInterface.exe
+# --source/--dest default to the current directory if omitted; --name defaults to
+# --source's own folder name. Bare invocation (no args) or --help prints usage.
+.\bin\Debug\net48\beckhoffAutomationInterface.exe --source <path-to-.st-folder> --dest <path-to-TwinCAT-projects-root>
+
+# Fast preflight: parse all .st files without opening Visual Studio
+.\bin\Debug\net48\beckhoffAutomationInterface.exe --source <path> --parse-only
+
+# Skip the .st/library/IO sync; just reopen the existing project, build, and report
+.\bin\Debug\net48\beckhoffAutomationInterface.exe --source <path> --dest <path> --build-only
 ```
 
 ## Project Overview
