@@ -55,8 +55,34 @@ diverge from what's actually inside TwinCAT.
       rebuilt with 0 errors, and confirmed Diagnostics.TcPOU was removed
       from disk. The full create/update/delete engine is now validated
       end-to-end with a real TwinCAT/Visual Studio instance.
-- [ ] Spike: does the Automation Interface expose IO variable linking
+- [x] Spike: does the Automation Interface expose IO variable linking
       (not just device/box creation), and at what granularity?
+      **VALIDATED (partially) 2026-07-05** — `ITcSysManager.LinkVariables(
+      bstrV1, bstrV2, offs1, offs2, size)` / `UnlinkVariables(bstrV1,
+      bstrV2)` exist and are callable on the TwinCAT 3 XAE `ITcSysManager`
+      (confirmed via reflection on Interop.TCatSysManager.dll — inherited
+      by all versions up to `ITcSysManager18`), matching Beckhoff's
+      TwinCAT 2-era "How to link variables" documentation. Granularity is
+      byte-level: `offs1`/`offs2` are byte offsets into each variable and
+      `size` is the number of bytes to link, for cases where the two
+      variables differ in size.
+      **However**, calling it against real Shark project paths in the
+      same `TIPC^...^GVLs^GVL_Shark^varName` tree-path convention used
+      everywhere else in this engine failed both times with `COMException:
+      Item '...' not found` — for a mismatched-type PLC<->PLC link *and*
+      for a link to a nonexistent IO path. This means `LinkVariables`
+      does **not** use the same declaration-tree addressing as
+      `LookupTreeItem`/`CreateChild`; Beckhoff's own sample path
+      (`"TIPC^Project1^Standard^Outputs^MyOutput"`) suggests it expects a
+      variable that's already surfaced under a task's mapped I/O list
+      (e.g. an instance/symbol path), not a raw GVL declaration path.
+      **Conclusion**: the AI does expose variable linking, but wiring it
+      into this engine would need further research into TwinCAT 3's
+      actual instance/symbol path format for linkable variables (out of
+      scope for this MVP) — recorded here so the next attempt doesn't
+      have to rediscover this from scratch. Test code was added to
+      `Program.cs`, run against the live project, and then removed (it
+      was a one-off spike, not a shipped feature).
 - [x] Verify: does the tool reuse/reopen a persistent TwinCAT project
       across repeated runs instead of recreating it? **VALIDATED
       2026-07-04** — ran the assembled engine twice in a row: run 1
@@ -67,7 +93,7 @@ diverge from what's actually inside TwinCAT.
       persistence across separate process runs, not yet a single
       long-lived DTE session across N in-process builds — that's a
       distinct, still-open question for the eventual watch-mode/Cluster C
-      wrapper.)
+      wrapper, and out of scope for the current one-shot CLI usage.)
 
 ## MVP Engine — Assembled 2026-07-04
 The validated spikes have been consolidated into a reusable engine, live in
@@ -227,8 +253,20 @@ current MAIN.st as the test case.
   riskiest assumption (text injection + compile feedback) solo first.
 
 ## Open Questions
-- Does Beckhoff's InfoSys confirm ITcPlcDeclaration/ITcPlcImplementation
-  as the intended API for this, or is PlcOpenImport the only supported path?
-- What's the actual object model for IO variable linking in the AI?
+- ~~Does Beckhoff's InfoSys confirm ITcPlcDeclaration/ITcPlcImplementation
+  as the intended API for this?~~ **Answered**: yes — InfoSys documents
+  both interfaces directly (`DeclarationText`/`ImplementationText`,
+  Get/Set, TwinCAT 3.1+), and this was independently confirmed by
+  successfully round-tripping real `.st` content through them.
+- ~~What's the actual object model for IO variable linking in the AI?~~
+  **Answered (partially)**: `ITcSysManager.LinkVariables`/`UnlinkVariables`
+  exist and work at byte-level granularity, but require a different
+  variable-path format than the declaration-tree paths used everywhere
+  else in this engine (see the IO-linking spike above) — the exact
+  instance/symbol path format still needs further research before this
+  could be wired into the sync engine.
+- What's the exact TwinCAT 3 instance/symbol path format `LinkVariables`
+  expects for a PLC-side variable (vs. the `TIPC^...^GVLs^...` declaration
+  path that works for `LookupTreeItem`/`CreateChild`)?
 - How will conflicting edits be handled once this becomes a team/GitHub
   workflow (two people editing the same POU in parallel)?
