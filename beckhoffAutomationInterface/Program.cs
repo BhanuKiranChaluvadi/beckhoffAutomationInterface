@@ -21,12 +21,8 @@ namespace BeckhoffAutomationInterface
     class Program
     {
         const uint RPC_E_SERVERCALL_RETRYLATER = 0x8001010A;
-        const int VS_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for VS to load
-        const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
-        const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
+        const int RETRY_TIMEOUT_MS = 30000;
+        const int RETRY_INTERVAL_MS = 1000;
 
         static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -59,33 +55,6 @@ namespace BeckhoffAutomationInterface
         }
 
         /// <summary>
-        /// Waits for VS to finish loading by retrying a COM call until it succeeds
-        /// or the timeout is reached. Handles RPC_E_SERVERCALL_RETRYLATER (0x8001010A)
-        /// which VS raises while its message pump is busy initializing.
-        /// </summary>
-        static void WaitForVsToLoad(EnvDTE80.DTE2 dte)
-        {
-            int elapsed = 0;
-            while (elapsed < VS_LOAD_TIMEOUT_MS)
-            {
-                try
-                {
-                    // Accessing MainWindow forces a COM round-trip; if VS is busy it throws
-                    dte.MainWindow.Visible = true;
-                    return; // success
-                }
-                catch (COMException ex) when ((uint)ex.HResult == RPC_E_SERVERCALL_RETRYLATER)
-                {
-                    Console.WriteLine("{0}: Visual Studio is loading, retrying in 1s... ({1}s elapsed)",
-                        Now(), elapsed / 1000);
-                    Thread.Sleep(VS_LOAD_RETRY_INTERVAL_MS);
-                    elapsed += VS_LOAD_RETRY_INTERVAL_MS;
-                }
-            }
-            throw new TimeoutException("Visual Studio did not finish loading within the timeout period.");
-        }
-
-        /// <summary>
         /// Retries a COM call that can transiently fail with RPC_E_SERVERCALL_RETRYLATER
         /// (0x8001010A) when Visual Studio's background compiler/IntelliSense is still
         /// busy right after a large batch of tree changes (observed after syncing 16+
@@ -101,12 +70,12 @@ namespace BeckhoffAutomationInterface
                     action();
                     return;
                 }
-                catch (COMException ex) when ((uint)ex.HResult == RPC_E_SERVERCALL_RETRYLATER && elapsed < VS_LOAD_TIMEOUT_MS)
+                catch (COMException ex) when ((uint)ex.HResult == RPC_E_SERVERCALL_RETRYLATER && elapsed < RETRY_TIMEOUT_MS)
                 {
                     Console.WriteLine("{0}: Visual Studio is busy ({1}), retrying in 1s... ({2}s elapsed)",
                         Now(), description, elapsed / 1000);
-                    Thread.Sleep(VS_LOAD_RETRY_INTERVAL_MS);
-                    elapsed += VS_LOAD_RETRY_INTERVAL_MS;
+                    Thread.Sleep(RETRY_INTERVAL_MS);
+                    elapsed += RETRY_INTERVAL_MS;
                 }
             }
         }
@@ -149,92 +118,10 @@ namespace BeckhoffAutomationInterface
             }
 
             // Create the Visual Studio DTE instance
-            Console.WriteLine("{0}: Getting Visual Studio DTE type...", Now());
-            Type dteType = Type.GetTypeFromProgID("VisualStudio.DTE.17.0");
-            if (dteType == null)
+            using (VisualStudioSession vs = VisualStudioSession.Start())
             {
-                Console.Error.WriteLine("ERROR: VisualStudio.DTE.17.0 is not registered.");
-                Console.Error.WriteLine("Ensure Visual Studio 2022 (17.x) is installed.");
-                Environment.Exit(1);
+                RunSync(vs.Dte, options);
             }
-            Console.WriteLine("{0}: Visual Studio DTE type resolved.", Now());
-
-            Console.WriteLine("{0}: Creating the DTE instance...", Now());
-            // Register a COM message filter so calls VS rejects while busy are auto-retried
-            // (essential when driving a large batch of PLC-object edits, which otherwise
-            // throws RPC_E_SERVERCALL_RETRYLATER). Requires the STA thread (see [STAThread]).
-            MessageFilter.Register();
-            // Snapshot existing devenv PIDs so we can reliably identify the one WE spawn
-            // (HWND-based capture is fragile once a modal dialog is up).
-            var devenvBefore = new HashSet<int>(
-                System.Diagnostics.Process.GetProcessesByName("devenv").Select(p => p.Id));
-            EnvDTE80.DTE2 dte = (EnvDTE80.DTE2)Activator.CreateInstance(dteType);
-            dte.SuppressUI = false;
-
-            Console.WriteLine("{0}: Waiting for Visual Studio to finish loading...", Now());
-            WaitForVsToLoad(dte);
-            Console.WriteLine("{0}: Visual Studio is ready.", Now());
-
-            // Identify our devenv process (the one that appeared after CreateInstance), so we
-            // can force-kill it later if a graceful dte.Quit() leaves it alive (e.g. behind a
-            // modal dialog). Fall back to the HWND method if the diff is inconclusive.
-            int devenvPid = System.Diagnostics.Process.GetProcessesByName("devenv")
-                .Select(p => p.Id)
-                .FirstOrDefault(id => !devenvBefore.Contains(id));
-            if (devenvPid == 0)
-            {
-                try { GetWindowThreadProcessId((IntPtr)dte.MainWindow.HWnd, out devenvPid); }
-                catch { /* non-fatal: we just lose the force-kill fallback */ }
-            }
-
-            try
-            {
-                RunSync(dte, options);
-            }
-            finally
-            {
-                // Ensure Visual Studio always shuts down, even on failure \u2014 otherwise every
-                // run (successful or not) leaks a devenv.exe process, which eventually causes
-                // COM calls to fail with RPC_E_SERVERCALL_RETRYLATER as instances pile up.
-                // A graceful Quit() can hang (or even "return" while the process lingers) if a
-                // modal dialog is up, so we attempt it with a timeout and then ALWAYS verify the
-                // process actually exited, force-killing it if not.
-                Console.WriteLine("{0}: Closing Visual Studio...", Now());
-                TryQuit(dte, VS_QUIT_TIMEOUT_MS);
-                EnsureExited(devenvPid);
-                MessageFilter.Revoke();
-            }
-        }
-
-        /// <summary>Runs dte.Quit() on a background thread and waits up to timeoutMs for it
-        /// to finish. Returns false if it didn't complete in time (e.g. a modal dialog is
-        /// blocking shutdown).</summary>
-        static bool TryQuit(EnvDTE80.DTE2 dte, int timeoutMs)
-        {
-            var quitThread = new Thread(() => { try { dte.Quit(); } catch { /* ignore */ } })
-            {
-                IsBackground = true
-            };
-            quitThread.Start();
-            return quitThread.Join(timeoutMs);
-        }
-
-        /// <summary>Verifies the devenv process actually exited after a graceful Quit; if it's
-        /// still alive after a short grace period (Quit can return while the process lingers
-        /// behind a modal dialog), force-kills it so no devenv.exe is leaked.</summary>
-        static void EnsureExited(int processId)
-        {
-            if (processId <= 0) return;
-            try
-            {
-                var p = System.Diagnostics.Process.GetProcessById(processId);
-                if (!p.WaitForExit(3000))
-                {
-                    p.Kill();
-                    Console.WriteLine("{0}: Force-killed lingering devenv (pid {1}).", Now(), processId);
-                }
-            }
-            catch { /* already gone \u2014 the happy path */ }
         }
 
         static void RunSync(EnvDTE80.DTE2 dte, RunOptions options)
