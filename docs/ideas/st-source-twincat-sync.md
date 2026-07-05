@@ -297,5 +297,54 @@ current MAIN.st as the test case.
 - What's the exact TwinCAT 3 instance/symbol path format `LinkVariables`
   expects for a PLC-side variable (vs. the `TIPC^...^GVLs^...` declaration
   path that works for `LookupTreeItem`/`CreateChild`)?
+- Does adding a real (or virtual/simulated) EtherCAT IO device/terminal to
+  the Shark project's I/O tree make `LinkVariables` succeed? **Analysis
+  (2026-07-05, not yet tested)**: likely necessary but **not sufficient by
+  itself**. The spike above proved the *PLC-side* argument already fails
+  `LookupTreeItem` at the variable level (only the containing GVL/POU
+  resolves) — that's independent of whether a valid IO-side target exists.
+  Adding an EL terminal would give a legitimate, resolvable path for the
+  *IO-side* argument (e.g. `TIPC^Shark^I/O^Devices^Device 1 (EtherCAT)^
+  Term 1 (EK1100)^Channel 1^Input`), but the PLC-side argument would still
+  need to be whatever non-tree-path format `LinkVariables` actually
+  expects for a GVL variable (hypothesized above to be a plain ADS symbol
+  path, e.g. `GVL_Shark.bMotorRunSensor`, not a `TIPC^...` path).
+  **Next real test**: add a terminal to the I/O tree (TwinCAT lets you
+  insert EtherCAT terminals manually without scanning real hardware, e.g.
+  right-click I/O > Devices > Add New Item > EtherCAT), build, then try
+  `LinkVariables` with the PLC side as a bare ADS-style symbol string (no
+  `TIPC^` prefix) against the new terminal's real tree path. Also worth
+  inspecting the generated `.tsproj` XML after manually linking a variable
+  via the IDE itself — that's the most reliable way to reverse-engineer
+  the exact linked-variable path syntax TwinCAT uses internally, without
+  more blind guessing.
 - How will conflicting edits be handled once this becomes a team/GitHub
   workflow (two people editing the same POU in parallel)?
+
+## Other Automation Interface Capabilities (Beckhoff InfoSys survey, 2026-07-05)
+While researching the IO-linking question, the InfoSys "How to..." index
+for the (TwinCAT 2-era, but largely still applicable) Automation Interface
+was surveyed for capabilities beyond what this engine already uses. None
+of these have been implemented or spike-tested yet — recorded here as a
+backlog for future work:
+- **Enable/disable a tree item**, change a PLC project's path, force a
+  rescan.
+- **Change a fieldbus device's address**, exchange one fieldbus device for
+  another of the same type.
+- **Export/import child info as XML** (`ProduceXml`/`ConsumeXml`) — could
+  snapshot or restore a whole subtree (e.g. an I/O configuration) instead
+  of rebuilding it item-by-item.
+- **Link an NC axis/encoder/drive to IO** — same underlying idea as
+  `LinkVariables` but for motion objects; likely has the same PLC-side
+  addressing question.
+- **Scan devices and boxes** — requires `ITcSysManager3.SetTargetNetId`
+  pointed at a real or TwinCAT-simulated running target; Shark currently
+  has no target configured, so this is untested.
+- **Add a route to a remote ADS target**, **broadcast search** for
+  reachable targets on the network.
+
+Of these, XML export/import is the most promising near-term addition
+since it doesn't require a live target. Device scanning, NC linking, and
+resolving the `LinkVariables` PLC-side path all require either real or
+simulated hardware, or further reverse-engineering of TwinCAT 3's internal
+addressing — out of scope until a target is available to test against.
