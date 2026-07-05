@@ -337,6 +337,69 @@ Actual variable linking (`LinkVariables`) is still blocked on finding the
 correct PLC-side (task mapping) path format, and on confirming whether an
 unlinked-but-populated I/O tree still blocks unattended builds.
 
+## Extended 2026-07-05 (later same day): IO SyncEngine shipped + closed-loop build
+Turned the IO-tree spike into a real, shipped feature and closed the
+remaining loop so the whole pipeline runs unattended:
+
+- **`io-devices.xml` manifest + `IoManifestParser` + `IoSyncEngine`** \u2014
+  same "config data, not .st" pattern as `libraries.xml`. The manifest
+  declares the hardware tree by product name:
+  ```xml
+  <IoTree>
+    <Device Name="Device 1 (EtherCAT)" Disabled="true">
+      <Box Name="Term 1 (EK1100)" Product="EK1100">
+        <Terminal Name="Term 2 (EL1008)" Product="EL1008" />
+        <Terminal Name="Term 3 (EL2008)" Product="EL2008" />
+      </Box>
+    </Device>
+  </IoTree>
+  ```
+  `IoSyncEngine.Sync` reconciles Device\u2192Box\u2192Terminal against `TIID`,
+  creating only what's missing (idempotent, append/update-only) and
+  deleting only genuine orphans. Validated: first run created all 4 items;
+  a re-run reported `0 created, 0 deleted, 0 state change(s)`.
+- **The "needs sync master" popup is solved by DISABLING the master, not
+  by clicking the dialog.** `ITcSmTreeItem.Disabled` (type `DISABLED_STATE`:
+  `SMDS_NOT_DISABLED=0`, `SMDS_DISABLED=1`, `SMDS_PARENT_DISABLED=2`) lets us
+  mark the unlinked EtherCAT master disabled. The hardware is still fully
+  populated and visible in the tree (just grayed out), but TwinCAT skips the
+  "at least one variable linked to a task" validation on Build \u2014 so the
+  build passes with **zero popups and zero human interaction**. Declared
+  per-device via the manifest's `Disabled="true"` attribute; flip to
+  `false` once variable-linking is automated. (Confirmed by direct test:
+  an *enabled* master blocks the build even WITH terminals attached \u2014 it's
+  the missing task LINK, not missing hardware, that triggers the dialog.)
+- **Build timeout + guaranteed process cleanup** (defensive, per user
+  request): `BuildRunner.Build` now kicks off the build ASYNCHRONOUSLY
+  (`SolutionBuild.Build(false)`) and polls `BuildState` to completion with a
+  hard 5-minute deadline, throwing `BuildTimeoutException` instead of
+  hanging forever if a modal dialog ever does block it. `Program.Main`'s
+  `finally` attempts a graceful `dte.Quit()` on a background thread with a
+  timeout, then ALWAYS verifies the devenv process actually exited
+  (force-killing it otherwise) \u2014 because a graceful `Quit()` can *return*
+  while the process lingers behind a modal dialog. The devenv PID is
+  captured reliably by diffing the `devenv` process list before/after
+  `CreateInstance` (HWND capture was fragile once a dialog was up). Proved
+  end-to-end: with a temporary 30s timeout against a deliberately-blocking
+  build, the tool timed out cleanly, printed a helpful message, and
+  recovered the leaked devenv on its own with no human input.
+- **Idempotency bug found + fixed via the tree dump.** TwinCAT enumerates
+  EtherCAT terminals BOTH under their coupler AND flat under the device
+  (with the same coupler-nested `PathName`). The device-level orphan prune
+  therefore saw the terminals as device orphans and deleted them, then the
+  box loop recreated them \u2014 a create/delete churn every run (which would
+  also break any variable links). Fixed by only treating a child as an
+  orphan candidate when it's a GENUINE direct child
+  (`child.PathName == parent.PathName + "^" + child.Name`), which naturally
+  excludes the flat-enumerated deeper terminals.
+
+**Net result**: `Master \u2192 EK1100 \u2192 EL1008 + EL2008` is now declared in
+`io-devices.xml`, synced idempotently into the project, and the whole
+pipeline (POUs + DUTs + GVL + libraries + IO tree + build) runs green,
+unattended, with no popups and no leaked processes. The only remaining
+open item is automating the actual variable-to-task LINK (which would let
+the master be enabled); everything else the user asked for is shipped.
+
 ## MVP Scope
 One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.

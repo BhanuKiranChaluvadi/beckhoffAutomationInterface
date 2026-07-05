@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using BeckhoffAutomationInterface.Sync;
@@ -21,6 +23,10 @@ namespace BeckhoffAutomationInterface
         const uint RPC_E_SERVERCALL_RETRYLATER = 0x8001010A;
         const int VS_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for VS to load
         const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
+        const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
 
         static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -114,12 +120,28 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Visual Studio DTE type resolved.", Now());
 
             Console.WriteLine("{0}: Creating the DTE instance...", Now());
+            // Snapshot existing devenv PIDs so we can reliably identify the one WE spawn
+            // (HWND-based capture is fragile once a modal dialog is up).
+            var devenvBefore = new HashSet<int>(
+                System.Diagnostics.Process.GetProcessesByName("devenv").Select(p => p.Id));
             EnvDTE80.DTE2 dte = (EnvDTE80.DTE2)Activator.CreateInstance(dteType);
             dte.SuppressUI = false;
 
             Console.WriteLine("{0}: Waiting for Visual Studio to finish loading...", Now());
             WaitForVsToLoad(dte);
             Console.WriteLine("{0}: Visual Studio is ready.", Now());
+
+            // Identify our devenv process (the one that appeared after CreateInstance), so we
+            // can force-kill it later if a graceful dte.Quit() leaves it alive (e.g. behind a
+            // modal dialog). Fall back to the HWND method if the diff is inconclusive.
+            int devenvPid = System.Diagnostics.Process.GetProcessesByName("devenv")
+                .Select(p => p.Id)
+                .FirstOrDefault(id => !devenvBefore.Contains(id));
+            if (devenvPid == 0)
+            {
+                try { GetWindowThreadProcessId((IntPtr)dte.MainWindow.HWnd, out devenvPid); }
+                catch { /* non-fatal: we just lose the force-kill fallback */ }
+            }
 
             try
             {
@@ -132,9 +154,44 @@ namespace BeckhoffAutomationInterface
                 // Ensure Visual Studio always shuts down, even on failure \u2014 otherwise every
                 // run (successful or not) leaks a devenv.exe process, which eventually causes
                 // COM calls to fail with RPC_E_SERVERCALL_RETRYLATER as instances pile up.
+                // A graceful Quit() can hang (or even "return" while the process lingers) if a
+                // modal dialog is up, so we attempt it with a timeout and then ALWAYS verify the
+                // process actually exited, force-killing it if not.
                 Console.WriteLine("{0}: Closing Visual Studio...", Now());
-                dte.Quit();
+                TryQuit(dte, VS_QUIT_TIMEOUT_MS);
+                EnsureExited(devenvPid);
             }
+        }
+
+        /// <summary>Runs dte.Quit() on a background thread and waits up to timeoutMs for it
+        /// to finish. Returns false if it didn't complete in time (e.g. a modal dialog is
+        /// blocking shutdown).</summary>
+        static bool TryQuit(EnvDTE80.DTE2 dte, int timeoutMs)
+        {
+            var quitThread = new Thread(() => { try { dte.Quit(); } catch { /* ignore */ } })
+            {
+                IsBackground = true
+            };
+            quitThread.Start();
+            return quitThread.Join(timeoutMs);
+        }
+
+        /// <summary>Verifies the devenv process actually exited after a graceful Quit; if it's
+        /// still alive after a short grace period (Quit can return while the process lingers
+        /// behind a modal dialog), force-kills it so no devenv.exe is leaked.</summary>
+        static void EnsureExited(int processId)
+        {
+            if (processId <= 0) return;
+            try
+            {
+                var p = System.Diagnostics.Process.GetProcessById(processId);
+                if (!p.WaitForExit(3000))
+                {
+                    p.Kill();
+                    Console.WriteLine("{0}: Force-killed lingering devenv (pid {1}).", Now(), processId);
+                }
+            }
+            catch { /* already gone \u2014 the happy path */ }
         }
 
         static void RunSync(EnvDTE80.DTE2 dte, string standardPlcProjectTemplate, string plcName,
@@ -242,10 +299,48 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Library sync complete ({1} added, {2} removed).",
                 Now(), libraryReport.Added.Count, libraryReport.Removed.Count);
 
+            // ---------------------------------------------------------------
+            // Sync the I/O hardware tree (Device -> Box -> Terminal) from
+            // io-devices.xml (config data, not .st source \u2014 same rationale as
+            // libraries.xml). Idempotent: existing items are detected via
+            // LookupTreeItem and left untouched; only missing ones are created,
+            // and only orphaned ones (removed from the manifest) are deleted.
+            //
+            // CAVEAT (see docs/ideas/st-source-twincat-sync.md): TwinCAT pops a
+            // blocking native dialog on Build ("needs sync master") whenever an
+            // EtherCAT master has no linked variables \u2014 true even with
+            // terminals attached. Until LinkVariables' correct PLC-side path is
+            // found, persisting devices here WILL require a human to dismiss
+            // that dialog on Build.
+            // ---------------------------------------------------------------
+            string ioManifestPath = Path.Combine(stSourceFolder, "io-devices.xml");
+            Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), ioManifestPath);
+            var desiredIoDevices = IoManifestParser.Parse(ioManifestPath);
+
+            Console.WriteLine("{0}: Syncing {1} IO device(s)...", Now(), desiredIoDevices.Count);
+            IoSyncReport ioReport = null;
+            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices), "syncing IO tree");
+
+            foreach (string name in ioReport.Created) Console.WriteLine("    + created  {0}", name);
+            foreach (string name in ioReport.Deleted) Console.WriteLine("    - deleted  {0}", name);
+            foreach (string change in ioReport.StateChanged) Console.WriteLine("    ~ state    {0}", change);
+
+            project.Save();
+            Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s)).",
+                Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count);
+
             // Build and report
             Console.WriteLine("{0}: Building solution...", Now());
             BuildReport buildReport = null;
-            RetryOnBusy(() => buildReport = BuildRunner.Build(dte), "building solution");
+            try
+            {
+                RetryOnBusy(() => buildReport = BuildRunner.Build(dte), "building solution");
+            }
+            catch (BuildTimeoutException ex)
+            {
+                Console.WriteLine("{0}: BUILD TIMED OUT \u2014 {1}", Now(), ex.Message);
+                return; // finally in Main will force-close VS (dialog is still up)
+            }
 
             if (buildReport.Success)
             {

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("beckhoffAutomationInterface")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7789904101fb65cfb3bddc217c45e4834a70989c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+89d7a5cee4126459954c900eebcd5937054bbe27")]
 [assembly: System.Reflection.AssemblyProductAttribute("beckhoffAutomationInterface")]
 [assembly: System.Reflection.AssemblyTitleAttribute("beckhoffAutomationInterface")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,15 @@
+<IoTree>
+	<!--
+	  Disabled="true": the EtherCAT master is created and its full bus topology
+	  (EK1100 coupler + EL terminals) is populated in the I/O tree, but the master
+	  is marked disabled so TwinCAT skips the "needs sync master" build validation.
+	  An enabled master with no variable linked to a task blocks the build with a
+	  modal dialog. Flip to Disabled="false" once variable-linking is automated.
+	-->
+	<Device Name="Device 1 (EtherCAT)" Disabled="true">
+		<Box Name="Term 1 (EK1100)" Product="EK1100">
+			<Terminal Name="Term 2 (EL1008)" Product="EL1008" />
+			<Terminal Name="Term 3 (EL2008)" Product="EL2008" />
+		</Box>
+	</Device>
+</IoTree>
