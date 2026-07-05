@@ -1,9 +1,16 @@
 # ST-as-Source TwinCAT Sync Engine
 
+> **Status (2026-07-05): shipped end-to-end.** Editing only `.st` files +
+> `libraries.xml` + `io-devices.xml`, the tool syncs POUs/DUTs/GVLs,
+> library references, the full EtherCAT IO tree, and live variable\u2194IO
+> channel links, then compiles and reports pass/fail \u2014 fully unattended.
+> Only Activate-Configuration (runtime target), watch mode, and CLI/CI
+> packaging remain as future work.
+
 ## Problem Statement
 How might we let an engineer maintain a TwinCAT PLC project as plain .st
-text files in Git, and have those files automatically sync — create,
-update, compile, and (eventually) IO-map/activate — into a real TwinCAT
+text files in Git, and have those files automatically sync \u2014 create,
+update, compile, and IO-map (and eventually activate) \u2014 into a real TwinCAT
 XAE project via the Automation Interface, without ever hand-editing the
 project inside the IDE?
 
@@ -112,6 +119,12 @@ diverge from what's actually inside TwinCAT.
       step** — that still requires a human to use the IDE's I/O mapping
       view (or `ConsumeXml`/`LinkVariables` with the correct symbol path,
       once found) after this tool runs.
+      **UPDATE (2026-07-05, RESOLVED — see "variable-to-IO LINKING solved"
+      section below): automated hardware linking now works.** The correct
+      symbol path is the mapped *instance* path
+      (`TIPC^Shark^Shark Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor`),
+      and `ITcPlcProject.CompileProject()` must run first to generate it.
+      No human IDE step and no runtime target are needed after all.
 - [x] Verify: does the tool reuse/reopen a persistent TwinCAT project
       across repeated runs instead of recreating it? **VALIDATED
       2026-07-04** — ran the assembled engine twice in a row: run 1
@@ -454,9 +467,10 @@ One job, done well: sync + compile + report for POUs only, using Shark's
 current MAIN.st as the test case.
 - In: file->POU create/update/delete engine, direct text injection,
   build trigger, console pass/fail + error output, drift check.
-- Out (for now): IO mapping/activation, watch mode, CLI/CI packaging,
-  multi-target/team features. (GVLs and library references, originally
-  listed here as deferred, are now implemented — see above.)
+- Out (for now): watch mode, CLI/CI packaging, multi-target/team features.
+  (GVLs, library references, the full EtherCAT IO tree, AND variable↔IO
+  channel linking — originally listed here as deferred/out-of-scope — are
+  now all implemented; see the dated "Extended 2026-07-05" sections above.)
 
 ## Not Doing (and Why)
 - Full-project rebuild on every run — too slow/destructive once I/O
@@ -473,15 +487,16 @@ current MAIN.st as the test case.
   Get/Set, TwinCAT 3.1+), and this was independently confirmed by
   successfully round-tripping real `.st` content through them.
 - ~~What's the actual object model for IO variable linking in the AI?~~
-  **Answered (partially)**: `ITcSysManager.LinkVariables`/`UnlinkVariables`
-  exist and work at byte-level granularity, but require a different
-  variable-path format than the declaration-tree paths used everywhere
-  else in this engine (see the IO-linking spike above) — the exact
-  instance/symbol path format still needs further research before this
-  could be wired into the sync engine.
-- What's the exact TwinCAT 3 instance/symbol path format `LinkVariables`
+  **Answered & SHIPPED (2026-07-05)**: `ITcSysManager.LinkVariables` works
+  once (1) `ITcPlcProject.CompileProject()` has generated the PLC instance
+  image and (2) the mapped *instance* path is used. See the final
+  "variable-to-IO LINKING solved" section — now automated end-to-end via
+  `VariableLinkEngine` + the `<Links>` manifest section.
+- ~~What's the exact TwinCAT 3 instance/symbol path format `LinkVariables`
   expects for a PLC-side variable (vs. the `TIPC^...^GVLs^...` declaration
-  path that works for `LookupTreeItem`/`CreateChild`)?
+  path that works for `LookupTreeItem`/`CreateChild`)?~~ **Answered**:
+  `TIPC^<Plc>^<Plc> Instance^PlcTask Inputs|Outputs^<GVL/PROGRAM>.<var>`
+  (the mapped instance path), resolvable after `CompileProject()`.
 - Does adding a real (or virtual/simulated) EtherCAT IO device/terminal to
   the Shark project's I/O tree make `LinkVariables` succeed? **Tested
   2026-07-05, partial result**: reflection on the local
