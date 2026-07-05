@@ -25,8 +25,7 @@ namespace BeckhoffAutomationInterface
         const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
         static bool _buildOnly;
-        static bool _probeEventClass;
-        static bool _testEventClass;
+        static bool _eventsOnly;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
@@ -131,6 +130,8 @@ namespace BeckhoffAutomationInterface
             string projectRootPath = string.Format("TIPC^{0}^{0} Project", plcName);
             string referencesTreePath = string.Format("TIPC^{0}^{0} Project^References", plcName);
             string libraryManifestPath = Path.Combine(stSourceFolder, "libraries.xml");
+            string eventManifestPath = Path.Combine(stSourceFolder, "events.xml");
+            string tsprojFilePath = Path.Combine(solutionDirectory, plcName, plcName + ".tsproj");
 
             // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser
             // issues surface in seconds (not after a ~40s VS round-trip). Run with --parse-only.
@@ -142,8 +143,22 @@ namespace BeckhoffAutomationInterface
             // --build-only: skip the (slow) .st sync + library + IO steps and just open the
             // existing project, build, and report errors — for fast iteration on build feedback.
             _buildOnly = args.Contains("--build-only");
-            _probeEventClass = args.Contains("--probe-eventclass");
-            _testEventClass = args.Contains("--test-eventclass");
+            _eventsOnly = args.Contains("--events-only");
+
+            // Event Classes (events.xml) are a .tsproj-level config item with no known
+            // Automation Interface creation path (see EventClassSync) — sync them by editing
+            // the .tsproj file directly, which MUST happen before Visual Studio opens the
+            // project (devenv holds its own in-memory copy and would overwrite this on save).
+            if ((!_buildOnly || _eventsOnly) && File.Exists(tsprojFilePath))
+            {
+                var desiredEventClasses = EventManifestParser.Parse(eventManifestPath);
+                if (desiredEventClasses.Count > 0)
+                {
+                    Console.WriteLine("{0}: Syncing {1} event class(es) into '{2}'...", Now(), desiredEventClasses.Count, tsprojFilePath);
+                    EventClassSync.Sync(tsprojFilePath, desiredEventClasses);
+                    Console.WriteLine("{0}: Event class sync complete.", Now());
+                }
+            }
 
             // Pre-flight checks
             if (!File.Exists(twincatTemplate))
@@ -317,50 +332,9 @@ namespace BeckhoffAutomationInterface
             dte.Solution.SaveAs(solutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
 
-            if (_testEventClass)
+            if (_eventsOnly)
             {
-                ITcSmTreeItem typeSystem = sysManager.LookupTreeItem("TIRC^Type System");
-                string dataTypeXml =
-                    "<DataType>" +
-                    "<Name GUID=\"{11111111-2222-3333-4444-555555555555}\" PersistentType=\"true\">ShTestEvents</Name>" +
-                    "<DisplayName TxtId=\"\"><![CDATA[Shark Test Events]]></DisplayName>" +
-                    "<EventId><Name Id=\"1\">Verbose</Name><DisplayName TxtId=\"\"><![CDATA[{0} - {1}]]></DisplayName><Severity>Verbose</Severity></EventId>" +
-                    "</DataType>";
-                try
-                {
-                    ITcSmTreeItem created = typeSystem.CreateChild("ShTestEvents", 0, "", dataTypeXml);
-                    Console.WriteLine("  CreateChild OK: Name='{0}' Path='{1}'", created.Name, created.PathName);
-                    Console.WriteLine("  ProduceXml:\n{0}", created.ProduceXml());
-                    project.Save();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("  CreateChild FAILED: {0}", ex);
-                }
-                return;
-            }
-
-            if (_probeEventClass)
-            {
-                foreach (string candidate in new[]
-                {
-                    "TIRC", "TITS", "SYSTEM", "TIRC^Type System", "SYSTEM^Type System",
-                    "TIRC^Type System^Event Classes", "SYSTEM^Type System^Event Classes",
-                    "TITY", "TIRC^Event Classes",
-                })
-                {
-                    try
-                    {
-                        ITcSmTreeItem item = sysManager.LookupTreeItem(candidate);
-                        Console.WriteLine("  OK '{0}' -> Name='{1}' ChildCount={2}", candidate, item.Name, item.ChildCount);
-                        for (int i = 1; i <= item.ChildCount; i++)
-                            Console.WriteLine("      child[{0}] = '{1}'", i, item.get_Child(i).Name);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine("  FAIL '{0}': {1}", candidate, ex.Message);
-                    }
-                }
+                Console.WriteLine("{0}: --events-only: skipping POU/library/IO sync and build.", Now());
                 return;
             }
 

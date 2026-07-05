@@ -1,0 +1,19 @@
+<EventClasses>
+	<!--
+	  Event Classes are TwinCAT project config items (SYSTEM ▸ Type System ▸ Event Classes),
+	  not IEC 61131-3 source, so they're synced from this manifest the same way
+	  libraries.xml/io-devices.xml are synced \u2014 not parsed from .st files.
+
+	  Guid is the Event Class's own identity (referenced by name in ST as
+	  "<EventClassName>.<EventName>"). Keep it stable once assigned \u2014 changing it changes
+	  the object's identity in the project. Generate a fresh GUID per class; do not reuse
+	  GUIDs from other/older projects.
+	-->
+	<EventClass Name="BeckhoffLibEvents" Guid="{6E2A6E64-6B0A-4B7B-9E1D-2C7B0A6E4B7C}">
+		<Event Name="Verbose"  Id="1" Severity="Verbose"  Message="{0} - {1}" />
+		<Event Name="Info"     Id="2" Severity="Info"     Message="{0} - {1}" />
+		<Event Name="Warning"  Id="3" Severity="Warning"  Message="{0} - {1}" />
+		<Event Name="Error"    Id="4" Severity="Error"    Message="{0} - {1}" />
+		<Event Name="Critical" Id="5" Severity="Critical" Message="{0} - {1}" />
+	</EventClass>
+</EventClasses>
