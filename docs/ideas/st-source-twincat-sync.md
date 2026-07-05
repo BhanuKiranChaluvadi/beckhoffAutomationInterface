@@ -83,6 +83,35 @@ diverge from what's actually inside TwinCAT.
       have to rediscover this from scratch. Test code was added to
       `Program.cs`, run against the live project, and then removed (it
       was a one-off spike, not a shipped feature).
+      **Follow-up (2026-07-05, same day)**: confirmed the root cause with
+      a targeted `LookupTreeItem` test on real GVL variables
+      (`bMotorRunSensor`/`bMotorEnableOutput`, added to `GVL_Shark` as
+      `AT %I*`/`AT %Q*` placeholders). `LookupTreeItem("TIPC^Shark^Shark
+      Project^GVLs^GVL_Shark")` **succeeds** (the GVL itself is a real
+      tree item), but appending the variable name with either `^` or `.`
+      (`...^GVL_Shark^bMotorRunSensor`, `...^GVL_Shark.bMotorRunSensor`)
+      **fails** with "Subitem ... not found". This proves individual PLC
+      variables (whether in a GVL or a POU) are **not** separate tree
+      items in the Automation Interface's tree model at all — they only
+      exist as text inside the GVL's/POU's `DeclarationText`. Only true
+      hardware-side items (Device/Box/Terminal/Channel) and the
+      GVL/POU/DUT containers themselves are tree items. This means
+      `LinkVariables`'s variable-path arguments must use a fundamentally
+      different addressing scheme (most likely a pure ADS symbol path,
+      e.g. `GVL_Shark.bMotorRunSensor` without any `TIPC^...` tree
+      prefix, resolvable only once the configuration is built/activated
+      on a real or simulated running target) rather than anything
+      `LookupTreeItem`/`CreateChild` can resolve. Confirming the exact
+      format would require either a running target (TwinCAT allows
+      "Activate Configuration" even without real I/O, using a local
+      simulated runtime) or TwinCAT-3-specific documentation (the
+      InfoSys pages found are all TwinCAT 2-era) — both out of scope for
+      this pass. **This engine can declare `AT %I*`/`AT %Q*` I/O
+      variables and use them in logic (compiles cleanly, validated
+      end-to-end), but cannot yet automate the actual hardware linking
+      step** — that still requires a human to use the IDE's I/O mapping
+      view (or `ConsumeXml`/`LinkVariables` with the correct symbol path,
+      once found) after this tool runs.
 - [x] Verify: does the tool reuse/reopen a persistent TwinCAT project
       across repeated runs instead of recreating it? **VALIDATED
       2026-07-04** — ran the assembled engine twice in a row: run 1
