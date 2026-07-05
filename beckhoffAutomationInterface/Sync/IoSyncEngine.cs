@@ -105,25 +105,17 @@ namespace BeckhoffAutomationInterface.Sync
         }
 
         /// <summary>
-        /// Looks up an existing child by its full tree path (parent.PathName + "^" +
-        /// name) \u2014 the same LookupTreeItem convention already validated elsewhere
-        /// in this engine \u2014 and only calls CreateChild if it doesn't exist yet.
-        /// This makes the sync idempotent: re-running against a project that already
-        /// has some (or all) of the desired hardware only creates what's missing.
+        /// Delegates to the shared TreeItemFactory (idempotent check-then-create), reporting
+        /// anything actually created. This makes the sync idempotent: re-running against a
+        /// project that already has some (or all) of the desired hardware only creates
+        /// what's missing.
         /// </summary>
         static ITcSmTreeItem GetOrCreate(ITcSysManager sysManager, ITcSmTreeItem parent, string name, int type, string vInfo, IoSyncReport report)
         {
-            string fullPath = parent.PathName + "^" + name;
-            try
-            {
-                return sysManager.LookupTreeItem(fullPath);
-            }
-            catch (COMException)
-            {
-                ITcSmTreeItem created = parent.CreateChild(name, type, "", vInfo);
+            ITcSmTreeItem item = TreeItemFactory.GetOrCreate(sysManager, parent, name, type, vInfo, out bool isNew);
+            if (isNew)
                 report.Created.Add(name);
-                return created;
-            }
+            return item;
         }
 
         static void DeleteOrphans(ITcSmTreeItem parent, HashSet<string> desiredNames, IoSyncReport report)

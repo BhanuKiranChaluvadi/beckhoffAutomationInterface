@@ -61,8 +61,7 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (StPouSource source in nonMethods)
             {
                 ITcSmTreeItem folder = GetOrCreateFolder(source.RelativeFolder);
-                string path = folder.PathName + "^" + source.Name;
-                ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), CreationVInfo(source.Kind), out bool isNew);
+                ITcSmTreeItem item = CreateOrGet(folder, source.Name, KindToTreeItemType(source.Kind), CreationVInfo(source.Kind), out bool isNew);
                 placed.Add((source, item, isNew));
 
                 // PROGRAM is a valid method/property owner too — PROGRAMs commonly carry
@@ -174,8 +173,7 @@ namespace BeckhoffAutomationInterface.Sync
 
                 foreach (StPouSource method in kv.Value)
                 {
-                    string path = ownerItem.PathName + "^" + method.Name;
-                    ITcSmTreeItem item = CreateOrGet(ownerItem, path, method.Name, methodType, null, out bool isNew);
+                    ITcSmTreeItem item = CreateOrGet(ownerItem, method.Name, methodType, null, out bool isNew);
 
                     ((ITcPlcDeclaration)item).DeclarationText = method.DeclarationText;
                     try
@@ -224,19 +222,18 @@ namespace BeckhoffAutomationInterface.Sync
 
                 foreach (StPouSource prop in kv.Value)
                 {
-                    string propPath = ownerItem.PathName + "^" + prop.Name;
                     // A property's return type (carried in BaseType) is required as vInfo.
-                    ITcSmTreeItem propItem = CreateOrGet(ownerItem, propPath, prop.Name, propType, prop.BaseType, out bool isNew);
+                    ITcSmTreeItem propItem = CreateOrGet(ownerItem, prop.Name, propType, prop.BaseType, out bool isNew);
                     ((ITcPlcDeclaration)propItem).DeclarationText = prop.DeclarationText;
 
                     if (prop.GetText != null)
                     {
-                        ITcSmTreeItem getItem = CreateOrGet(propItem, propPath + "^Get", "Get", getType, null, out _);
+                        ITcSmTreeItem getItem = CreateOrGet(propItem, "Get", getType, null, out _);
                         SetAccessorBody(getItem, prop.GetText, isItf);
                     }
                     if (prop.SetText != null)
                     {
-                        ITcSmTreeItem setItem = CreateOrGet(propItem, propPath + "^Set", "Set", setType, null, out _);
+                        ITcSmTreeItem setItem = CreateOrGet(propItem, "Set", setType, null, out _);
                         SetAccessorBody(setItem, prop.SetText, isItf);
                     }
 
@@ -257,33 +254,23 @@ namespace BeckhoffAutomationInterface.Sync
             }
         }
 
-        ITcSmTreeItem CreateOrGet(ITcSmTreeItem parent, string path, string name, TREEITEMTYPES kind, object vInfo, out bool isNew)
+        ITcSmTreeItem CreateOrGet(ITcSmTreeItem parent, string name, TREEITEMTYPES kind, object vInfo, out bool isNew)
         {
             try
             {
-                ITcSmTreeItem existing = _sysManager.LookupTreeItem(path);
+                return TreeItemFactory.GetOrCreate(_sysManager, parent, name, (int)kind, vInfo, out isNew);
+            }
+            catch (COMException) when (kind == TREEITEMTYPES.TREEITEMTYPE_PLCPOUPROG)
+            {
+                // PLC object names are globally unique, so a create can collide with an
+                // object of the same name that already exists elsewhere — most commonly
+                // the standard template's "MAIN" (in the POUs folder), which a root-level
+                // MAIN.st would duplicate. Find and reuse the existing one so its text is
+                // updated in place instead of failing.
+                ITcSmTreeItem existing = FindDescendantByName(_folderCache[_projectRootPath], name);
+                if (existing == null) throw;
                 isNew = false;
                 return existing;
-            }
-            catch (COMException)
-            {
-                try
-                {
-                    isNew = true;
-                    return parent.CreateChild(name, (int)kind, "", vInfo);
-                }
-                catch (COMException) when (kind == TREEITEMTYPES.TREEITEMTYPE_PLCPOUPROG)
-                {
-                    // PLC object names are globally unique, so a create can collide with an
-                    // object of the same name that already exists elsewhere \u2014 most commonly
-                    // the standard template's "MAIN" (in the POUs folder), which a root-level
-                    // MAIN.st would duplicate. Find and reuse the existing one so its text is
-                    // updated in place instead of failing.
-                    ITcSmTreeItem existing = FindDescendantByName(_folderCache[_projectRootPath], name);
-                    if (existing == null) throw;
-                    isNew = false;
-                    return existing;
-                }
             }
         }
 
