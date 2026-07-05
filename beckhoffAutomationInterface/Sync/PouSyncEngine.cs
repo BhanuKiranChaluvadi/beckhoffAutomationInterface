@@ -7,128 +7,160 @@ using Interop.TCatSysManager;
 namespace BeckhoffAutomationInterface.Sync
 {
     /// <summary>
-    /// Reconciles a folder of .st files against a TwinCAT PLC project: creates
-    /// missing PLC objects, updates existing ones, and deletes any that no
-    /// longer have a corresponding .st file. Handles four tiers:
-    ///   1. Top-level POUs (PROGRAM/FUNCTION_BLOCK/FUNCTION/INTERFACE) under the POUs folder.
-    ///   2. Top-level DUTs (ENUM/STRUCT/ALIAS) under the DUTs folder.
-    ///   3. Top-level GVLs under the GVLs folder.
-    ///   4. METHODs, which are children of their owning FUNCTION_BLOCK or
-    ///      INTERFACE (not the POUs folder directly), synced/pruned per-owner
-    ///      after the owner itself has been created/updated.
+    /// Reconciles a folder tree of .st files against a TwinCAT PLC project. The
+    /// source folder hierarchy is MIRRORED as PLC folders directly under the PLC
+    /// project root (e.g. ST/Shark/App/Shark/FunctionBlocks/FB_X.st ->
+    /// "&lt;Project&gt;^App^Shark^FunctionBlocks^FB_X"), so POUs, DUTs and GVLs can
+    /// live together in feature folders exactly as organised on disk. METHODs are
+    /// created as children of their owning FUNCTION_BLOCK / INTERFACE.
     ///
-    /// Validated end-to-end in docs/ideas/st-source-twincat-sync.md (2026-07-04):
-    /// text injection via ITcPlcDeclaration/ITcPlcImplementation, object creation
-    /// via CreateChild(name, TREEITEMTYPE_*, "", null), and deletion via
-    /// DeleteChild(name) all work as expected against a real TwinCAT/VS instance.
+    /// Folders are created via CreateChild(name, TREEITEMTYPE_PLCFOLDER=601, "",
+    /// null) (pattern from example/.../GeneratePlcProject.cs). Objects are created
+    /// with CreateChild(name, TREEITEMTYPE_*, "", vInfo) and their text injected
+    /// via ITcPlcDeclaration/ITcPlcImplementation.
+    ///
+    /// Orphan deletion is intentionally NOT performed at the mirrored-folder level:
+    /// it would risk deleting the standard template's default POUs/DUTs/GVLs/MAIN
+    /// items. Only METHODs are pruned (per owner). Deleted .st files are therefore
+    /// left in the project until manually removed.
     /// </summary>
     class PouSyncEngine
     {
-        readonly ITcSysManager _sysManager;
-        readonly string _pousTreePath;
-        readonly string _dutsTreePath;
-        readonly string _gvlsTreePath;
+        const int TREEITEMTYPE_PLCFOLDER = 601;
 
-        public PouSyncEngine(ITcSysManager sysManager, string pousTreePath, string dutsTreePath, string gvlsTreePath)
+        readonly ITcSysManager _sysManager;
+        readonly string _projectRootPath;
+        readonly Dictionary<string, ITcSmTreeItem> _folderCache = new Dictionary<string, ITcSmTreeItem>();
+        readonly Dictionary<string, ITcSmTreeItem> _ownerItems = new Dictionary<string, ITcSmTreeItem>();
+        readonly HashSet<string> _interfaceOwners = new HashSet<string>();
+
+        public PouSyncEngine(ITcSysManager sysManager, string projectRootPath)
         {
             _sysManager = sysManager;
-            _pousTreePath = pousTreePath;
-            _dutsTreePath = dutsTreePath;
-            _gvlsTreePath = gvlsTreePath;
+            _projectRootPath = projectRootPath;
+            _folderCache[projectRootPath] = sysManager.LookupTreeItem(projectRootPath);
         }
 
         public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources)
         {
             var report = new SyncReport();
 
-            List<StPouSource> topLevelPous = desiredSources.Where(s => !s.IsDut && !s.IsMethod && !s.IsGvl).ToList();
-            List<StPouSource> duts = desiredSources.Where(s => s.IsDut).ToList();
-            List<StPouSource> gvls = desiredSources.Where(s => s.IsGvl).ToList();
+            List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod).ToList();
+            List<StPouSource> methods = desiredSources.Where(s => s.IsMethod).ToList();
 
-            SyncTopLevel(_pousTreePath, topLevelPous, report);
-            SyncTopLevel(_dutsTreePath, duts, report);
-            SyncTopLevel(_gvlsTreePath, gvls, report);
-            SyncMethods(topLevelPous, desiredSources.Where(s => s.IsMethod).ToList(), report);
+            // Two passes so cross-type references (FB EXTENDS/IMPLEMENTS, INTERFACE EXTENDS,
+            // ALIAS base type) always resolve regardless of file order:
+            //   Pass 1: create every object as a base-less shell in its mirrored folder
+            //           (CreateChild's vInfo must reference a type that already exists, so we
+            //            never pass a base at creation \u2014 EXTENDS/IMPLEMENTS come from the text).
+            //   Pass 2: inject Declaration/Implementation text (which carries the real
+            //           EXTENDS/IMPLEMENTS/base). By now every referenced type exists, and
+            //           TwinCAT only validates the references at build time anyway.
+            var placed = new List<(StPouSource Source, ITcSmTreeItem Item, bool IsNew)>();
+            foreach (StPouSource source in nonMethods)
+            {
+                ITcSmTreeItem folder = GetOrCreateFolder(source.RelativeFolder);
+                string path = folder.PathName + "^" + source.Name;
+                ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), CreationVInfo(source.Kind), out bool isNew);
+                placed.Add((source, item, isNew));
+
+                if (source.Kind == PouKind.FunctionBlock || source.Kind == PouKind.Interface)
+                {
+                    _ownerItems[source.Name] = item;
+                    if (source.Kind == PouKind.Interface)
+                        _interfaceOwners.Add(source.Name);
+                }
+            }
+
+            foreach (var p in placed)
+            {
+                ((ITcPlcDeclaration)p.Item).DeclarationText = p.Source.DeclarationText;
+                if (p.Source.ImplementationText != null)
+                    ((ITcPlcImplementation)p.Item).ImplementationText = p.Source.ImplementationText;
+
+                (p.IsNew ? report.Created : report.Updated).Add(p.Source.RelativeFolder.Length > 0
+                    ? p.Source.RelativeFolder + "/" + p.Source.Name
+                    : p.Source.Name);
+            }
+
+            SyncMethods(methods, report);
 
             return report;
         }
 
-        void SyncTopLevel(string parentTreePath, List<StPouSource> desired, SyncReport report)
+        /// <summary>
+        /// The vInfo to pass to CreateChild when creating a base-less shell. We never pass a
+        /// user-defined base type here (it may not exist yet); the real base comes from the
+        /// declaration text set in pass 2. Rules that are structurally required by TwinCAT:
+        ///   - INTERFACE: needs a string ("" = no base); null throws "Base class not specified!".
+        ///   - ALIAS: needs a base type; we seed a primitive placeholder ("INT") and let the
+        ///     declaration text set the real (possibly user-defined) base.
+        ///   - FUNCTION_BLOCK and everything else: null.
+        /// </summary>
+        static object CreationVInfo(PouKind kind)
         {
-            ITcSmTreeItem folder = _sysManager.LookupTreeItem(parentTreePath);
-            if (folder == null)
-                throw new InvalidOperationException($"Could not find tree folder at '{parentTreePath}'.");
-
-            var desiredNames = new HashSet<string>(desired.Select(s => s.Name));
-
-            foreach (StPouSource source in desired)
+            switch (kind)
             {
-                Console.WriteLine("    ... syncing {0} '{1}' (type={2})...", source.Kind, source.Name, (int)KindToTreeItemType(source.Kind));
-                string path = $"{parentTreePath}^{source.Name}";
-                // Some tree item kinds require a non-null "base class" in CreateChild's vInfo,
-                // and the exact rule differs by kind (found only by testing against real TwinCAT):
-                //   - ALIAS: the aliased base type (e.g. "LREAL") is always mandatory.
-                //   - INTERFACE: requires a specified string even with no EXTENDS \u2014 "" means
-                //     "no base interface"; passing null throws "Base class not specified!".
-                //   - FUNCTION_BLOCK: the opposite \u2014 requires null when there's no EXTENDS
-                //     (passing "" throws "Must specify valid information for parsing"), and the
-                //     actual base FB name when EXTENDS is present.
-                // Everything else (PROGRAM/FUNCTION/ENUM/STRUCT/GVL) accepts null.
-                object vInfo;
-                if (source.Kind == PouKind.AliasDut)
-                    vInfo = source.BaseType;
-                else if (source.Kind == PouKind.Interface)
-                    vInfo = source.BaseType ?? "";
-                else if (source.Kind == PouKind.FunctionBlock)
-                    vInfo = source.BaseType;
-                else
-                    vInfo = null;
-
-                ITcSmTreeItem item = CreateOrGet(folder, path, source.Name, KindToTreeItemType(source.Kind), vInfo, out bool isNew);
-
-                ((ITcPlcDeclaration)item).DeclarationText = source.DeclarationText;
-                if (source.ImplementationText != null)
-                    ((ITcPlcImplementation)item).ImplementationText = source.ImplementationText;
-
-                (isNew ? report.Created : report.Updated).Add(source.Name);
+                case PouKind.Interface: return "";
+                case PouKind.AliasDut: return "INT";
+                default: return null;
             }
-
-            DeleteOrphans(folder, desiredNames, report);
         }
 
-        void SyncMethods(List<StPouSource> desiredOwners, List<StPouSource> desiredMethods, SyncReport report)
+        /// <summary>Walks/creates the PLC folder chain for a source-relative folder path,
+        /// caching each level. Returns the project root item for an empty path.</summary>
+        ITcSmTreeItem GetOrCreateFolder(string relativeFolder)
         {
-            var ownerKindByName = desiredOwners
-                .Where(s => s.Kind == PouKind.FunctionBlock || s.Kind == PouKind.Interface)
-                .ToDictionary(s => s.Name, s => s.Kind);
+            ITcSmTreeItem current = _folderCache[_projectRootPath];
+            if (string.IsNullOrEmpty(relativeFolder))
+                return current;
 
+            string path = _projectRootPath;
+            foreach (string segment in relativeFolder.Split('/'))
+            {
+                string childPath = path + "^" + segment;
+                if (!_folderCache.TryGetValue(childPath, out ITcSmTreeItem child))
+                {
+                    try
+                    {
+                        child = _sysManager.LookupTreeItem(childPath);
+                    }
+                    catch (COMException)
+                    {
+                        child = current.CreateChild(segment, TREEITEMTYPE_PLCFOLDER, "", null);
+                    }
+                    _folderCache[childPath] = child;
+                }
+                current = child;
+                path = childPath;
+            }
+            return current;
+        }
+
+        void SyncMethods(List<StPouSource> desiredMethods, SyncReport report)
+        {
             var methodsByOwner = desiredMethods
                 .GroupBy(m => m.OwnerName)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            foreach (string unknownOwner in methodsByOwner.Keys.Except(ownerKindByName.Keys))
+            foreach (string unknownOwner in methodsByOwner.Keys.Except(_ownerItems.Keys))
                 throw new InvalidOperationException(
                     $"Method file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 
-            foreach (var owner in ownerKindByName)
+            foreach (var kv in methodsByOwner)
             {
-                string ownerName = owner.Key;
-                bool isInterfaceOwner = owner.Value == PouKind.Interface;
+                string ownerName = kv.Key;
+                ITcSmTreeItem ownerItem = _ownerItems[ownerName];
+                bool isInterfaceOwner = _interfaceOwners.Contains(ownerName);
                 TREEITEMTYPES methodType = isInterfaceOwner
                     ? TREEITEMTYPES.TREEITEMTYPE_PLCITFMETH
                     : TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD;
 
-                string ownerPath = $"{_pousTreePath}^{ownerName}";
-                ITcSmTreeItem ownerItem = _sysManager.LookupTreeItem(ownerPath);
+                var desiredMethodNames = new HashSet<string>(kv.Value.Select(m => m.Name));
 
-                List<StPouSource> methodsForOwner = methodsByOwner.TryGetValue(ownerName, out var list)
-                    ? list
-                    : new List<StPouSource>();
-                var desiredMethodNames = new HashSet<string>(methodsForOwner.Select(m => m.Name));
-
-                foreach (StPouSource method in methodsForOwner)
+                foreach (StPouSource method in kv.Value)
                 {
-                    string path = $"{ownerPath}^{method.Name}";
+                    string path = ownerItem.PathName + "^" + method.Name;
                     ITcSmTreeItem item = CreateOrGet(ownerItem, path, method.Name, methodType, null, out bool isNew);
 
                     ((ITcPlcDeclaration)item).DeclarationText = method.DeclarationText;
@@ -138,8 +170,7 @@ namespace BeckhoffAutomationInterface.Sync
                     }
                     catch (InvalidCastException) when (isInterfaceOwner)
                     {
-                        // Interface method signatures have no implementation body in TwinCAT;
-                        // some TwinCAT versions don't expose ITcPlcImplementation on them at all.
+                        // Interface method signatures have no implementation body.
                     }
 
                     (isNew ? report.Created : report.Updated).Add($"{ownerName}.{method.Name}");

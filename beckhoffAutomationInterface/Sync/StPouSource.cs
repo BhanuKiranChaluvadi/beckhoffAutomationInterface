@@ -25,6 +25,14 @@ namespace BeckhoffAutomationInterface.Sync
         /// </summary>
         public string BaseType { get; }
 
+        /// <summary>
+        /// Source-relative folder path (forward-slash separated, e.g.
+        /// "App/Shark/FunctionBlocks"), mirrored as PLC folders under the project
+        /// root. Empty string for files directly in the source root. Set by the
+        /// parser after construction.
+        /// </summary>
+        public string RelativeFolder { get; set; } = "";
+
         public StPouSource(string name, PouKind kind, string ownerName, string declarationText, string implementationText, string baseType = null)
         {
             Name = name;

@@ -35,13 +35,15 @@ namespace BeckhoffAutomationInterface.Sync
     static class StFileParser
     {
         const string EndVarMarker = "END_VAR";
-        // Method name capture skips an optional access modifier (METHOD PUBLIC Init : BOOL),
-        // otherwise the modifier keyword itself would be mistaken for the method name.
-        static readonly Regex MethodHeaderRegex = new Regex(@"^\s*METHOD\s+(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL)\s+)?(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-        static readonly Regex FunctionBlockHeaderRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-        static readonly Regex FunctionBlockExtendsRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-        static readonly Regex InterfaceHeaderRegex = new Regex(@"^\s*INTERFACE\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-        static readonly Regex InterfaceExtendsRegex = new Regex(@"^\s*INTERFACE\s+\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        // Headers may carry optional modifiers between the keyword and the name, e.g.
+        // "FUNCTION_BLOCK ABSTRACT FB_X", "METHOD PUBLIC ABSTRACT Foo". These regexes skip
+        // any run of such modifiers so the captured group is always the actual name.
+        const string Modifiers = @"(?:(?:PUBLIC|PRIVATE|PROTECTED|INTERNAL|ABSTRACT|FINAL)\s+)*";
+        static readonly Regex MethodHeaderRegex = new Regex(@"^\s*METHOD\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex FunctionBlockHeaderRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex FunctionBlockExtendsRegex = new Regex(@"^\s*FUNCTION_BLOCK\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex InterfaceHeaderRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
+        static readonly Regex InterfaceExtendsRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex AliasBaseTypeRegex = new Regex(@"TYPE\s+\w+\s*:\s*(\w+)\s*;", RegexOptions.IgnoreCase);
 
         public static List<StPouSource> ParseFile(string stFilePath)
@@ -84,9 +86,34 @@ namespace BeckhoffAutomationInterface.Sync
 
         public static List<StPouSource> ParseFolder(string sourceFolder)
         {
-            return Directory.GetFiles(sourceFolder, "*.st", SearchOption.TopDirectoryOnly)
-                .SelectMany(ParseFile)
-                .ToList();
+            string root = Path.GetFullPath(sourceFolder).TrimEnd(Path.DirectorySeparatorChar);
+            var result = new List<StPouSource>();
+
+            foreach (string file in Directory.GetFiles(root, "*.st", SearchOption.AllDirectories))
+            {
+                string relativeFolder = GetRelativeFolder(root, file);
+                foreach (StPouSource src in ParseFile(file))
+                {
+                    src.RelativeFolder = relativeFolder;
+                    result.Add(src);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns the source-root-relative folder of a file, forward-slash
+        /// separated (e.g. "App/Shark/FunctionBlocks"), or "" if the file sits
+        /// directly in the root. (.NET Framework 4.8 has no Path.GetRelativePath.)
+        /// </summary>
+        static string GetRelativeFolder(string root, string filePath)
+        {
+            string dir = Path.GetFullPath(Path.GetDirectoryName(filePath));
+            if (string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
+                return "";
+            string rel = dir.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar);
+            return rel.Replace(Path.DirectorySeparatorChar, '/');
         }
 
         /// <summary>
@@ -194,7 +221,9 @@ namespace BeckhoffAutomationInterface.Sync
         {
             int endVarIndex = source.LastIndexOf(EndVarMarker, StringComparison.OrdinalIgnoreCase);
             if (endVarIndex < 0)
-                throw new FormatException($"Could not find END_VAR for '{sectionName}' in '{filePath}'.");
+                // No VAR...END_VAR block (e.g. a METHOD or FUNCTION with no local variables):
+                // the declaration is just the header line, the rest is the body.
+                return SplitAfterHeaderLine(source);
 
             int declarationEnd = endVarIndex + EndVarMarker.Length;
             string declaration = source.Substring(0, declarationEnd).Trim();
@@ -202,14 +231,47 @@ namespace BeckhoffAutomationInterface.Sync
             return (declaration, implementation);
         }
 
+        /// <summary>
+        /// Splits a section that has no VAR...END_VAR block into (header line, body): the
+        /// declaration is everything up to and including the first POU/METHOD header line
+        /// (e.g. "METHOD IsInitialized : BOOL"), the implementation is the rest.
+        /// </summary>
+        static (string declaration, string implementation) SplitAfterHeaderLine(string source)
+        {
+            string[] lines = source.Replace("\r\n", "\n").Split('\n');
+            int headerIdx = -1;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string u = lines[i].Trim().ToUpperInvariant();
+                if (u.StartsWith("METHOD") || u.StartsWith("FUNCTION_BLOCK") || u.StartsWith("FUNCTION")
+                    || u.StartsWith("PROGRAM") || u.StartsWith("INTERFACE"))
+                {
+                    headerIdx = i;
+                    break;
+                }
+            }
+            if (headerIdx < 0)
+                return (source.Trim(), "");
+
+            string declaration = string.Join("\n", lines, 0, headerIdx + 1).Trim();
+            string implementation = headerIdx + 1 < lines.Length
+                ? string.Join("\n", lines, headerIdx + 1, lines.Length - headerIdx - 1).Trim()
+                : "";
+            return (declaration, implementation);
+        }
+
         static PouKind ClassifyKind(string source, string filePath)
         {
-            foreach (string rawLine in source.Split('\n'))
+            // Classify against a comment-stripped copy so leading (* ... *) block comments
+            // and // line comments (common file headers) don't hide the first keyword, and
+            // so a comment containing "STRUCT"/"(" can't misclassify a DUT.
+            string stripped = StripComments(source);
+
+            foreach (string rawLine in stripped.Split('\n'))
             {
                 string line = rawLine.Trim().TrimEnd('\r');
                 if (line.Length == 0) continue;
                 if (line.StartsWith("{")) continue;  // attribute pragma, e.g. {attribute 'qualified_only'}
-                if (line.StartsWith("//")) continue; // comment line
 
                 string upper = line.ToUpperInvariant();
                 if (upper.StartsWith("FUNCTION_BLOCK")) return PouKind.FunctionBlock;
@@ -220,16 +282,59 @@ namespace BeckhoffAutomationInterface.Sync
                 if (upper.StartsWith("VAR_GLOBAL")) return PouKind.Gvl;
                 if (upper.StartsWith("TYPE"))
                 {
-                    string upperSource = source.ToUpperInvariant();
+                    string upperSource = stripped.ToUpperInvariant();
                     if (upperSource.Contains("STRUCT")) return PouKind.StructDut;
                     if (upperSource.Contains("(")) return PouKind.EnumDut; // enum literal list, e.g. TYPE X : (A, B); END_TYPE
                     return PouKind.AliasDut; // simple alias, e.g. TYPE T_MotorSpeed : LREAL; END_TYPE
                 }
 
-                throw new FormatException($"Could not classify POU kind for '{filePath}' \u2014 unrecognized first keyword '{line}'.");
+                // Not a recognized keyword \u2014 skip it rather than throw. Comment-stripping is
+                // best-effort (ST comments can legitimately contain "*)" inside them, e.g.
+                // "(AMBT_TEMP_*)", which leaves stray fragments), so tolerate junk lines and
+                // keep scanning for the first real POU/DUT/GVL keyword.
             }
 
-            throw new FormatException($"'{filePath}' appears to be empty.");
+            throw new FormatException($"Could not classify POU kind for '{filePath}' \u2014 no FUNCTION_BLOCK/FUNCTION/PROGRAM/INTERFACE/METHOD/VAR_GLOBAL/TYPE keyword found.");
+        }
+
+        /// <summary>
+        /// Removes ST comments \u2014 (* ... *) block comments (nesting-aware) and // line
+        /// comments \u2014 while preserving newlines so line-based scanning still works. Used
+        /// only for classification/boundary sniffing; the original text (with comments) is
+        /// what gets stored as the POU's declaration/implementation.
+        /// </summary>
+        static string StripComments(string source)
+        {
+            var sb = new System.Text.StringBuilder(source.Length);
+            int depth = 0;
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (depth == 0 && i + 1 < source.Length && source[i] == '/' && source[i + 1] == '/')
+                {
+                    while (i < source.Length && source[i] != '\n') i++;
+                    if (i < source.Length) sb.Append('\n');
+                    continue;
+                }
+                if (i + 1 < source.Length && source[i] == '(' && source[i + 1] == '*')
+                {
+                    depth++;
+                    i++;
+                    continue;
+                }
+                if (depth > 0 && i + 1 < source.Length && source[i] == '*' && source[i + 1] == ')')
+                {
+                    depth--;
+                    i++;
+                    continue;
+                }
+                if (depth > 0)
+                {
+                    if (source[i] == '\n') sb.Append('\n');
+                    continue;
+                }
+                sb.Append(source[i]);
+            }
+            return sb.ToString();
         }
     }
 }

@@ -1,0 +1,18 @@
+INTERFACE I_FlowSubsystem
+
+METHOD IsInitialized : BOOL
+END_METHOD
+
+METHOD HasAnyError : BOOL
+END_METHOD
+
+METHOD GetControllerByIndex : I_Controller
+VAR_INPUT
+    nZone : INT;
+END_VAR
+END_METHOD
+
+METHOD GetCount : INT
+END_METHOD
+
+END_INTERFACE

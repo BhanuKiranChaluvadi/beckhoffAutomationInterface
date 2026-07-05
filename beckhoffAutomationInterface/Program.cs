@@ -30,6 +30,34 @@ namespace BeckhoffAutomationInterface
 
         static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
+        /// <summary>Parses every .st file under the source folder without opening Visual
+        /// Studio, aggregating and printing all parser failures. Returns a process exit code
+        /// (0 = all parsed, 1 = one or more failed). Used by the --parse-only preflight.</summary>
+        static int ParseOnly(string stSourceFolder)
+        {
+            var failures = new List<string>();
+            int ok = 0, objects = 0;
+            foreach (string file in Directory.GetFiles(stSourceFolder, "*.st", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    objects += Sync.StFileParser.ParseFile(file).Count;
+                    ok++;
+                }
+                catch (Exception ex)
+                {
+                    string rel = file.Substring(stSourceFolder.Length).TrimStart('\\', '/');
+                    failures.Add($"  {rel}\n      {ex.Message}");
+                }
+            }
+
+            Console.WriteLine("{0}: [parse-only] {1} file(s) parsed OK ({2} PLC objects), {3} failed.",
+                Now(), ok, objects, failures.Count);
+            foreach (string f in failures)
+                Console.WriteLine(f);
+            return failures.Count == 0 ? 0 : 1;
+        }
+
         /// <summary>
         /// Waits for VS to finish loading by retrying a COM call until it succeeds
         /// or the timeout is reached. Handles RPC_E_SERVERCALL_RETRYLATER (0x8001010A)
@@ -83,6 +111,7 @@ namespace BeckhoffAutomationInterface
             }
         }
 
+        [STAThread]
         static void Main(string[] args)
         {
             // Configuration
@@ -96,8 +125,16 @@ namespace BeckhoffAutomationInterface
             string pousTreePath = string.Format("TIPC^{0}^{0} Project^POUs", plcName);
             string dutsTreePath = string.Format("TIPC^{0}^{0} Project^DUTs", plcName);
             string gvlsTreePath = string.Format("TIPC^{0}^{0} Project^GVLs", plcName);
+            string projectRootPath = string.Format("TIPC^{0}^{0} Project", plcName);
             string referencesTreePath = string.Format("TIPC^{0}^{0} Project^References", plcName);
             string libraryManifestPath = Path.Combine(stSourceFolder, "libraries.xml");
+
+            // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser
+            // issues surface in seconds (not after a ~40s VS round-trip). Run with --parse-only.
+            if (args.Contains("--parse-only"))
+            {
+                Environment.Exit(ParseOnly(stSourceFolder));
+            }
 
             // Pre-flight checks
             if (!File.Exists(twincatTemplate))
@@ -120,6 +157,10 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Visual Studio DTE type resolved.", Now());
 
             Console.WriteLine("{0}: Creating the DTE instance...", Now());
+            // Register a COM message filter so calls VS rejects while busy are auto-retried
+            // (essential when driving a large batch of PLC-object edits, which otherwise
+            // throws RPC_E_SERVERCALL_RETRYLATER). Requires the STA thread (see [STAThread]).
+            MessageFilter.Register();
             // Snapshot existing devenv PIDs so we can reliably identify the one WE spawn
             // (HWND-based capture is fragile once a modal dialog is up).
             var devenvBefore = new HashSet<int>(
@@ -147,7 +188,7 @@ namespace BeckhoffAutomationInterface
             {
                 RunSync(dte, standardPlcProjectTemplate, plcName, solutionName, solutionDirectory,
                     solutionFilePath, stSourceFolder, twincatTemplate, pousTreePath, dutsTreePath,
-                    gvlsTreePath, referencesTreePath, libraryManifestPath);
+                    gvlsTreePath, projectRootPath, referencesTreePath, libraryManifestPath);
             }
             finally
             {
@@ -160,6 +201,7 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: Closing Visual Studio...", Now());
                 TryQuit(dte, VS_QUIT_TIMEOUT_MS);
                 EnsureExited(devenvPid);
+                MessageFilter.Revoke();
             }
         }
 
@@ -197,7 +239,7 @@ namespace BeckhoffAutomationInterface
         static void RunSync(EnvDTE80.DTE2 dte, string standardPlcProjectTemplate, string plcName,
             string solutionName, string solutionDirectory, string solutionFilePath, string stSourceFolder,
             string twincatTemplate, string pousTreePath, string dutsTreePath, string gvlsTreePath,
-            string referencesTreePath, string libraryManifestPath)
+            string projectRootPath, string referencesTreePath, string libraryManifestPath)
         {
             EnvDTE.Project project;
             ITcSysManager sysManager;
@@ -271,7 +313,7 @@ namespace BeckhoffAutomationInterface
             var desiredPous = StFileParser.ParseFolder(stSourceFolder);
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            var syncEngine = new PouSyncEngine(sysManager, pousTreePath, dutsTreePath, gvlsTreePath);
+            var syncEngine = new PouSyncEngine(sysManager, projectRootPath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);
 
             foreach (string name in syncReport.Created) Console.WriteLine("    + created  {0}", name);

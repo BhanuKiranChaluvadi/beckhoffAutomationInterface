@@ -1,0 +1,15 @@
+INTERFACE I_ValveSubsystem
+
+METHOD IsInitialized : BOOL
+END_METHOD
+
+METHOD HasAnyError : BOOL
+END_METHOD
+
+METHOD GetValveByIndex : I_Valve
+VAR_INPUT
+    nValveId : INT;
+END_VAR
+END_METHOD
+
+END_INTERFACE

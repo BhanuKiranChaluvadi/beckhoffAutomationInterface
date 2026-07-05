@@ -1,0 +1,15 @@
+INTERFACE I_DigitalInputSubsystem
+
+METHOD IsInitialized : BOOL
+END_METHOD
+
+METHOD GetInputByIndex : I_DigitalInput
+VAR_INPUT
+    nInput : INT;
+END_VAR
+END_METHOD
+
+METHOD GetCount : INT
+END_METHOD
+
+END_INTERFACE

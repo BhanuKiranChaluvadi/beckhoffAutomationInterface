@@ -1,0 +1,15 @@
+(* Modbus slave interface. *)
+INTERFACE I_ModbusSlave
+
+METHOD HandleRequest : BOOL
+END_METHOD
+
+METHOD Update : BOOL
+END_METHOD
+
+METHOD IsBusy : BOOL
+END_METHOD
+
+METHOD Reset : BOOL
+END_METHOD
+END_INTERFACE
