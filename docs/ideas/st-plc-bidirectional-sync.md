@@ -105,6 +105,16 @@ pipeline is a later problem, not a v1 concern.
   objects whose .st file is gone) — new PouSyncEngine entry point; the
   existing full engine stays as-is for the first bootstrap run. (Motivation
   is now SPEED only, not git noise — see resolved assumption above.)
+  **Slice 1 DONE (2026-07-06)**: new `Sync/GitDiffHelper.cs` shells out to
+  `git diff --name-status --relative <sinceSha> HEAD` (read-only) and
+  returns Changed/Deleted .st paths relative to the source folder. Verified
+  against this repo's OWN real history (not the PLC project) via a
+  temporary spike flag: exact match against raw `git diff` output for both
+  a single-file change (1 changed, 0 deleted) and a wider range with real
+  deletions (5 deleted, exact file list match); spike flag removed after
+  verification. Still TODO: wire this into an actual incremental
+  PouSyncEngine entry point + `.st-sync-state` file + CLI flag — this slice
+  only proves the diff mechanism, it isn't called from anywhere yet.
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
   launches the sync detached.
