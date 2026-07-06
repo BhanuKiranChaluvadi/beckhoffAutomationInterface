@@ -87,6 +87,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--events-only` | off | Check `events.xml` against the `.tsproj` (declared vs actual) and stop — no Visual Studio session needed (see Known limitations) |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 | `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
+| `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (DUTs/GVLs only for now — see below). |
 
 ### Ignoring source files
 
@@ -149,6 +150,28 @@ override with `$env:BECKHOFF_TWINCAT_DEST` / `$env:BECKHOFF_ST_SOURCE` if
 different. It does **not** pass `--name`, so the project name defaults to
 the source folder's own directory name ("Shark") — this must match whatever
 name the project was originally bootstrapped with.
+
+### Exporting manual PLC-side edits
+
+Some objects can only be created manually via the XAE UI (e.g. IO-scanned
+DUTs, Event Classes) but should still live in `.st` source once created.
+`--export <ObjectName>` finds that live object, reads its current text, and
+writes it to the correct mirrored `.st` file path (creating folders as
+needed) — the read-side counterpart of the normal sync, using the same
+`DeclarationText`/`ImplementationText` properties `PouSyncEngine` writes.
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export T_Beckhoff_AmbientSensor
+```
+
+**Current limitation**: only DUTs (STRUCT/ENUM/ALIAS) and GVLs are
+supported — for these, the live object's `DeclarationText` already IS the
+complete file content, so no reconstruction is needed. FUNCTION_BLOCK/
+PROGRAM/INTERFACE/FUNCTION export (which have a separate implementation
+section, re-added terminators, and possibly child METHODs/PROPERTIES to
+stitch back together) isn't implemented yet — `--export` refuses with a
+clear error for those kinds. Errors also refuse cleanly if the name isn't
+found, or matches more than one object.
 
 ### Naming-convention linting
 

@@ -161,6 +161,44 @@ namespace BeckhoffAutomationInterface
             dte.Solution.SaveAs(options.SolutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
 
+            if (options.ExportObjectName != null)
+            {
+                // Uses Environment.ExitCode (not Environment.Exit) on error paths so this
+                // method can still `return` normally and let the enclosing `using
+                // (VisualStudioSession ...)` block in Main dispose/close VS properly.
+                List<ITcSmTreeItem> matches = PlcObjectExporter.FindByName(sysManager.LookupTreeItem(options.ProjectRootPath), options.ExportObjectName);
+                if (matches.Count == 0)
+                {
+                    Console.Error.WriteLine("ERROR: no PLC object named '{0}' found.", options.ExportObjectName);
+                    Environment.ExitCode = 1;
+                    return;
+                }
+                if (matches.Count > 1)
+                {
+                    Console.Error.WriteLine("ERROR: {0} object(s) named '{1}' found — ambiguous.", matches.Count, options.ExportObjectName);
+                    Environment.ExitCode = 1;
+                    return;
+                }
+
+                ITcSmTreeItem item = matches[0];
+                if (!PlcObjectExporter.IsSupported(item))
+                {
+                    Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported — only DUTs (STRUCT/ENUM/ALIAS) and GVLs can be exported so far.", item.Name, item.ItemSubTypeName);
+                    Environment.ExitCode = 1;
+                    return;
+                }
+
+                string text = PlcObjectExporter.Export(item);
+                string relativeFolder = PlcObjectExporter.GetRelativeFolder(item, options.ProjectRootPath);
+                string folderPath = Path.Combine(options.SourceFolder, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(folderPath);
+                string filePath = Path.Combine(folderPath, item.Name + ".st");
+                File.WriteAllText(filePath, text);
+
+                Console.WriteLine("{0}: Exported '{1}' -> '{2}'.", Now(), item.Name, filePath);
+                return;
+            }
+
             if (!options.BuildOnly)
             {
             // Sync .st files -> POUs (create/update/delete). --incremental narrows this to

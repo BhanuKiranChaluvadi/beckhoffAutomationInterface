@@ -31,6 +31,11 @@ namespace BeckhoffAutomationInterface
         /// baseline (see Sync.SyncState) — refuses to run without one rather than guessing.</summary>
         public bool Incremental { get; }
 
+        /// <summary>When set, export the named live PLC object's current text back to its
+        /// mirrored .st file instead of running a sync (see Sync.PlcObjectExporter). Null
+        /// when --export wasn't given.</summary>
+        public string ExportObjectName { get; }
+
         /// <summary>Extra ignore glob patterns from repeated --ignore &lt;pattern&gt; CLI args,
         /// merged with any ".stignore" file found in SourceFolder (see Sync.IgnoreRules).</summary>
         public IReadOnlyList<string> IgnorePatterns { get; }
@@ -59,7 +64,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -69,6 +74,7 @@ namespace BeckhoffAutomationInterface
             ParseOnly = parseOnly;
             IgnorePatterns = ignorePatterns;
             Incremental = incremental;
+            ExportObjectName = exportObjectName;
         }
 
         /// <summary>
@@ -95,7 +101,8 @@ namespace BeckhoffAutomationInterface
                 eventsOnly: args.Contains("--events-only"),
                 parseOnly: args.Contains("--parse-only"),
                 ignorePatterns: GetOptions(args, "--ignore"),
-                incremental: args.Contains("--incremental"));
+                incremental: args.Contains("--incremental"),
+                exportObjectName: GetOption(args, "--export"));
         }
 
         static string GetOption(string[] args, string flag)
@@ -128,6 +135,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("                    merged with a \".stignore\" file in --source, if present");
             Console.WriteLine("  --incremental     Sync only .st files changed/deleted since the last recorded");
             Console.WriteLine("                    sync (see .st-sync-state); requires a prior full sync's baseline");
+            Console.WriteLine("  --export <name>   Write the named live PLC object's current text back to its");
+            Console.WriteLine("                    mirrored .st file (DUTs/GVLs only for now)");
             Console.WriteLine("  --help, -h        Show this message");
         }
     }

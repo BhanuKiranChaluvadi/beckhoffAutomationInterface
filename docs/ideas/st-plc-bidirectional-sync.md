@@ -176,6 +176,27 @@ pipeline is a later problem, not a v1 concern.
   `DeclarationText`/`ImplementationText` directly from the tree item (same
   properties `PouSyncEngine` already writes) → .st file written to the
   inferred mirrored folder path. No XML parsing/conversion needed.
+  **PARTIALLY DONE (2026-07-06)**: new `Sync/PlcObjectExporter.cs` +
+  `--export` CLI flag, supporting DUTs (STRUCT/ENUM/ALIAS) and GVLs \u2014 the
+  ORIGINAL motivating use case (IO-scanned DUTs) \u2014 since for these kinds
+  `DeclarationText` already IS the complete file content verbatim (no
+  terminator reconstruction needed at all, confirmed by re-checking
+  `StFileParser.ParseFile`'s own DUT/GVL branch: it stores the WHOLE
+  trimmed file as DeclarationText for these kinds). FUNCTION_BLOCK/PROGRAM/
+  INTERFACE/FUNCTION export (separate implementation section + re-added
+  terminators + child METHODs/PROPERTIES to stitch together) is explicitly
+  NOT done yet \u2014 refuses with a clear error naming the unsupported kind.
+  Found and fixed a real bug during testing: `ITcSmTreeItem.ItemSubType`
+  and `.ItemSubTypeName` do NOT correspond to each other in this COM API
+  (confirmed against the official `example/.../SysManSamples/Form1.cs`,
+  which checks `.ItemType`, not `.ItemSubType`, against the `TREEITEMTYPES`
+  enum) \u2014 `ItemSubTypeName` is actually a human-readable name for
+  `ItemType`. Classification must check `item.ItemType`, not
+  `item.ItemSubType`. Verified end-to-end against a disposable scratch
+  project: successful STRUCT export with exact round-trip fidelity
+  (re-exported text byte-identical to the original source), correct
+  not-found error, and correct unsupported-kind error (tried exporting a
+  FUNCTION_BLOCK). Scratch project fully cleaned up afterward.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
   run automatically before every sync. **PARTIALLY DONE (2026-07-06)**: the
   linter half is done \u2014 new `Sync/StLinter.cs` checks each parsed object's
