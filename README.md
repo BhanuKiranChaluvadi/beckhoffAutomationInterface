@@ -129,6 +129,27 @@ or run a full sync's orphan-cleanup path once that's built (see
 `docs/ideas/st-plc-bidirectional-sync.md`). `--incremental` refuses to run
 (exit code 1) if no baseline exists yet — run a full sync first.
 
+### Automatic sync on commit (git hook)
+
+A `post-commit` hook in [`githooks/`](githooks/) can trigger `--incremental`
+automatically, detached (so `git commit` returns immediately) — sync output
+goes to `githooks/logs/<timestamp>.log`, not the terminal.
+
+One-time setup:
+
+```powershell
+git config core.hooksPath githooks
+```
+
+The hook (`githooks/post-commit`) is a fast no-op unless the commit touched
+`*.st` files, then launches `githooks/run-incremental-sync.ps1` hidden/
+detached. That script assumes the TwinCAT project already exists at
+`C:\Users\<you>\Documents\TwinCAT` with the ST source at `<repo>\ST\Shark` —
+override with `$env:BECKHOFF_TWINCAT_DEST` / `$env:BECKHOFF_ST_SOURCE` if
+different. It does **not** pass `--name`, so the project name defaults to
+the source folder's own directory name ("Shark") — this must match whatever
+name the project was originally bootstrapped with.
+
 ### Naming-convention linting
 
 Every parse (`--parse-only` or a full sync) runs a naming-convention linter

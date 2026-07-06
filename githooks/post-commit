@@ -1,0 +1,23 @@
+#!/bin/sh
+# git post-commit hook — detached, non-blocking trigger for the incremental ST sync.
+#
+# Installed via: git config core.hooksPath githooks   (one-time, see README.md)
+#
+# Fast no-op if this commit didn't touch any .st files (avoids spinning up
+# PowerShell/the sync tool on every unrelated commit). Otherwise launches
+# run-incremental-sync.ps1 detached (Start-Process, hidden window) so
+# `git commit` returns immediately — sync progress/result goes to
+# githooks/logs/, not the terminal.
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+CHANGED_ST=$(git diff --name-only HEAD~1 HEAD -- '*.st' 2>/dev/null)
+if [ -z "$CHANGED_ST" ]; then
+    exit 0
+fi
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \
+    "Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','$REPO_ROOT/githooks/run-incremental-sync.ps1'" \
+    >/dev/null 2>&1
+
+exit 0

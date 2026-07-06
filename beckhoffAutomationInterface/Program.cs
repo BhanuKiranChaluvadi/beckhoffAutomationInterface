@@ -127,6 +127,16 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: --events-only: event class check complete, skipping Visual Studio.", Now());
                 Environment.Exit(0);
             }
+
+            // Fail fast (before opening Visual Studio) if --incremental has nothing to diff
+            // against — no point paying the ~30-40s VS round-trip just to refuse.
+            if (options.Incremental && !options.BuildOnly && SyncState.Read(options.SyncStatePath) == null)
+            {
+                Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
+                Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
+                Environment.Exit(1);
+            }
+
             // Pre-flight checks
             if (!File.Exists(options.TwinCatTemplate))
             {
@@ -160,12 +170,6 @@ namespace BeckhoffAutomationInterface
             if (options.Incremental)
             {
                 string lastSha = SyncState.Read(options.SyncStatePath);
-                if (lastSha == null)
-                {
-                    Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
-                    Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
-                    Environment.Exit(1);
-                }
 
                 Console.WriteLine("{0}: Computing .st changes since {1}...", Now(), lastSha);
                 GitDiffResult diff = GitDiffHelper.GetChangedStFiles(options.SourceFolder, lastSha);

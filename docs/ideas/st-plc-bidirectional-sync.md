@@ -141,7 +141,32 @@ pipeline is a later problem, not a v1 concern.
   knowing before assuming 100% incremental-sync parity with a full sync.
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
-  launches the sync detached.
+  launches the sync detached. **DONE (2026-07-06)**: `githooks/post-commit`
+  (POSIX shell, git-bash compatible \u2014 fast no-op unless the commit touched
+  `*.st` files) launches `githooks/run-incremental-sync.ps1` hidden/detached
+  via `Start-Process`, so `git commit` returns immediately. The worker
+  script runs `--incremental`, logging everything (including a SUCCESS/
+  FAILED marker) to `githooks/logs/<timestamp>.log` (gitignored) since
+  nothing is visible to the developer's terminal. Installed via
+  `git config core.hooksPath githooks` (one-time, tracked-in-repo hooks
+  directory, not `.git/hooks`). Also moved the `--incremental` no-baseline
+  check to BEFORE Visual Studio opens (was previously wasting a ~30-40s VS
+  round-trip only to then refuse) \u2014 a small, closely-related fix made as
+  part of this same increment since it directly serves the hook's goal of
+  being fast/lightweight. Verified functionally: (1) the shell hook's `git
+  diff --name-only HEAD~1 HEAD -- '*.st'` detection against this repo's own
+  real history (correctly empty for non-.st commits); (2) the worker script
+  end-to-end against a disposable scratch project \u2014 fast-fail path (no
+  baseline \u2192 instant FAILED in log, no VS opened) and success path
+  (bootstrap \u2192 commit a change \u2192 worker correctly reused the SAME
+  project, "~ updated FB_Gamma", SUCCESS marker). Scratch project fully
+  cleaned up afterward, never touched the real project.
+  KNOWN CAVEAT: the worker script doesn't pass `--name`, relying on the
+  "project name defaults to source folder name" convention (true for the
+  real Shark project) \u2014 documented in the script's own header comment and
+  the README; would silently bootstrap a SEPARATE project if that
+  convention is ever broken (e.g. an explicit different `--name` at
+  original bootstrap time).
 - .stignore file + --ignore CLI flag, applied during ParseFolder. **DONE
   (2026-07-06)**: `Sync/IgnoreRules.cs` (gitignore-style glob matching),
   wired into `StFileParser.GetStFiles`/`ParseFolder` and both call sites in
