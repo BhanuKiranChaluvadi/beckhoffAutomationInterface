@@ -104,6 +104,30 @@ is matched against the whole source-relative path. `*` matches within a path
 segment, `**` matches across segments. Use `--ignore <glob>` for one-off,
 per-invocation exclusions on top of `.stignore`.
 
+### Naming-convention linting
+
+Every parse (`--parse-only` or a full sync) runs a naming-convention linter
+over the parsed objects and prints warnings — it never blocks the sync or
+rewrites anything. It checks the prefix convention already used throughout
+this codebase:
+
+| Kind | Expected prefix | Example |
+|---|---|---|
+| `FUNCTION_BLOCK` | `FB_` | `FB_HeatZone` |
+| `PROGRAM` | `PRG_` | `PRG_MAIN` |
+| `INTERFACE` | `I_` | `I_Tunable` |
+| `FUNCTION` | `F_` | `F_ClampSpeed` |
+| `ENUM` (`TYPE ... : (...)`) | `E_` | `E_CTRL_MODE` |
+| `STRUCT` | `ST_` | `ST_HeatZoneConfig` |
+| Alias (`TYPE X : Y;`) | `T_` | `T_Beckhoff_AmbientSensor` |
+| GVL | `GVL_` | `GVL_HeatZone` |
+
+Known false positives (safe to ignore): the default TwinCAT template's own
+`MAIN` program, and alias-of-a-struct types conventionally kept under the
+`ST_` prefix instead of `T_` (e.g. `ST_MFC_Telemetry : ST_MFCTelemetry`) to
+signal they represent the same struct shape. METHODs and PROPERTIES have no
+naming convention and are never checked.
+
 ### Typical workflow
 
 ```powershell

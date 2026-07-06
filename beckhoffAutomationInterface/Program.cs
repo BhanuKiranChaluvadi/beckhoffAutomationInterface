@@ -32,12 +32,13 @@ namespace BeckhoffAutomationInterface
         static int ParseOnly(string stSourceFolder, IgnoreRules ignore)
         {
             var failures = new List<string>();
-            int ok = 0, objects = 0;
+            var parsed = new List<Sync.StPouSource>();
+            int ok = 0;
             foreach (string file in Sync.StFileParser.GetStFiles(stSourceFolder, ignore))
             {
                 try
                 {
-                    objects += Sync.StFileParser.ParseFile(file).Count;
+                    parsed.AddRange(Sync.StFileParser.ParseFile(file));
                     ok++;
                 }
                 catch (Exception ex)
@@ -48,9 +49,18 @@ namespace BeckhoffAutomationInterface
             }
 
             Console.WriteLine("{0}: [parse-only] {1} file(s) parsed OK ({2} PLC objects), {3} failed.",
-                Now(), ok, objects, failures.Count);
+                Now(), ok, parsed.Count, failures.Count);
             foreach (string f in failures)
                 Console.WriteLine(f);
+
+            List<string> lintIssues = Sync.StLinter.Lint(parsed);
+            if (lintIssues.Count > 0)
+            {
+                Console.WriteLine("{0}: [lint] {1} naming convention warning(s):", Now(), lintIssues.Count);
+                foreach (string issue in lintIssues)
+                    Console.WriteLine("    ! {0}", issue);
+            }
+
             return failures.Count == 0 ? 0 : 1;
         }
 
@@ -146,6 +156,14 @@ namespace BeckhoffAutomationInterface
             // Sync .st files -> POUs (create/update/delete)
             Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), options.SourceFolder);
             var desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
+
+            List<string> lintIssues = StLinter.Lint(desiredPous);
+            if (lintIssues.Count > 0)
+            {
+                Console.WriteLine("{0}: [lint] {1} naming convention warning(s):", Now(), lintIssues.Count);
+                foreach (string issue in lintIssues)
+                    Console.WriteLine("    ! {0}", issue);
+            }
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             var syncEngine = new PouSyncEngine(sysManager, options.ProjectRootPath);

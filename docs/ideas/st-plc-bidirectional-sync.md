@@ -118,7 +118,18 @@ pipeline is a later problem, not a v1 concern.
   properties `PouSyncEngine` already writes) → .st file written to the
   inferred mirrored folder path. No XML parsing/conversion needed.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
-  run automatically before every sync.
+  run automatically before every sync. **PARTIALLY DONE (2026-07-06)**: the
+  linter half is done \u2014 new `Sync/StLinter.cs` checks each parsed object's
+  name against the prefix convention empirically confirmed throughout the
+  real Shark source (FB_/PRG_/I_/F_/E_/ST_/T_/GVL_), reporting warnings
+  (never blocking) from both `--parse-only` and the main sync path. Verified
+  against a scratch temp folder (2 intentional violations caught) AND
+  against the real 1261-object Shark source (8 warnings: 1 known-safe
+  `MAIN` template default, 7 alias-of-struct types conventionally kept
+  under `ST_` rather than `T_` \u2014 both documented as known false positives
+  in the README, not bugs). The FORMATTER half (indentation/style rewriting)
+  is deliberately deferred as a separate, riskier increment (it would mutate
+  user source files, unlike the linter which only reports) \u2014 not started.
 - Event Class "declared vs actual" checker (replaces the write-based
   `EventClassSync.cs`, since automating Event Class *creation* is a
   confirmed dead end). **DONE (2026-07-06)**: new read-only
