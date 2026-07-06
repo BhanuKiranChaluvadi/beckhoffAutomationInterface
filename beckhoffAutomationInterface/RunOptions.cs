@@ -31,6 +31,12 @@ namespace BeckhoffAutomationInterface
         /// baseline (see Sync.SyncState) — refuses to run without one rather than guessing.</summary>
         public bool Incremental { get; }
 
+        /// <summary>Opt-in gate (user's explicit choice of the safer default): with
+        /// --incremental alone, deleted .st files are only warned about. Combined with
+        /// --confirm-delete, Sync.IncrementalDeleter actually removes the corresponding
+        /// PLC object(s), conservatively (exact unambiguous name match only).</summary>
+        public bool ConfirmDelete { get; }
+
         /// <summary>When set, export the named live PLC object's current text back to its
         /// mirrored .st file instead of running a sync (see Sync.PlcObjectExporter). Null
         /// when --export wasn't given.</summary>
@@ -64,7 +70,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -75,6 +81,7 @@ namespace BeckhoffAutomationInterface
             IgnorePatterns = ignorePatterns;
             Incremental = incremental;
             ExportObjectName = exportObjectName;
+            ConfirmDelete = confirmDelete;
         }
 
         /// <summary>
@@ -102,7 +109,8 @@ namespace BeckhoffAutomationInterface
                 parseOnly: args.Contains("--parse-only"),
                 ignorePatterns: GetOptions(args, "--ignore"),
                 incremental: args.Contains("--incremental"),
-                exportObjectName: GetOption(args, "--export"));
+                exportObjectName: GetOption(args, "--export"),
+                confirmDelete: args.Contains("--confirm-delete"));
         }
 
         static string GetOption(string[] args, string flag)
@@ -134,9 +142,14 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --ignore <glob>   Exclude .st files matching this pattern (repeatable);");
             Console.WriteLine("                    merged with a \".stignore\" file in --source, if present");
             Console.WriteLine("  --incremental     Sync only .st files changed/deleted since the last recorded");
-            Console.WriteLine("                    sync (see .st-sync-state); requires a prior full sync's baseline");
+            Console.WriteLine("                    sync (see .st-sync-state); requires a prior full sync's baseline.");
+            Console.WriteLine("                    Deleted files are only WARNED about unless --confirm-delete is");
+            Console.WriteLine("                    also given, which actually removes the matching PLC object(s).");
+            Console.WriteLine("  --confirm-delete  Combined with --incremental: actually delete PLC object(s)");
+            Console.WriteLine("                    for .st files git reports as deleted (conservative: exact,");
+            Console.WriteLine("                    unambiguous name matches only — anything else is skipped/reported)");
             Console.WriteLine("  --export <name>   Write the named live PLC object's current text back to its");
-            Console.WriteLine("                    mirrored .st file (DUTs/GVLs only for now)");
+            Console.WriteLine("                    mirrored .st file");
             Console.WriteLine("  --help, -h        Show this message");
         }
     }

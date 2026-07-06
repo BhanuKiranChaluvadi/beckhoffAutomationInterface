@@ -230,8 +230,24 @@ namespace BeckhoffAutomationInterface
                     Now(), diff.Changed.Count, diff.Deleted.Count);
                 if (diff.Deleted.Count > 0)
                 {
-                    Console.WriteLine("{0}: NOTE: deleting the corresponding PLC object(s) is not yet automated — remove manually if desired:", Now());
-                    foreach (string f in diff.Deleted) Console.WriteLine("    ! {0}", f);
+                    if (options.ConfirmDelete)
+                    {
+                        List<DeleteResult> deleteResults = IncrementalDeleter.Delete(sysManager, options.ProjectRootPath, diff.Deleted);
+                        Console.WriteLine("{0}: --confirm-delete: {1} of {2} deleted PLC object(s) removed.",
+                            Now(), deleteResults.Count(r => r.Deleted), deleteResults.Count);
+                        foreach (DeleteResult r in deleteResults)
+                        {
+                            if (r.Deleted)
+                                Console.WriteLine("    - deleted  {0}", r.ObjectName);
+                            else
+                                Console.WriteLine("    ! skipped  {0} ({1})", r.ObjectName, r.SkipReason);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("{0}: NOTE: the following PLC object(s) still exist — remove manually, or re-run with --confirm-delete:", Now());
+                        foreach (string f in diff.Deleted) Console.WriteLine("    ! {0}", f);
+                    }
                 }
             }
             else

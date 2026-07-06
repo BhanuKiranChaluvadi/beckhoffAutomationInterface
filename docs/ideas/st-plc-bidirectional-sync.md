@@ -139,6 +139,25 @@ pipeline is a later problem, not a v1 concern.
   lookup is only built from the current call's sources — not hit in
   testing (methods are normally inline in the owner's own file), but worth
   knowing before assuming 100% incremental-sync parity with a full sync.
+  **Slice 3 DONE (2026-07-06)**: deletion handling for the deleted-files
+  case above. New `Sync/IncrementalDeleter.cs` + opt-in `--confirm-delete`
+  CLI flag (user's explicit choice, via `vscode_askQuestions`, of the
+  safer default: `--incremental` alone still only warns; deletion requires
+  the extra flag). Conservative by design: derives the presumed object
+  name from the deleted file's own name (without extension), looks it up
+  via `PlcObjectExporter.FindByName` (reused), and only deletes on an
+  EXACT, unambiguous match, using the official `ITcSmTreeItem.DeleteChild()`
+  API — confirmed against the official
+  `example/.../PlcArchives.cs:pousItem.DeleteChild("POUProgram")`. Zero
+  matches, multiple matches, or a standalone `<Owner>.<Method>.st` file are
+  skipped and reported, never guessed at. Verified against a disposable
+  scratch project (2 FBs): deleted one file and ran `--incremental` WITHOUT
+  `--confirm-delete` — correctly warned only, object confirmed still live
+  via `--export`; then deleted the second file and ran WITH
+  `--confirm-delete` — object correctly removed ("1 of 1 deleted"), build
+  still passed afterward, and `--export` on the removed object correctly
+  reported "not found". Scratch project fully cleaned up, never touched
+  the real project.
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
   launches the sync detached. **DONE (2026-07-06)**: `githooks/post-commit`

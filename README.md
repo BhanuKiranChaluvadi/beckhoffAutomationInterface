@@ -123,12 +123,22 @@ much faster once a project has many objects.
 .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental
 ```
 
-**Current limitation**: deletion is NOT yet automated. If `git diff` reports
-a `.st` file was deleted, the tool prints which PLC object(s) that implies
-should be removed, but does not remove them — remove manually via the XAE UI,
-or run a full sync's orphan-cleanup path once that's built (see
-`docs/ideas/st-plc-bidirectional-sync.md`). `--incremental` refuses to run
-(exit code 1) if no baseline exists yet — run a full sync first.
+By default, `git diff`-reported deletions are only **warned** about, never
+acted on — `.st-sync-state`'s baseline still advances, but the corresponding
+PLC object(s) are left in place. Add `--confirm-delete` to actually remove
+them:
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental --confirm-delete
+```
+
+`--confirm-delete` is conservative by design: it only deletes an object when
+the deleted file's name (without extension) matches **exactly one** live PLC
+object, using the official `ITcSmTreeItem.DeleteChild()` API. It skips (and
+reports why) anything ambiguous — zero matches, more than one match, or a
+standalone `<Owner>.<Method>.st` file (deleting an individual method isn't
+supported; remove it manually). `--incremental` refuses to run (exit code 1)
+if no baseline exists yet — run a full sync first.
 
 ### Automatic sync on commit (git hook)
 
