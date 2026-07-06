@@ -105,8 +105,8 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(args.Length == 0 ? 1 : 0);
             }
 
-            string sourceFolder = Path.GetFullPath(GetOption(args, "--source") ?? ".");
-            string destinationFolder = Path.GetFullPath(GetOption(args, "--dest") ?? ".");
+            string sourceFolder = Path.GetFullPath(GetOption(args, "--source", "--src") ?? ".");
+            string destinationFolder = Path.GetFullPath(GetOption(args, "--dest", "--dst") ?? ".");
             string projectName = GetOption(args, "--name") ?? new DirectoryInfo(sourceFolder).Name;
 
             return new RunOptions(
@@ -121,10 +121,15 @@ namespace BeckhoffAutomationInterface
                 formatCheck: args.Contains("--format-check"));
         }
 
-        static string GetOption(string[] args, string flag)
+        static string GetOption(string[] args, params string[] flags)
         {
-            int i = Array.IndexOf(args, flag);
-            return (i >= 0 && i + 1 < args.Length) ? args[i + 1] : null;
+            foreach (string flag in flags)
+            {
+                int i = Array.IndexOf(args, flag);
+                if (i >= 0 && i + 1 < args.Length)
+                    return args[i + 1];
+            }
+            return null;
         }
 
         /// <summary>Collects every value following a repeated flag, e.g. "--ignore a --ignore b" -> [a, b].</summary>
@@ -142,7 +147,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("Usage: beckhoffAutomationInterface [options]");
             Console.WriteLine();
             Console.WriteLine("  --source <path>   Folder containing the .st source files (default: .)");
+            Console.WriteLine("                    (alias: --src)");
             Console.WriteLine("  --dest <path>     Folder under which <name>/<name>.sln is created/opened (default: .)");
+            Console.WriteLine("                    (alias: --dst)");
             Console.WriteLine("  --name <name>     Project/solution name (default: the --source folder's own name)");
             Console.WriteLine("  --parse-only      Parse all .st files without opening Visual Studio");
             Console.WriteLine("  --build-only      Skip .st/library/IO sync; just open, build, and report");

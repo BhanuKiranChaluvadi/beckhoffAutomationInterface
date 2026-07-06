@@ -86,8 +86,8 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `--source <path>` | `.` | Folder containing the `.st` files |
-| `--dest <path>` | `.` | Folder under which `<name>/<name>.sln` is created/opened |
+| `--source <path>` (alias `--src`) | `.` | Folder containing the `.st` files |
+| `--dest <path>` (alias `--dst`) | `.` | Folder under which `<name>/<name>.sln` is created/opened |
 | `--name <name>` | `--source`'s folder name | Project/solution name |
 | `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. |
 | `--build-only` | off | Skip the `.st`/library/IO sync steps; just reopen the existing project, build, and report. Use for fast iteration on compile errors when the `.st` source hasn't changed. |
