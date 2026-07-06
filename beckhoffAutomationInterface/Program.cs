@@ -193,7 +193,7 @@ namespace BeckhoffAutomationInterface
                 ITcSmTreeItem item = matches[0];
                 if (!PlcObjectExporter.IsSupported(item))
                 {
-                    Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported — only DUTs (STRUCT/ENUM/ALIAS) and GVLs can be exported so far.", item.Name, item.ItemSubTypeName);
+                    Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported.", item.Name, item.ItemSubTypeName);
                     Environment.ExitCode = 1;
                     return;
                 }

@@ -10,6 +10,13 @@ The tool is idempotent: re-running it against the same source/destination
 only creates what's missing, updates what changed, and leaves everything
 else untouched.
 
+> **Deletion is opt-in, not automatic.** A normal (non-`--incremental`) sync
+> never deletes PLC objects for `.st` files you've removed or renamed — they
+> linger harmlessly in the TwinCAT project. Only `--incremental --confirm-delete`
+> actually removes objects, and only on an exact, unambiguous name match (see
+> "Incremental sync" below). If you delete/rename a file and expect the old
+> PLC object gone, you must use that combination — it is not automatic.
+
 ## Prerequisites
 
 See [beckhoffAutomationInterface/REQUIREMENTS.md](beckhoffAutomationInterface/REQUIREMENTS.md)
@@ -87,7 +94,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--events-only` | off | Check `events.xml` against the `.tsproj` (declared vs actual) and stop — no Visual Studio session needed (see Known limitations) |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 | `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
-| `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (DUTs/GVLs only for now — see below). |
+| `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (all supported kinds — see below). |
 | `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
 
 ### Ignoring source files
