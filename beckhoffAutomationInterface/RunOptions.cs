@@ -25,6 +25,12 @@ namespace BeckhoffAutomationInterface
         public bool EventsOnly { get; }
         public bool ParseOnly { get; }
 
+        /// <summary>When set, report (never write) low-risk .st style issues — trailing
+        /// whitespace, mixed line endings, EOF newline hygiene — and stop (see
+        /// Sync.StFormatter). Deliberately dry-run-only for now; no --format (write) mode
+        /// exists yet, since actually rewriting user source is a separate, riskier step.</summary>
+        public bool FormatCheck { get; }
+
         /// <summary>When set, sync only the .st files changed/deleted since the commit
         /// recorded in SyncStatePath (via Sync.GitDiffHelper), instead of the whole source
         /// folder. Requires SourceFolder to be inside a git repo with a prior recorded
@@ -70,7 +76,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete, bool formatCheck)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -82,6 +88,7 @@ namespace BeckhoffAutomationInterface
             Incremental = incremental;
             ExportObjectName = exportObjectName;
             ConfirmDelete = confirmDelete;
+            FormatCheck = formatCheck;
         }
 
         /// <summary>
@@ -110,7 +117,8 @@ namespace BeckhoffAutomationInterface
                 ignorePatterns: GetOptions(args, "--ignore"),
                 incremental: args.Contains("--incremental"),
                 exportObjectName: GetOption(args, "--export"),
-                confirmDelete: args.Contains("--confirm-delete"));
+                confirmDelete: args.Contains("--confirm-delete"),
+                formatCheck: args.Contains("--format-check"));
         }
 
         static string GetOption(string[] args, string flag)
@@ -150,6 +158,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("                    unambiguous name matches only — anything else is skipped/reported)");
             Console.WriteLine("  --export <name>   Write the named live PLC object's current text back to its");
             Console.WriteLine("                    mirrored .st file");
+            Console.WriteLine("  --format-check    Report (never write) .st style issues — trailing whitespace,");
+            Console.WriteLine("                    mixed line endings, EOF newline hygiene — without opening VS");
             Console.WriteLine("  --help, -h        Show this message");
         }
     }

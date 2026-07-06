@@ -245,7 +245,19 @@ pipeline is a later problem, not a v1 concern.
   under `ST_` rather than `T_` — both documented as known false positives
   in the README, not bugs). The FORMATTER half (indentation/style rewriting)
   is deliberately deferred as a separate, riskier increment (it would mutate
-  user source files, unlike the linter which only reports) — not started.
+  user source files, unlike the linter which only reports) — not started
+  in that full form. **A minimal, dry-run-only slice of it IS now DONE
+  (2026-07-06)**: new `Sync/StFormatter.cs` + `--format-check` flag reports
+  (never writes) mixed line endings, trailing whitespace, missing trailing
+  EOF newline, and extra blank lines at EOF, needing no Visual Studio session
+  (same style as `--parse-only`). This was an explicit, deliberate scope
+  decision by the user (chose "minimal & safe" over full re-indentation, and
+  "report-only" over a write mode) to avoid ever risking a rewrite of real
+  source files. Verified against a scratch folder with one instance of each
+  issue type (all 4 detected correctly, clean file correctly silent) and
+  against the real 300+-file Shark source (38 real issues found, read-only,
+  no writes). Full re-indentation/auto-rewrite remains explicitly deferred
+  as a separate future feature, not requested in this pass.
 - Event Class "declared vs actual" checker (replaces the write-based
   `EventClassSync.cs`, since automating Event Class *creation* is a
   confirmed dead end). **DONE (2026-07-06)**: new read-only
@@ -273,6 +285,6 @@ pipeline is a later problem, not a v1 concern.
   useful as a reference for the XML shape, not as a dependency.
 
 ## Open Questions
-- None blocking further MVP work — remaining pieces (ST formatter, incremental
-  sync mode, git hook, `--export` command) are independent of each other and
-  can proceed in any order.
+- None blocking further MVP work — remaining pieces (full ST formatter
+  re-indentation) are independent and can proceed in any order if pursued
+  as a future, separately-scoped feature.

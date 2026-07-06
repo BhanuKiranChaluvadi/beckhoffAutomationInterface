@@ -104,6 +104,16 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(ParseOnly(options.SourceFolder, ignore));
             }
 
+            // Read-only style check, also no VS needed. Dry-run only — see Sync/StFormatter.cs.
+            if (options.FormatCheck)
+            {
+                List<FormatIssue> formatIssues = StFormatter.CheckFolder(options.SourceFolder, ignore);
+                Console.WriteLine("{0}: [format-check] {1} issue(s) found.", Now(), formatIssues.Count);
+                foreach (FormatIssue issue in formatIssues)
+                    Console.WriteLine("    ! {0}: {1}", issue.RelativePath, issue.Description);
+                Environment.Exit(0);
+            }
+
             // Event Classes (events.xml) are a .tsproj-level config item with no known
             // Automation Interface creation path — automating creation is a confirmed dead
             // end (see docs/ideas/st-plc-bidirectional-sync.md), so Event Classes must be

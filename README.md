@@ -88,6 +88,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 | `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
 | `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (DUTs/GVLs only for now — see below). |
+| `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
 
 ### Ignoring source files
 
@@ -211,6 +212,22 @@ Known false positives (safe to ignore): the default TwinCAT template's own
 `ST_` prefix instead of `T_` (e.g. `ST_MFC_Telemetry : ST_MFCTelemetry`) to
 signal they represent the same struct shape. METHODs and PROPERTIES have no
 naming convention and are never checked.
+
+### Style checking
+
+`--format-check` scans every non-ignored `.st` file under `--source` and
+prints a dry-run report of hygiene issues — it never modifies any file, and
+needs no Visual Studio session at all (similar to `--parse-only`):
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --format-check
+```
+
+It checks for: mixed line endings (both CRLF and bare LF in the same file),
+trailing whitespace, a missing trailing newline at end of file, and extra
+blank lines at end of file. This is deliberately minimal — it does **not**
+re-indent or otherwise rewrite code; a full auto-formatter remains a
+possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
 
 ### Typical workflow
 
