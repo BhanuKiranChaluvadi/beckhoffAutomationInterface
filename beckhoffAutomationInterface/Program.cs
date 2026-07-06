@@ -288,14 +288,14 @@ namespace BeckhoffAutomationInterface
 
             // ---------------------------------------------------------------
             // Sync the I/O hardware tree (Device -> Box -> Terminal) from
-            // io-devices.xml (config data, not .st source \u2014 same rationale as
+            // io-devices.xml (config data, not .st source — same rationale as
             // libraries.xml). Idempotent: existing items are detected via
             // LookupTreeItem and left untouched; only missing ones are created,
             // and only orphaned ones (removed from the manifest) are deleted.
             // The master is then linked to the PLC %I*/%Q* variables (see the
             // <Links> section handling below) so the "needs sync master"
             // validation is satisfied and the build passes with the master
-            // enabled \u2014 no popup, fully unattended.
+            // enabled — no popup, fully unattended.
             // ---------------------------------------------------------------
             string ioManifestPath = options.IoManifestPath;
             Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), ioManifestPath);
@@ -319,7 +319,7 @@ namespace BeckhoffAutomationInterface
             // EtherCATLinking.cs sample. If any declared link can't be resolved
             // (the PLC instance image and EtherCAT channels only materialize as
             // tree items after Activate Configuration on a real/simulated target
-            // \u2014 unavailable in a plain dev environment), we fall back to
+            // — unavailable in a plain dev environment), we fall back to
             // disabling the master(s) so the build stays green and unattended.
             // ---------------------------------------------------------------
             var desiredLinks = IoManifestParser.ParseLinks(ioManifestPath);

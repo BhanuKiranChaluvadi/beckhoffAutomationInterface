@@ -1,4 +1,4 @@
-namespace BeckhoffAutomationInterface.Sync
+﻿namespace BeckhoffAutomationInterface.Sync
 {
     using System.Linq;
     using System.Text.RegularExpressions;
@@ -59,7 +59,7 @@ namespace BeckhoffAutomationInterface.Sync
 
         // The outer POU/METHOD terminator keywords are part of a whole-file textual view but
         // are NOT stored in TwinCAT's separated declaration/implementation model (they're
-        // implicit) \u2014 leaving them in the text is a syntax error. END_VAR / END_STRUCT /
+        // implicit) — leaving them in the text is a syntax error. END_VAR / END_STRUCT /
         // END_TYPE and control-flow terminators (END_IF/END_CASE/END_WHILE/END_FOR/
         // END_REPEAT) are real ST and must be kept, so only these POU-level ones are removed.
         static readonly Regex PouTerminatorLine = new Regex(

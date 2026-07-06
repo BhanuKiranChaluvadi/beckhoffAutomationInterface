@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -203,7 +203,7 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>
         /// Splits an INTERFACE file into the interface's own StPouSource (its
-        /// header only \u2014 interfaces declare no variables of their own) plus
+        /// header only — interfaces declare no variables of their own) plus
         /// one StPouSource per inline METHOD signature.
         /// </summary>
         static List<StPouSource> ParseInterfaceFile(string filePath, string source)
@@ -406,7 +406,7 @@ namespace BeckhoffAutomationInterface.Sync
                     return PouKind.AliasDut; // simple alias, e.g. TYPE T_MotorSpeed : LREAL; END_TYPE
                 }
 
-                // Not a recognized keyword \u2014 skip it rather than throw. Comment-stripping is
+                // Not a recognized keyword — skip it rather than throw. Comment-stripping is
                 // best-effort (ST comments can legitimately contain "*)" inside them, e.g.
                 // "(AMBT_TEMP_*)", which leaves stray fragments), so tolerate junk lines and
                 // keep scanning for the first real POU/DUT/GVL keyword.
@@ -416,8 +416,8 @@ namespace BeckhoffAutomationInterface.Sync
         }
 
         /// <summary>
-        /// Removes ST comments \u2014 (* ... *) block comments (nesting-aware) and // line
-        /// comments \u2014 while preserving newlines so line-based scanning still works. Used
+        /// Removes ST comments — (* ... *) block comments (nesting-aware) and // line
+        /// comments — while preserving newlines so line-based scanning still works. Used
         /// only for classification/boundary sniffing; the original text (with comments) is
         /// what gets stored as the POU's declaration/implementation.
         /// </summary>

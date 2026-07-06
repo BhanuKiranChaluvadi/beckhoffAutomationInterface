@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 
 namespace BeckhoffAutomationInterface
@@ -7,7 +7,7 @@ namespace BeckhoffAutomationInterface
     /// An IOleMessageFilter that auto-retries COM calls rejected with
     /// SERVERCALL_RETRYLATER, instead of letting them surface as
     /// RPC_E_SERVERCALL_RETRYLATER (0x8001010A) exceptions. Visual Studio's DTE
-    /// frequently rejects calls while its background compiler/UI is busy \u2014 which
+    /// frequently rejects calls while its background compiler/UI is busy — which
     /// happens constantly when driving a large batch of PLC-object creates/edits.
     /// Registering this filter on the (STA) calling thread makes those calls wait
     /// and retry transparently. Standard pattern from Beckhoff/Microsoft DTE

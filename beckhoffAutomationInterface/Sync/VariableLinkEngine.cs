@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Interop.TCatSysManager;
@@ -27,7 +27,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// 2. Use the *instance* path above, NOT the GVL declaration path
     ///    (TIPC^...^GVLs^GVL_X^var) that earlier attempts wrongly used.
     /// Note: a tree DUMP shows the instance and terminal nodes with ChildCount=0, but
-    /// LinkVariables still resolves these paths by name \u2014 no Activate Configuration or
+    /// LinkVariables still resolves these paths by name — no Activate Configuration or
     /// runtime target is required. Linking is naturally idempotent (CompileProject
     /// regenerates the mappings, so the links re-apply cleanly on every run).
     ///

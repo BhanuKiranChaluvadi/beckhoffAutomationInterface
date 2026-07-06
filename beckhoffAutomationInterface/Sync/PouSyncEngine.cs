@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -53,7 +53,7 @@ namespace BeckhoffAutomationInterface.Sync
             // ALIAS base type) always resolve regardless of file order:
             //   Pass 1: create every object as a base-less shell in its mirrored folder
             //           (CreateChild's vInfo must reference a type that already exists, so we
-            //            never pass a base at creation \u2014 EXTENDS/IMPLEMENTS come from the text).
+            //            never pass a base at creation — EXTENDS/IMPLEMENTS come from the text).
             //   Pass 2: inject Declaration/Implementation text (which carries the real
             //           EXTENDS/IMPLEMENTS/base). By now every referenced type exists, and
             //           TwinCAT only validates the references at build time anyway.
@@ -188,7 +188,7 @@ namespace BeckhoffAutomationInterface.Sync
                     (isNew ? report.Created : report.Updated).Add($"{ownerName}.{method.Name}");
                 }
 
-                // NOTE: no orphan pruning of an owner's children here \u2014 a FUNCTION_BLOCK's
+                // NOTE: no orphan pruning of an owner's children here — a FUNCTION_BLOCK's
                 // children include both METHODs and PROPERTYs, so pruning "everything not in
                 // the method set" would delete the properties (and vice-versa).
             }

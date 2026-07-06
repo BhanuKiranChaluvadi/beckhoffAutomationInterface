@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -14,7 +14,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// &lt;/Libraries&gt;
     /// </code>
     /// Library references are not IEC 61131-3 source code, so they don't fit the
-    /// .st convention used for POUs/DUTs/GVLs \u2014 they're config data, synced the
+    /// .st convention used for POUs/DUTs/GVLs — they're config data, synced the
     /// same way the ELT/soup01 tutorial samples in example/ do it via
     /// ITcPlcLibraryManager.
     /// </summary>

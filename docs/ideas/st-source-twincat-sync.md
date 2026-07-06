@@ -1,16 +1,16 @@
-# ST-as-Source TwinCAT Sync Engine
+﻿# ST-as-Source TwinCAT Sync Engine
 
 > **Status (2026-07-05): shipped end-to-end.** Editing only `.st` files +
 > `libraries.xml` + `io-devices.xml`, the tool syncs POUs/DUTs/GVLs,
-> library references, the full EtherCAT IO tree, and live variable\u2194IO
-> channel links, then compiles and reports pass/fail \u2014 fully unattended.
+> library references, the full EtherCAT IO tree, and live variable↔IO
+> channel links, then compiles and reports pass/fail — fully unattended.
 > Only Activate-Configuration (runtime target), watch mode, and CLI/CI
 > packaging remain as future work.
 
 ## Problem Statement
 How might we let an engineer maintain a TwinCAT PLC project as plain .st
-text files in Git, and have those files automatically sync \u2014 create,
-update, compile, and IO-map (and eventually activate) \u2014 into a real TwinCAT
+text files in Git, and have those files automatically sync — create,
+update, compile, and IO-map (and eventually activate) — into a real TwinCAT
 XAE project via the Automation Interface, without ever hand-editing the
 project inside the IDE?
 
@@ -277,7 +277,7 @@ errors, and a second consecutive run reported 0 created / 16 updated / 0
 deleted with no transient failures and a clean VS shutdown (no leaked
 processes).
 
-## Extended 2026-07-05 (later same day): IO hardware tree creation \u2014 BREAKTHROUGH
+## Extended 2026-07-05 (later same day): IO hardware tree creation — BREAKTHROUGH
 Following up on the "add an EL IO card" question, discovered the actual
 working recipe for creating real EtherCAT hardware tree items, live
 against the Shark project:
@@ -289,40 +289,40 @@ against the Shark project:
   `vInfo` (e.g. `"EK1100"`, `"EL1008"`). Once that was tried, **all** of
   the following succeeded:
   - `ioDevicesRoot.CreateChild("Device 1 (EtherCAT)", 94 /* TSM_DEV_TYPE_ETHERCAT */, "", null)`
-    \u2014 EtherCAT master device (vInfo can stay `null` here; it's a device,
+    — EtherCAT master device (vInfo can stay `null` here; it's a device,
     not a specific hardware model).
   - `device.CreateChild("Term 1 (EK1100)", 6 /* TREEITEMTYPE_TERM */, "", "EK1100")`
-    \u2014 **succeeded**, as a child of the master device.
+    — **succeeded**, as a child of the master device.
   - `coupler.CreateChild("Term 2 (EL1008)", 6, "", "EL1008")` and
-    `coupler.CreateChild("Term 3 (EL2008)", 6, "", "EL2008")` \u2014 **both
-    succeeded**, as children of the EK1100 coupler \u2014 matching the exact
-    real-world E-bus topology (Master \u2192 Coupler \u2192 Terminals) the user
+    `coupler.CreateChild("Term 3 (EL2008)", 6, "", "EL2008")` — **both
+    succeeded**, as children of the EK1100 coupler — matching the exact
+    real-world E-bus topology (Master → Coupler → Terminals) the user
     asked about. The generic `TREEITEMTYPE_TERM = 6` type works for *any*
     Beckhoff product as long as `vInfo` is its product name string; the
     legacy per-model `TCSYSMANAGERBOXTYPES`/`TCSYSMANAGERDEVICETYPES` enums
     are unnecessary for terminals (only used for the master's own device
     type, `TSM_DEV_TYPE_ETHERCAT = 94`).
-  - This means the full topology the user described \u2014 *EtherCAT Master \u2192
-    EK1100 coupler \u2192 arbitrary EL cards* \u2014 **is fully scriptable** via
+  - This means the full topology the user described — *EtherCAT Master →
+    EK1100 coupler → arbitrary EL cards* — **is fully scriptable** via
     `CreateChild`, generalizable to a declarative manifest (same pattern as
-    `libraries.xml`): a small XML/text file listing Device \u2192 Box \u2192
+    `libraries.xml`): a small XML/text file listing Device → Box →
     Terminal entries by product name, reconciled by a new `IoSyncEngine`
-    analogous to `LibrarySyncEngine`. **Not yet built** \u2014 recorded here as
+    analogous to `LibrarySyncEngine`. **Not yet built** — recorded here as
     the next concrete increment once the remaining risk below is resolved.
 - **Individual channels are still not separate tree items pre-activation.**
   `elTerminal.ChildCount == 0` for a freshly created EL1008 in an
-  unconfigured project \u2014 channels (e.g. "Channel 1", "Input") only likely
+  unconfigured project — channels (e.g. "Channel 1", "Input") only likely
   appear as distinct `ITcSmTreeItem`s after the configuration is activated
   on a real/simulated target, or possibly only via the IDE's own linking
   UI. This still blocks fully automating `LinkVariables`.
 - **`LinkVariables` PLC-side path still fails, with a new clue.** Retried
   with a real terminal now in the tree (IO-side argument =
   `TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)`) against three
-  PLC-side path candidates \u2014 all failed:
-  - `"GVL_Shark.bMotorRunSensor"` (bare ADS-style) \u2014 not found.
-  - `".GVL_Shark.bMotorRunSensor"` (leading dot) \u2014 not found.
+  PLC-side path candidates — all failed:
+  - `"GVL_Shark.bMotorRunSensor"` (bare ADS-style) — not found.
+  - `".GVL_Shark.bMotorRunSensor"` (leading dot) — not found.
   - `"TIPC^Shark^Shark Project^GVLs^GVL_Shark^bMotorRunSensor"` (tree path)
-    \u2014 not found, but with a telling difference: the error specifically
+    — not found, but with a telling difference: the error specifically
     says **`(Shark Project failed)`**, meaning resolution broke down at
     that particular segment. Combined with Beckhoff's own TC2 sample path
     for `LinkVariables` (`"TIPC^Project1^Standard^Outputs^MyOutput"`,
@@ -330,14 +330,14 @@ against the Shark project:
     suggests the PLC-side argument must reference a **PLC task's
     Inputs/Outputs mapping node** (a per-task tree location that appears
     once variables are mapped to a task), not the GVL declaration tree at
-    all. This remains unresolved \u2014 next step would be to find/guess the
+    all. This remains unresolved — next step would be to find/guess the
     task tree path convention (e.g. `TIPC^Shark^Shark Project^Standard^
     Inputs^...`) and retry, or reverse-engineer it from a manually-linked
     project's `.tsproj` XML.
 - **Operational risk confirmed again, and mitigated in the spike
   discipline**: every spike in this round created the full Device/Coupler/
   Terminal tree, tested what it needed to test, then **always deleted the
-  master device before the build step** \u2014 specifically to avoid
+  master device before the build step** — specifically to avoid
   re-triggering the earlier-discovered blocking "needs sync master" popup.
   **Not yet tested**: whether leaving terminals attached (vs. a bare empty
   master) is enough to satisfy that validation and avoid the popup. This
@@ -345,7 +345,7 @@ against the Shark project:
   created hardware across a real build.
 
 **Conclusion**: hardware topology creation (Device/Box/Terminal) is now a
-solved problem \u2014 ready to become a real, shippable manifest + sync engine.
+solved problem — ready to become a real, shippable manifest + sync engine.
 Actual variable linking (`LinkVariables`) is still blocked on finding the
 correct PLC-side (task mapping) path format, and on confirming whether an
 unlinked-but-populated I/O tree still blocks unattended builds.
@@ -354,7 +354,7 @@ unlinked-but-populated I/O tree still blocks unattended builds.
 Turned the IO-tree spike into a real, shipped feature and closed the
 remaining loop so the whole pipeline runs unattended:
 
-- **`io-devices.xml` manifest + `IoManifestParser` + `IoSyncEngine`** \u2014
+- **`io-devices.xml` manifest + `IoManifestParser` + `IoSyncEngine`** —
   same "config data, not .st" pattern as `libraries.xml`. The manifest
   declares the hardware tree by product name:
   ```xml
@@ -367,7 +367,7 @@ remaining loop so the whole pipeline runs unattended:
     </Device>
   </IoTree>
   ```
-  `IoSyncEngine.Sync` reconciles Device\u2192Box\u2192Terminal against `TIID`,
+  `IoSyncEngine.Sync` reconciles Device→Box→Terminal against `TIID`,
   creating only what's missing (idempotent, append/update-only) and
   deleting only genuine orphans. Validated: first run created all 4 items;
   a re-run reported `0 created, 0 deleted, 0 state change(s)`.
@@ -376,11 +376,11 @@ remaining loop so the whole pipeline runs unattended:
   `SMDS_NOT_DISABLED=0`, `SMDS_DISABLED=1`, `SMDS_PARENT_DISABLED=2`) lets us
   mark the unlinked EtherCAT master disabled. The hardware is still fully
   populated and visible in the tree (just grayed out), but TwinCAT skips the
-  "at least one variable linked to a task" validation on Build \u2014 so the
+  "at least one variable linked to a task" validation on Build — so the
   build passes with **zero popups and zero human interaction**. Declared
   per-device via the manifest's `Disabled="true"` attribute; flip to
   `false` once variable-linking is automated. (Confirmed by direct test:
-  an *enabled* master blocks the build even WITH terminals attached \u2014 it's
+  an *enabled* master blocks the build even WITH terminals attached — it's
   the missing task LINK, not missing hardware, that triggers the dialog.)
 - **Build timeout + guaranteed process cleanup** (defensive, per user
   request): `BuildRunner.Build` now kicks off the build ASYNCHRONOUSLY
@@ -389,7 +389,7 @@ remaining loop so the whole pipeline runs unattended:
   hanging forever if a modal dialog ever does block it. `Program.Main`'s
   `finally` attempts a graceful `dte.Quit()` on a background thread with a
   timeout, then ALWAYS verifies the devenv process actually exited
-  (force-killing it otherwise) \u2014 because a graceful `Quit()` can *return*
+  (force-killing it otherwise) — because a graceful `Quit()` can *return*
   while the process lingers behind a modal dialog. The devenv PID is
   captured reliably by diffing the `devenv` process list before/after
   `CreateInstance` (HWND capture was fragile once a dialog was up). Proved
@@ -400,21 +400,21 @@ remaining loop so the whole pipeline runs unattended:
   EtherCAT terminals BOTH under their coupler AND flat under the device
   (with the same coupler-nested `PathName`). The device-level orphan prune
   therefore saw the terminals as device orphans and deleted them, then the
-  box loop recreated them \u2014 a create/delete churn every run (which would
+  box loop recreated them — a create/delete churn every run (which would
   also break any variable links). Fixed by only treating a child as an
   orphan candidate when it's a GENUINE direct child
   (`child.PathName == parent.PathName + "^" + child.Name`), which naturally
   excludes the flat-enumerated deeper terminals.
 
-**Net result**: `Master \u2192 EK1100 \u2192 EL1008 + EL2008` is now declared in
+**Net result**: `Master → EK1100 → EL1008 + EL2008` is now declared in
 `io-devices.xml`, synced idempotently into the project, and the whole
 pipeline (POUs + DUTs + GVL + libraries + IO tree + build) runs green,
 unattended, with no popups and no leaked processes. The only remaining
 open item is automating the actual variable-to-task LINK (which would let
 the master be enabled); everything else the user asked for is shipped.
 
-## Extended 2026-07-05 (final): variable-to-IO LINKING solved \u2014 full closed loop
-The last open item \u2014 automating the actual PLC-variable-to-hardware link \u2014
+## Extended 2026-07-05 (final): variable-to-IO LINKING solved — full closed loop
+The last open item — automating the actual PLC-variable-to-hardware link —
 is now **solved and shipped**. The whole pipeline runs unattended with the
 EtherCAT master ENABLED and its channels genuinely linked to the PLC
 `%I*`/`%Q*` variables, build green, no popups.
@@ -423,7 +423,7 @@ Two missing pieces were found (the official Beckhoff sample
 `example/.../Scripting.CSharp.Scripts/Scripts/EtherCATLinking.cs` was the key):
 1. **The confirmed path format** (roots `TIPC^`/`TIID^` prepended by the engine):
    - PLC side: `TIPC^Shark^Shark Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor`
-     (and `PlcTask Outputs^GVL_Shark.bMotorEnableOutput`) \u2014 the mapped
+     (and `PlcTask Outputs^GVL_Shark.bMotorEnableOutput`) — the mapped
      *instance* image path, NOT the GVL declaration path that every earlier
      attempt (wrongly) used.
    - IO side: `TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input`
@@ -436,7 +436,7 @@ Two missing pieces were found (the official Beckhoff sample
 
 Crucial correction to an earlier assumption: the tree DUMPS showed
 `Shark Instance` and each EL terminal with `ChildCount=0`, which looked like
-"the paths don't exist without Activate Configuration." That was misleading \u2014
+"the paths don't exist without Activate Configuration." That was misleading —
 **`LinkVariables` resolves those paths directly by name even though the tree
 enumeration doesn't expand them**. So after `CompileProject()`, both
 `LinkVariables` calls succeed against a target-less dev environment, the
@@ -448,16 +448,16 @@ Shipped as:
 - **`<Links>` section in `io-devices.xml`** (`<Link PlcVar="..." IoChannel="..."/>`),
   parsed by `IoManifestParser.ParseLinks` into `LinkSpec`.
 - **`VariableLinkEngine`**: `CompileProject()` then `LinkVariables(TIPC^..., TIID^...)`
-  per declared link, reporting linked vs. unresolved. Naturally idempotent \u2014
+  per declared link, reporting linked vs. unresolved. Naturally idempotent —
   re-runs report `2 linked, 0 unresolved` every time with no churn or errors.
 - **Graceful fallback**: if any declared link can't be resolved (e.g. a genuinely
   different environment where the paths don't materialize), `IoSyncEngine.
   DisableAllMasters` disables the master(s) so the build still stays green and
-  unattended \u2014 so the tool never hangs on the popup regardless.
+  unattended — so the tool never hangs on the popup regardless.
 
 **Final state**: editing only `.st` files + `libraries.xml` + `io-devices.xml`,
-the tool creates/updates the entire TwinCAT project \u2014 POUs, DUTs, GVLs,
-libraries, the full EtherCAT IO tree, AND the live variable\u2194channel links \u2014
+the tool creates/updates the entire TwinCAT project — POUs, DUTs, GVLs,
+libraries, the full EtherCAT IO tree, AND the live variable↔channel links —
 then compiles and reports pass/fail, fully unattended, with a 5-minute build
 timeout and guaranteed devenv cleanup as safety nets. The original goal is
 met end to end.

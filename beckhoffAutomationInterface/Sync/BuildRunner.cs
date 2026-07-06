@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -25,7 +25,7 @@ namespace BeckhoffAutomationInterface.Sync
         public List<BuildError> Warnings { get; } = new List<BuildError>();
     }
 
-    /// <summary>Thrown when a build does not finish within the allotted time \u2014 almost
+    /// <summary>Thrown when a build does not finish within the allotted time — almost
     /// always because a modal Visual Studio dialog (e.g. TwinCAT's "needs sync
     /// master") is blocking the build and waiting for human input that will never
     /// come in an automated run.</summary>
@@ -41,12 +41,12 @@ namespace BeckhoffAutomationInterface.Sync
     ///
     /// The build is kicked off ASYNCHRONOUSLY (Build(false)) and then polled to
     /// completion with a hard timeout, so a modal dialog can never hang the whole
-    /// process indefinitely \u2014 if the build doesn't finish in time we raise a
+    /// process indefinitely — if the build doesn't finish in time we raise a
     /// BuildTimeoutException instead of blocking forever.
     ///
     /// IMPORTANT: ErrorItems includes warnings and messages alongside real errors.
     /// EnvDTE.vsBuildErrorLevel is High=3/Medium=2/Low=1 (stable since VS2005); only
-    /// High (an actual compiler error) should count toward build failure \u2014
+    /// High (an actual compiler error) should count toward build failure —
     /// everything else (e.g. "return value ignored" on a method call used as a
     /// statement) is a warning and must not flip Success to false.
     /// </summary>

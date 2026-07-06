@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -20,14 +20,14 @@ namespace BeckhoffAutomationInterface.Sync
     /// Validated 2026-07-05 against a live TwinCAT/Shark project:
     /// - Device (EtherCAT master): CreateChild(name, TSM_DEV_TYPE_ETHERCAT=94, "", null).
     /// - Box/Terminal (any Beckhoff product, e.g. EK1100/EL1008/EL2008):
-    ///   CreateChild(name, TREEITEMTYPE_TERM=6, "", "&lt;ProductName&gt;") \u2014 the key
+    ///   CreateChild(name, TREEITEMTYPE_TERM=6, "", "&lt;ProductName&gt;") — the key
     ///   fix is passing the product name as vInfo (not null); the specific
     ///   TREEITEMTYPE/legacy TCSYSMANAGERBOXTYPES constant doesn't matter.
     ///
     /// IMPORTANT CAVEAT (see docs/ideas/st-source-twincat-sync.md): TwinCAT pops a
     /// BLOCKING native "needs sync master (at least one variable linked to a tasked
     /// variable)" dialog on Build whenever an EtherCAT master has no linked
-    /// variables \u2014 confirmed true even with terminals attached, not just an empty
+    /// variables — confirmed true even with terminals attached, not just an empty
     /// master. This is resolved by VariableLinkEngine (which links the master's
     /// channels to the PLC %I*/%Q* variables so the validation is satisfied); if
     /// links can't be resolved, IoSyncEngine.DisableAllMasters disables the master
@@ -123,8 +123,8 @@ namespace BeckhoffAutomationInterface.Sync
             // NOTE: TwinCAT enumerates EtherCAT terminals BOTH under their coupler AND
             // flat under the device (with the same coupler-nested PathName). So when
             // pruning a device's children we must only consider GENUINE direct children
-            // (PathName == parent^name); otherwise the terminals \u2014 which really live
-            // under the coupler \u2014 look like device-level orphans and get deleted, then
+            // (PathName == parent^name); otherwise the terminals — which really live
+            // under the coupler — look like device-level orphans and get deleted, then
             // recreated by the box loop (an idempotency-breaking create/delete churn).
             string directChildPrefix = parent.PathName + "^";
             int childCount = parent.ChildCount;

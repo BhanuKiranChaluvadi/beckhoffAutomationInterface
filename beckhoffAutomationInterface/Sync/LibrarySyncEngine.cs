@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -59,7 +59,7 @@ namespace BeckhoffAutomationInterface.Sync
                 {
                     // The References collection read above can be stale/incomplete right
                     // after a project is (re)opened, so AddLibrary's own duplicate check
-                    // is more authoritative than ours \u2014 treat this as an idempotent no-op.
+                    // is more authoritative than ours — treat this as an idempotent no-op.
                 }
             }
 

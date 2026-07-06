@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
@@ -18,8 +18,8 @@ namespace BeckhoffAutomationInterface.Sync
     ///   &lt;/Device&gt;
     /// &lt;/IoTree&gt;
     /// </code>
-    /// Hardware topology is not IEC 61131-3 source code, so \u2014 like
-    /// libraries.xml \u2014 it's config data synced directly against the
+    /// Hardware topology is not IEC 61131-3 source code, so — like
+    /// libraries.xml — it's config data synced directly against the
     /// Automation Interface's I/O tree (TIID) rather than going through the
     /// .st POU/DUT/GVL convention.
     ///
