@@ -164,14 +164,16 @@ needed) — the read-side counterpart of the normal sync, using the same
 .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export T_Beckhoff_AmbientSensor
 ```
 
-**Current limitation**: only DUTs (STRUCT/ENUM/ALIAS) and GVLs are
-supported — for these, the live object's `DeclarationText` already IS the
-complete file content, so no reconstruction is needed. FUNCTION_BLOCK/
-PROGRAM/INTERFACE/FUNCTION export (which have a separate implementation
-section, re-added terminators, and possibly child METHODs/PROPERTIES to
-stitch back together) isn't implemented yet — `--export` refuses with a
-clear error for those kinds. Errors also refuse cleanly if the name isn't
-found, or matches more than one object.
+**Current limitation**: only DUTs (STRUCT/ENUM/ALIAS), GVLs, and
+FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects with **no child
+METHODs/PROPERTIES** are supported. For the POU kinds, the correct
+terminator (`END_FUNCTION_BLOCK`/`END_PROGRAM`/`END_FUNCTION`/
+`END_INTERFACE`) is re-added since it's never stored in `Declaration`/
+`ImplementationText`. Objects with METHODs/PROPERTIES aren't implemented
+yet (stitching members back together in the right order/format is a
+separate, more involved piece of work) — `--export` refuses with a clear
+error for those. Errors also refuse cleanly if the name isn't found, or
+matches more than one object.
 
 ### Naming-convention linting
 

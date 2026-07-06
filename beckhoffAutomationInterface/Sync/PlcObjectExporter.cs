@@ -17,11 +17,17 @@ namespace BeckhoffAutomationInterface.Sync
     /// StFileParser.ParseFile stores as DeclarationText for these kinds, so no
     /// reconstruction is needed: read it, write it, done.
     ///
-    /// FUNCTION_BLOCK/PROGRAM/INTERFACE/FUNCTION (which have a separate Implementation
-    /// section, and FB/INTERFACE may also have child METHODs/PROPERTIES) need their
-    /// POU-level terminator re-added and their members stitched back together in the
-    /// right order — NOT yet implemented; ExportSupportedKinds lists what's currently
-    /// exportable and Export() throws NotSupportedException for anything else.
+    /// FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects with NO child METHODs/
+    /// PROPERTIES are also supported: Declaration + Implementation (if any) + the
+    /// correct POU-level terminator re-added (never stored in Declaration/
+    /// ImplementationText — see StPouSource.StripPouTerminators). INTERFACE has no
+    /// Implementation section at all (StFileParser never sets one), so only its
+    /// Declaration + END_INTERFACE are used.
+    ///
+    /// FB/PROGRAM/INTERFACE objects that DO have child METHODs/PROPERTIES are NOT
+    /// yet supported (stitching members back together in the right order/format is
+    /// a separate, more involved piece of work) — Export() throws
+    /// NotSupportedException for those; check IsSupported first.
     /// </summary>
     static class PlcObjectExporter
     {
@@ -31,6 +37,17 @@ namespace BeckhoffAutomationInterface.Sync
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTSTRUCT,
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTALIAS,
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCGVL,
+        };
+
+        /// <summary>POU kinds with a separate Declaration+Implementation (unlike DUTs/
+        /// GVLs) and their re-added terminator keyword, but only supported here when
+        /// ChildCount == 0 (no METHODs/PROPERTIES to stitch back in).</summary>
+        static readonly Dictionary<int, string> PouTerminators = new Dictionary<int, string>
+        {
+            { (int)TREEITEMTYPES.TREEITEMTYPE_PLCPOUFB, "END_FUNCTION_BLOCK" },
+            { (int)TREEITEMTYPES.TREEITEMTYPE_PLCPOUPROG, "END_PROGRAM" },
+            { (int)TREEITEMTYPES.TREEITEMTYPE_PLCPOUFUNC, "END_FUNCTION" },
+            { (int)TREEITEMTYPES.TREEITEMTYPE_PLCITF, "END_INTERFACE" },
         };
 
         /// <summary>Recursively finds every descendant tree item whose Name matches
@@ -69,18 +86,46 @@ namespace BeckhoffAutomationInterface.Sync
             return string.Join("/", segments, 0, segments.Length - 1);
         }
 
-        public static bool IsSupported(ITcSmTreeItem item) => DeclarationOnlyKinds.Contains(item.ItemType);
+        public static bool IsSupported(ITcSmTreeItem item)
+        {
+            if (DeclarationOnlyKinds.Contains(item.ItemType))
+                return true;
+            return PouTerminators.ContainsKey(item.ItemType) && item.ChildCount == 0;
+        }
 
         /// <summary>Returns the exact text to write to the .st file. Throws
         /// NotSupportedException if item's kind isn't a currently-supported one — check
         /// IsSupported first.</summary>
         public static string Export(ITcSmTreeItem item)
         {
-            if (!IsSupported(item))
-                throw new NotSupportedException(
-                    $"Export of '{item.Name}' ({item.ItemSubTypeName}) is not yet supported — only DUTs (STRUCT/ENUM/ALIAS) and GVLs can be exported so far.");
+            if (DeclarationOnlyKinds.Contains(item.ItemType))
+                return ((ITcPlcDeclaration)item).DeclarationText;
 
-            return ((ITcPlcDeclaration)item).DeclarationText;
+            if (PouTerminators.TryGetValue(item.ItemType, out string terminator) && item.ChildCount == 0)
+            {
+                string declaration = ((ITcPlcDeclaration)item).DeclarationText;
+                // INTERFACE has no Implementation section at all (StFileParser never sets
+                // one for it — see ParseInterfaceFile), so skip reading it for that kind.
+                string implementation = item.ItemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCITF
+                    ? null
+                    : ((ITcPlcImplementation)item).ImplementationText;
+
+                var text = new System.Text.StringBuilder();
+                text.AppendLine(declaration);
+                if (!string.IsNullOrEmpty(implementation))
+                {
+                    text.AppendLine();
+                    text.AppendLine(implementation);
+                }
+                text.AppendLine(terminator);
+                return text.ToString();
+            }
+
+            throw new NotSupportedException(
+                $"Export of '{item.Name}' ({item.ItemSubTypeName}) is not yet supported — " +
+                (item.ChildCount > 0
+                    ? "it has child METHODs/PROPERTIES, which export doesn't stitch back together yet."
+                    : "only DUTs (STRUCT/ENUM/ALIAS), GVLs, and childless FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects can be exported so far."));
         }
     }
 }

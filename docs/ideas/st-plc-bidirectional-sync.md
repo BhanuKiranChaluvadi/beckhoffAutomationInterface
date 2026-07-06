@@ -1,4 +1,4 @@
-# ST-as-Source-of-Truth: Bidirectional TwinCAT Sync with LLM Feedback Loop
+﻿# ST-as-Source-of-Truth: Bidirectional TwinCAT Sync with LLM Feedback Loop
 
 ## Problem Statement
 How might we make the .st source tree the single source of truth for a TwinCAT
@@ -142,7 +142,7 @@ pipeline is a later problem, not a v1 concern.
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
   launches the sync detached. **DONE (2026-07-06)**: `githooks/post-commit`
-  (POSIX shell, git-bash compatible \u2014 fast no-op unless the commit touched
+  (POSIX shell, git-bash compatible — fast no-op unless the commit touched
   `*.st` files) launches `githooks/run-incremental-sync.ps1` hidden/detached
   via `Start-Process`, so `git commit` returns immediately. The worker
   script runs `--incremental`, logging everything (including a SUCCESS/
@@ -151,19 +151,19 @@ pipeline is a later problem, not a v1 concern.
   `git config core.hooksPath githooks` (one-time, tracked-in-repo hooks
   directory, not `.git/hooks`). Also moved the `--incremental` no-baseline
   check to BEFORE Visual Studio opens (was previously wasting a ~30-40s VS
-  round-trip only to then refuse) \u2014 a small, closely-related fix made as
+  round-trip only to then refuse) — a small, closely-related fix made as
   part of this same increment since it directly serves the hook's goal of
   being fast/lightweight. Verified functionally: (1) the shell hook's `git
   diff --name-only HEAD~1 HEAD -- '*.st'` detection against this repo's own
   real history (correctly empty for non-.st commits); (2) the worker script
-  end-to-end against a disposable scratch project \u2014 fast-fail path (no
+  end-to-end against a disposable scratch project — fast-fail path (no
   baseline \u2192 instant FAILED in log, no VS opened) and success path
   (bootstrap \u2192 commit a change \u2192 worker correctly reused the SAME
   project, "~ updated FB_Gamma", SUCCESS marker). Scratch project fully
   cleaned up afterward, never touched the real project.
   KNOWN CAVEAT: the worker script doesn't pass `--name`, relying on the
   "project name defaults to source folder name" convention (true for the
-  real Shark project) \u2014 documented in the script's own header comment and
+  real Shark project) — documented in the script's own header comment and
   the README; would silently bootstrap a SEPARATE project if that
   convention is ever broken (e.g. an explicit different `--name` at
   original bootstrap time).
@@ -177,20 +177,20 @@ pipeline is a later problem, not a v1 concern.
   properties `PouSyncEngine` already writes) → .st file written to the
   inferred mirrored folder path. No XML parsing/conversion needed.
   **PARTIALLY DONE (2026-07-06)**: new `Sync/PlcObjectExporter.cs` +
-  `--export` CLI flag, supporting DUTs (STRUCT/ENUM/ALIAS) and GVLs \u2014 the
-  ORIGINAL motivating use case (IO-scanned DUTs) \u2014 since for these kinds
+  `--export` CLI flag, supporting DUTs (STRUCT/ENUM/ALIAS) and GVLs — the
+  ORIGINAL motivating use case (IO-scanned DUTs) — since for these kinds
   `DeclarationText` already IS the complete file content verbatim (no
   terminator reconstruction needed at all, confirmed by re-checking
   `StFileParser.ParseFile`'s own DUT/GVL branch: it stores the WHOLE
   trimmed file as DeclarationText for these kinds). FUNCTION_BLOCK/PROGRAM/
   INTERFACE/FUNCTION export (separate implementation section + re-added
   terminators + child METHODs/PROPERTIES to stitch together) is explicitly
-  NOT done yet \u2014 refuses with a clear error naming the unsupported kind.
+  NOT done yet — refuses with a clear error naming the unsupported kind.
   Found and fixed a real bug during testing: `ITcSmTreeItem.ItemSubType`
   and `.ItemSubTypeName` do NOT correspond to each other in this COM API
   (confirmed against the official `example/.../SysManSamples/Form1.cs`,
   which checks `.ItemType`, not `.ItemSubType`, against the `TREEITEMTYPES`
-  enum) \u2014 `ItemSubTypeName` is actually a human-readable name for
+  enum) — `ItemSubTypeName` is actually a human-readable name for
   `ItemType`. Classification must check `item.ItemType`, not
   `item.ItemSubType`. Verified end-to-end against a disposable scratch
   project: successful STRUCT export with exact round-trip fidelity
@@ -199,17 +199,17 @@ pipeline is a later problem, not a v1 concern.
   FUNCTION_BLOCK). Scratch project fully cleaned up afterward.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
   run automatically before every sync. **PARTIALLY DONE (2026-07-06)**: the
-  linter half is done \u2014 new `Sync/StLinter.cs` checks each parsed object's
+  linter half is done — new `Sync/StLinter.cs` checks each parsed object's
   name against the prefix convention empirically confirmed throughout the
   real Shark source (FB_/PRG_/I_/F_/E_/ST_/T_/GVL_), reporting warnings
   (never blocking) from both `--parse-only` and the main sync path. Verified
   against a scratch temp folder (2 intentional violations caught) AND
   against the real 1261-object Shark source (8 warnings: 1 known-safe
   `MAIN` template default, 7 alias-of-struct types conventionally kept
-  under `ST_` rather than `T_` \u2014 both documented as known false positives
+  under `ST_` rather than `T_` — both documented as known false positives
   in the README, not bugs). The FORMATTER half (indentation/style rewriting)
   is deliberately deferred as a separate, riskier increment (it would mutate
-  user source files, unlike the linter which only reports) \u2014 not started.
+  user source files, unlike the linter which only reports) — not started.
 - Event Class "declared vs actual" checker (replaces the write-based
   `EventClassSync.cs`, since automating Event Class *creation* is a
   confirmed dead end). **DONE (2026-07-06)**: new read-only
