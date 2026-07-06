@@ -1,0 +1,6829 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--This file is created by the TCatPlcCtrl automatically. Manually changes will be overwritten!-->
+<PlcProjectInfo xmlns:p="http://www.beckhoff.com/2002/01/TcPlcProjectDesc">
+	<ProjectInfo>
+		<Path>C:\Software\TwinCAT\SysManAutomation\sysmanauto\EtherCAT\Sample.pro</Path>
+		<IsLibrary>false</IsLibrary>
+		<ChangeDate>2006-03-10T14:41:13</ChangeDate>
+		<Library>
+			<Name>STANDARD.LIB</Name>
+			<Path>C:\TWINCAT\PLC\LIB\STANDARD.LIB</Path>
+			<ChangeDate>1998-06-05T11:03:02</ChangeDate>
+		</Library>
+		<Library>
+			<Name>TcBase.lib</Name>
+			<Path>C:\TWINCAT\PLC\LIB\TcBase.lib</Path>
+			<ChangeDate>2005-11-21T11:03:40</ChangeDate>
+		</Library>
+		<Library>
+			<Name>TcSystem.lib</Name>
+			<Path>C:\TWINCAT\PLC\LIB\TcSystem.lib</Path>
+			<ChangeDate>2005-10-05T09:34:26</ChangeDate>
+		</Library>
+		<Library>
+			<Name>TcNC.lib</Name>
+			<Path>C:\TWINCAT\PLC\LIB\TcNC.lib</Path>
+			<ChangeDate>2006-01-30T09:17:50</ChangeDate>
+		</Library>
+	</ProjectInfo>
+	<RoutingInfo>
+		<AdsInfo>
+			<NetId>0.0.0.0.0.0</NetId>
+			<Port>801</Port>
+			<TargetName>
+				<![CDATA[Target: Local (172.16.6.11.1.1), Run Time: 1]]>
+			</TargetName>
+		</AdsInfo>
+	</RoutingInfo>
+	<CompilerInfo>
+		<CpuFamily>x86</CpuFamily>
+		<CompilerVersion>2.9.6.0</CompilerVersion>
+		<TwinCATVersion>2.10.0</TwinCATVersion>
+		<TCatPlcCtrlVersion>2.10.859</TCatPlcCtrlVersion>
+	</CompilerInfo>
+	<TargetInfo>
+		<CpuFamily>x86</CpuFamily>
+		<DataAreaInfo>
+			<DataSize>1048576</DataSize>
+			<RetainSize>32768</RetainSize>
+			<MAreaSize>32768</MAreaSize>
+			<InputSize>16384</InputSize>
+			<OutputSize>16384</OutputSize>
+			<MaxNumOfPOUs>4096</MaxNumOfPOUs>
+		</DataAreaInfo>
+	</TargetInfo>
+	<TaskInfos>
+		<TaskInfo>
+			<Name>Standard</Name>
+			<Priority>0</Priority>
+			<CycleTime>10</CycleTime>
+			<CycleTimeUs>10000</CycleTimeUs>
+		</TaskInfo>
+	</TaskInfos>
+	<DirectoryInfos>
+		<DirectoryInfo>
+			<Type>LibraryDir</Type>
+			<Path>C:\TWINCAT\PLC\LIB\</Path>
+		</DirectoryInfo>
+		<DirectoryInfo>
+			<Type>CompileDir</Type>
+			<Path>C:\TWINCAT\PLC\</Path>
+		</DirectoryInfo>
+	</DirectoryInfos>
+	<DataTypes>
+		<DataType>
+			<Name Decoration="1009F7CA">FB_Inst</Name>
+			<BitSize>2144</BitSize>
+			<SubItem>
+				<Name VarClass="0">iCounter</Name>
+				<Type>INT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Input" VarClass="0">bIn</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Input" VarClass="0">iIn</Name>
+				<Type>INT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Input" VarClass="0">wIn</Name>
+				<Type>WORD</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Input" IsDefinedInLibrary="1" VarClass="0">sNcToPlc</Name>
+				<Type Decoration="10166AA6">NCTOPLC_AXLESTRUCT</Type>
+				<BitSize>1024</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Output" VarClass="0">bOut</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1080</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Output" VarClass="0">iOut</Name>
+				<Type>INT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>1088</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Output" VarClass="0">wOut</Name>
+				<Type>WORD</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>1104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name Location="Output" IsDefinedInLibrary="1" VarClass="0">sPlcToNc</Name>
+				<Type Decoration="10074C8A">PLCTONC_AXLESTRUCT</Type>
+				<BitSize>1024</BitSize>
+				<BitOffs>1120</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>282</CodeIndex>
+				<InitIndex>283</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="20017A50">ARRAY [1..4] OF FW_SystemTaskInfoType</Name>
+			<Type Decoration="100863C1">FW_SystemTaskInfoType</Type>
+			<BitSize>1056</BitSize>
+			<ArrayInfo>
+				<LBound>1</LBound>
+				<Elements>4</Elements>
+			</ArrayInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10060AFD" IsDefinedInLibrary="1">CTD</Name>
+			<BitSize>64</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Variable for CD Edge Detection]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Count Down on rising edge]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">LOAD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Load Start Value]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Start Value]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Counter reached 0]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">CV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Current Counter Value]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>18</CodeIndex>
+				<InitIndex>19</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10060B75" IsDefinedInLibrary="1">CTU</Name>
+			<BitSize>64</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Variable for CU Edge Detection]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CU</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Count Up]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">RESET</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Reset Counter to 0]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Counter Limit]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Counter reached the Limit]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">CV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Current Counter Value]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>20</CodeIndex>
+				<InitIndex>21</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100A13D0" IsDefinedInLibrary="1">CTUD</Name>
+			<BitSize>96</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">MU</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Variable for CU Edge Detection]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">MD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Variable for CD Edge Detection]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CU</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Count Up]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Count Down]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">RESET</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Reset Counter to Null]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">LOAD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Load Start Value]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Start Value / Counter Limit]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">QU</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Counter reached Limit]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">QD</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Counter reached Null]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>72</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">CV</Name>
+				<Type>WORD</Type>
+				<Comment>
+					<![CDATA[Current Counter Value]]>
+				</Comment>
+				<BitSize>16</BitSize>
+				<BitOffs>80</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>22</CodeIndex>
+				<InitIndex>23</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1003051C" IsDefinedInLibrary="1">F_TRIG</Name>
+			<BitSize>24</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CLK</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Signal to detect]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Edge detected]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>25</CodeIndex>
+				<InitIndex>26</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1003051C" IsDefinedInLibrary="1">R_TRIG</Name>
+			<BitSize>24</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CLK</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Signal to detect]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Edge detected]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>32</CodeIndex>
+				<InitIndex>33</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100306C8" IsDefinedInLibrary="1">RS</Name>
+			<BitSize>24</BitSize>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">SET</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">RESET1</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q1</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>36</CodeIndex>
+				<InitIndex>37</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100409DC" IsDefinedInLibrary="1">SEMA</Name>
+			<BitSize>32</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">X</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">CLAIM</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">RELEASE</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">BUSY</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>38</CodeIndex>
+				<InitIndex>39</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100306C6" IsDefinedInLibrary="1">SR</Name>
+			<BitSize>24</BitSize>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">SET1</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">RESET</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q1</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>40</CodeIndex>
+				<InitIndex>41</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10060D24" IsDefinedInLibrary="1">TOF</Name>
+			<BitSize>120</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[internal variable]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">StartTime</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[internal variable]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">IN</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[starts timer with falling edge, resets timer with rising edge]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PT</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[time to pass, before Q is set]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[is FALSE, PT seconds after IN had a falling edge]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>80</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">ET</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[elapsed time]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>88</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>42</CodeIndex>
+				<InitIndex>43</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10060D24" IsDefinedInLibrary="1">TON</Name>
+			<BitSize>120</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">M</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[internal variable]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">StartTime</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[internal variable]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">IN</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[starts timer with rising edge, resets timer with falling edge]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PT</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[time to pass, before Q is set]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[is TRUE, PT seconds after IN had a rising edge]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>80</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">ET</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[elapsed time]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>88</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>44</CodeIndex>
+				<InitIndex>45</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10050B9B" IsDefinedInLibrary="1">TP</Name>
+			<BitSize>112</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">StartTime</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[internal variable]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">IN</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[Trigger for Start of the Signal]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">PT</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[The length of the High-Signal in 10ms]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">Q</Name>
+				<Type>BOOL</Type>
+				<Comment>
+					<![CDATA[The pulse]]>
+				</Comment>
+				<BitSize>8</BitSize>
+				<BitOffs>72</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">ET</Name>
+				<Type>TIME</Type>
+				<Comment>
+					<![CDATA[The current phase of the High-Signal]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>80</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>46</CodeIndex>
+				<InitIndex>47</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100E7279" IsDefinedInLibrary="1">FW_AdsClearEvents</Name>
+			<BitSize>448</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">READ_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bClear</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nMode</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>336</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>368</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>400</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>408</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>416</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>48</CodeIndex>
+				<InitIndex>49</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100BAF13" IsDefinedInLibrary="1">FW_TcEvent</Name>
+			<BitSize>648</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">Class</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">Prio</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">Id</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">bQuitRequired</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">DataFormatStrAddress</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">UserFlags</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">Flags</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>168</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">StreamType</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>200</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">SourceString</Name>
+				<Type Decoration="40000010">STRING(15)</Type>
+				<Comment>
+					<![CDATA[TCEVENT_SRCNAMESIZE]]>
+				</Comment>
+				<BitSize>128</BitSize>
+				<BitOffs>232</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">SourceId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>360</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">ProgId</Name>
+				<Type Decoration="40000020">STRING(31)</Type>
+				<Comment>
+					<![CDATA[TCEVENT_FMTPRGSIZE]]>
+				</Comment>
+				<BitSize>256</BitSize>
+				<BitOffs>392</BitOffs>
+			</SubItem>
+		</DataType>
+		<DataType>
+			<Name Decoration="2001014E">ARRAY [1..8] OF BYTE</Name>
+			<Type>BYTE</Type>
+			<BitSize>64</BitSize>
+			<ArrayInfo>
+				<LBound>1</LBound>
+				<Elements>8</Elements>
+			</ArrayInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10207543" IsDefinedInLibrary="1">FW_AdsLogEvent</Name>
+			<BitSize>2176</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMPREQ_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMPRES_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMPSIG_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMPCON_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">AMSADDR_I</Name>
+				<Type Decoration="2001014E">ARRAY [1..8] OF BYTE</Type>
+				<BitSize>64</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">EVENT_I</Name>
+				<Type Decoration="100BAF13">FW_TcEvent</Type>
+				<BitSize>648</BitSize>
+				<BitOffs>160</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">pTCEVENTSTREAM_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>808</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">CBEVENTSTREAM_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>840</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">nSTATE_I</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>872</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">nSTATEREQ_I</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>904</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">nSTATERES_I</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>936</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">nSTATESIG_I</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>968</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">nSTATECON_I</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>1000</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1032</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>1040</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">bEVENT_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1072</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">bEVENTQUIT_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1080</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>1088</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>1120</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>1312</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bEvent</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bEventQuit</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>1336</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">stEventConfigData</Name>
+				<Type Decoration="100BAF13">FW_TcEvent</Type>
+				<BitSize>648</BitSize>
+				<BitOffs>1344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pEventDataAddress</Name>
+				<Type>UDINT</Type>
+				<Comment>
+					<![CDATA[pointer]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>1992</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbEventDataLength</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>2024</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bFbCleanup</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>2056</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>2064</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nEventState</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>2096</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>2128</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>2136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bQuit</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>2168</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>51</CodeIndex>
+				<InitIndex>52</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="101694F6" IsDefinedInLibrary="1">FW_AdsRdWrt</Name>
+			<BitSize>688</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">WRTRD_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">PDESTADDR_I</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>168</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>360</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>376</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>408</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbWriteLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>440</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>472</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pWriteBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>504</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pReadBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>536</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>568</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>576</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>608</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>616</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>624</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbRead</Name>
+				<Type>UDINT</Type>
+				<Comment>
+					<![CDATA[count of bytes actually read]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>656</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>55</CodeIndex>
+				<InitIndex>56</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100B696E" IsDefinedInLibrary="1">FW_AdsRdWrtInd</Name>
+			<BitSize>424</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">CLEAR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bClear</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bValid</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>232</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>264</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>296</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbWriteLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>360</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">pWriteBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>392</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>57</CodeIndex>
+				<InitIndex>58</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10085EA5" IsDefinedInLibrary="1">FW_AdsRdWrtRes</Name>
+			<BitSize>352</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">RESPOND_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>200</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>248</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>280</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pReadBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>312</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bRespond</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>59</CodeIndex>
+				<InitIndex>60</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1013863E" IsDefinedInLibrary="1">FW_AdsRead</Name>
+			<BitSize>592</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">READ_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>376</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>408</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pReadBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>440</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>472</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>480</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>512</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>520</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>528</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbRead</Name>
+				<Type>UDINT</Type>
+				<Comment>
+					<![CDATA[count of bytes actually read]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>560</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>61</CodeIndex>
+				<InitIndex>62</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1010BDC2" IsDefinedInLibrary="1">FW_AdsReadDeviceInfo</Name>
+			<BitSize>624</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">RDINFO_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>352</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>384</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>392</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>400</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">sDevName</Name>
+				<Type Decoration="40000014">STRING(19)</Type>
+				<BitSize>160</BitSize>
+				<BitOffs>432</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nDevVersion</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>592</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>63</CodeIndex>
+				<InitIndex>64</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10096058" IsDefinedInLibrary="1">FW_AdsReadInd</Name>
+			<BitSize>360</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">CLEAR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bClear</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bValid</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>232</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>264</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>296</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>65</CodeIndex>
+				<InitIndex>66</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10085EA5" IsDefinedInLibrary="1">FW_AdsReadRes</Name>
+			<BitSize>352</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">RESPOND_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>200</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>248</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbReadLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>280</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pReadBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>312</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bRespond</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>67</CodeIndex>
+				<InitIndex>68</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10107BD3" IsDefinedInLibrary="1">FW_AdsReadState</Name>
+			<BitSize>464</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">RDSTATE_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>352</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>384</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>392</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>400</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nAdsState</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>432</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nDevState</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>448</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>69</CodeIndex>
+				<InitIndex>70</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10128445" IsDefinedInLibrary="1">FW_AdsWrite</Name>
+			<BitSize>560</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">WRITE_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>376</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbWriteLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>408</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pWriteBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>440</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>472</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>480</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>512</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>520</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>528</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>71</CodeIndex>
+				<InitIndex>72</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1012845B" IsDefinedInLibrary="1">FW_AdsWriteControl</Name>
+			<BitSize>528</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">STAMP_I</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ACCESSCNT_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">BUSY_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>48</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>56</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">ERRID_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">WRITE_SAV_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">TICKSTART_I</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>104</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>136</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nAdsState</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>344</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nDevState</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>360</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">cbWriteLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>376</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">pWriteBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>408</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bExecute</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>440</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">tTimeout</Name>
+				<Type>TIME</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>448</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bBusy</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>480</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bError</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>488</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>496</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>73</CodeIndex>
+				<InitIndex>74</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100A655F" IsDefinedInLibrary="1">FW_AdsWriteInd</Name>
+			<BitSize>392</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">CLEAR_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bClear</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">bValid</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>16</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>24</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>232</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxGrp</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>264</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIdxOffs</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>296</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">cbWriteLen</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>328</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">pWriteBuff</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>360</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>75</CodeIndex>
+				<InitIndex>76</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1006566F" IsDefinedInLibrary="1">FW_AdsWriteRes</Name>
+			<BitSize>288</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">RESPOND_I</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">sNetId</Name>
+				<Type Decoration="40000018">STRING(23)</Type>
+				<BitSize>192</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nPort</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>200</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nInvokeId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>216</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nErrId</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>248</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">bRespond</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>280</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>77</CodeIndex>
+				<InitIndex>78</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="2001024B">ARRAY [0..249] OF UINT</Name>
+			<Type>UINT</Type>
+			<BitSize>4000</BitSize>
+			<ArrayInfo>
+				<LBound>0</LBound>
+				<Elements>250</Elements>
+			</ArrayInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10063DD7" IsDefinedInLibrary="1">FW_DRand</Name>
+			<BitSize>4136</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">FirstCall_i</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">HoldRand_i</Name>
+				<Type>DINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">R250_Buffer_i</Name>
+				<Type Decoration="2001024B">ARRAY [0..249] OF UINT</Type>
+				<BitSize>4000</BitSize>
+				<BitOffs>40</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="0">R250_Index</Name>
+				<Type>INT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>4040</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Input" IsDefinedInLibrary="1" VarClass="1">nSeed</Name>
+				<Type>INT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>4056</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">fRndNum</Name>
+				<Type>LREAL</Type>
+				<BitSize>64</BitSize>
+				<BitOffs>4072</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>79</CodeIndex>
+				<InitIndex>80</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10010527" IsDefinedInLibrary="1">FW_GetCpuAccount</Name>
+			<BitSize>32</BitSize>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">dwCpuAccount</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>81</CodeIndex>
+				<InitIndex>82</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1002092B" IsDefinedInLibrary="1">FW_GetCpuCounter</Name>
+			<BitSize>64</BitSize>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">dwCpuCntLo</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">dwCpuCntHi</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>83</CodeIndex>
+				<InitIndex>84</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="1001030B" IsDefinedInLibrary="1">FW_GetCurTaskIndex</Name>
+			<BitSize>8</BitSize>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">nIndex</Name>
+				<Type>BYTE</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>85</CodeIndex>
+				<InitIndex>86</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="100207EF" IsDefinedInLibrary="1">FW_GetSystemTime</Name>
+			<BitSize>64</BitSize>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">dwTimeLo</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name FbParameter="Output" IsDefinedInLibrary="1" VarClass="2">dwTimeHi</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<FbInfo>
+				<CodeIndex>87</CodeIndex>
+				<InitIndex>88</InitIndex>
+			</FbInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000362" IsDefinedInLibrary="1">FW_NoOfByte</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>NoOfByte_Byte</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NoOfByte_Word</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NoOfByte_DWord</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10066081" IsDefinedInLibrary="1">FW_SystemInfoType</Name>
+			<BitSize>320</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">runTimeNo</Name>
+				<Type>BYTE</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">projectName</Name>
+				<Type Decoration="40000021">STRING(32)</Type>
+				<BitSize>264</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">numberOfTasks</Name>
+				<Type>BYTE</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>272</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">onlineChangeCount</Name>
+				<Type>UINT</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>280</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">bootDataFlags</Name>
+				<Type>BYTE</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>296</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">systemStateFlags</Name>
+				<Type>WORD</Type>
+				<BitSize>16</BitSize>
+				<BitOffs>304</BitOffs>
+			</SubItem>
+		</DataType>
+		<DataType>
+			<Name Decoration="100863C1" IsDefinedInLibrary="1">FW_SystemTaskInfoType</Name>
+			<BitSize>264</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">active</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">taskName</Name>
+				<Type Decoration="40000011">STRING(16)</Type>
+				<BitSize>136</BitSize>
+				<BitOffs>8</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">firstCycle</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>144</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">cycleTimeExceeded</Name>
+				<Type>BOOL</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>152</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">cycleTime</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>160</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">lastExecTime</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>192</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">priority</Name>
+				<Type>BYTE</Type>
+				<BitSize>8</BitSize>
+				<BitOffs>224</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">cycleCount</Name>
+				<Type>UDINT</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>232</BitOffs>
+			</SubItem>
+		</DataType>
+		<DataType>
+			<Name Decoration="40000018" IsDefinedInLibrary="1">T_AmsNetId</Name>
+			<Type Decoration="40000018">STRING(23)</Type>
+			<BitSize>192</BitSize>
+		</DataType>
+		<DataType>
+			<Name Decoration="40000100" IsDefinedInLibrary="1">T_MaxString</Name>
+			<Type Decoration="40000100">STRING(255)</Type>
+			<BitSize>2048</BitSize>
+		</DataType>
+		<DataType>
+			<Name Decoration="100BAF13" IsDefinedInLibrary="1">TcEvent</Name>
+			<Type Decoration="100BAF13">FW_TcEvent</Type>
+			<BitSize>648</BitSize>
+		</DataType>
+		<DataType>
+			<Name IsDefinedInLibrary="1">T_AmsPort</Name>
+			<Type>UINT</Type>
+			<BitSize>16</BitSize>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000303" IsDefinedInLibrary="1">E_OpenPath</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>PATH_GENERIC</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_BOOTPRJ</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_BOOTDATA</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_BOOTPATH</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH1</Text>
+				<Enum>11</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH2</Text>
+				<Enum>12</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH3</Text>
+				<Enum>13</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH4</Text>
+				<Enum>14</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH5</Text>
+				<Enum>15</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH6</Text>
+				<Enum>16</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH7</Text>
+				<Enum>17</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH8</Text>
+				<Enum>18</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PATH_USERPATH9</Text>
+				<Enum>19</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000394" IsDefinedInLibrary="1">E_SeekOrigin</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>SEEK_SET</Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>SEEK_CUR</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>SEEK_END</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000433" IsDefinedInLibrary="1">E_TcEventClass</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_NONE</Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_MAINTENANCE</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_MESSAGE</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_HINT</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_STATEINFO</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_INSTRUCTION</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_WARNING</Text>
+				<Enum>6</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_ALARM</Text>
+				<Enum>7</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTCLASS_PARAMERROR</Text>
+				<Enum>8</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="3000059C" IsDefinedInLibrary="1">E_TcEventClearModes</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>TCEVENTLOGIOFFS_CLEARACTIVE</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTLOGIOFFS_CLEARLOGGED</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTLOGIOFFS_CLEARALL</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="3000053F" IsDefinedInLibrary="1">E_TcEventPriority</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>TCEVENTPRIO_IMPLICIT</Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="300005CB" IsDefinedInLibrary="1">E_TcEventStreamType</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_INVALID</Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_SIMPLE</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_NORMAL</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_NOSOURCE</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_CLASSID</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_CLSNOSRC</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_READCLASSCOUNT</Text>
+				<Enum>6</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>TCEVENTSTREAM_MAXTYPE</Text>
+				<Enum>7</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10066081" IsDefinedInLibrary="1">SYSTEMINFOTYPE</Name>
+			<Type Decoration="10066081">FW_SystemInfoType</Type>
+			<BitSize>320</BitSize>
+		</DataType>
+		<DataType>
+			<Name Decoration="100863C1" IsDefinedInLibrary="1">SYSTEMTASKINFOTYPE</Name>
+			<Type Decoration="100863C1">FW_SystemTaskInfoType</Type>
+			<BitSize>264</BitSize>
+		</DataType>
+		<DataType>
+			<Name Decoration="300007CD" IsDefinedInLibrary="1">E_CmdTypeNewTargPosAndVelo</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>CHANGE_POS</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>CHANGE_VELO</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>CHANGE_POSANDVELO</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>CHANGE_POS_AT_SWITCHPOS</Text>
+				<Enum>9</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>CHANGE_VELO_AT_SWITCHPOS</Text>
+				<Enum>10</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>CHANGE_POSANDVELO_AT_SWITCHPOS</Text>
+				<Enum>11</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>REACH_VELO_AT_POS</Text>
+				<Enum>14</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000406" IsDefinedInLibrary="1">E_TargPosType</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>POS_ABSOLUTE</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>POS_RELATIVE</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>POS_MODULO</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>POS_ABS_INTERNAL</Text>
+				<Enum>9</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10166AA6" IsDefinedInLibrary="1">NCTOPLC_AXLESTRUCT</Name>
+			<BitSize>1024</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nStateDWord</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Status double word]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nErrorCode</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis error code]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nAxisState</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis moving status]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nAxisModeCon</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis mode (feedback from NC)]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nCalibrationState</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[State of axis calibration (homing)]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>128</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nCoupleState</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis coupling state]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>160</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nSvbEntries</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[SVB entries/orders (SVB = Set preparation task)]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>192</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nSafEntries</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[SAF entries/orders (SAF = Set execution task]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>224</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nAxisId</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis ID]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>256</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nOpModeDWord</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Current operation mode]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>288</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nCtrlLoopIndex</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis control loop index  ( old variable: nReserved2_HIDDEN : DWORD )]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>320</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fPosIst</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Current position (absolut value from NC)]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>352</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fModuloPosIst</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Current position as modulo value (e.g. in degrees)]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>416</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nModuloTurns</Name>
+				<Type>DINT</Type>
+				<Comment>
+					<![CDATA[Modulo turns]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>480</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fVeloIst</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Current velocity (optional)]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>512</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fPosDiff</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Position difference (lag distance)]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>576</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fPosSoll</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Setpoint position]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>640</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fVeloSoll</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Setpoint velocity]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>704</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fAccSoll</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Setpoint acceleration ( old variable: fReserve1_HIDDEN : LREAL )]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>768</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fReserve2_HIDDEN</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[reserved]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>832</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fReserve3_HIDDEN</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[reserved]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>896</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fReserve4_HIDDEN</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[reserved]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>960</BitOffs>
+			</SubItem>
+		</DataType>
+		<DataType>
+			<Name Decoration="200101E4">ARRAY [32..127] OF BYTE</Name>
+			<Type>BYTE</Type>
+			<BitSize>768</BitSize>
+			<ArrayInfo>
+				<LBound>32</LBound>
+				<Elements>96</Elements>
+			</ArrayInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="10074C8A" IsDefinedInLibrary="1">PLCTONC_AXLESTRUCT</Name>
+			<BitSize>1024</BitSize>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nDeCtrlDWord</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Control double word]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>0</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nOverride</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Velocity override]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>32</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nAxisModeReq</Name>
+				<Type>DWORD</Type>
+				<Comment>
+					<![CDATA[Axis operating mode (PLC request)]]>
+				</Comment>
+				<BitSize>32</BitSize>
+				<BitOffs>64</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nAxisModeDWord</Name>
+				<Type>DWORD</Type>
+				<BitSize>32</BitSize>
+				<BitOffs>96</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fAxisModeLReal</Name>
+				<Type>LREAL</Type>
+				<BitSize>64</BitSize>
+				<BitOffs>128</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">fActPosCorrection</Name>
+				<Type>LREAL</Type>
+				<Comment>
+					<![CDATA[Correction value for current position]]>
+				</Comment>
+				<BitSize>64</BitSize>
+				<BitOffs>192</BitOffs>
+			</SubItem>
+			<SubItem>
+				<Name IsDefinedInLibrary="1" VarClass="3">nReserved_HIDDEN</Name>
+				<Type Decoration="200101E4">ARRAY [32..127] OF BYTE</Type>
+				<BitSize>768</BitSize>
+				<BitOffs>256</BitOffs>
+			</SubItem>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000445" IsDefinedInLibrary="1">E_NcSlaveTypes</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_LINEAR</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_FLYINGSAW_ONVELOCITY</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_FLYINGSAW_ONPOSITION</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_FLYINGSAW_QUADRATIC</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_SYNCHRONIZING_ONVELO</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_SYNCHRONIZING_ONPOS</Text>
+				<Enum>6</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_SYNCJERKSETTER_ONVELO</Text>
+				<Enum>7</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_TABULAR</Text>
+				<Enum>10</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_MULTITABULAR</Text>
+				<Enum>11</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_FLYINGMODULO_LINEAR</Text>
+				<Enum>12</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_MOTIONFUNCTIONTABULAR</Text>
+				<Enum>13</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_UNIVERSALTABULAR</Text>
+				<Enum>14</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_LINEAR_CYCLICCHANGES_RAMP</Text>
+				<Enum>15</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_BILINEAR</Text>
+				<Enum>16</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>NC_SLAVETYPE_CONST_SURFACEVELO_RAMP</Text>
+				<Enum>18</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="300003B4" IsDefinedInLibrary="1">E_ServoState</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>INACTIVE</Text>
+				<Enum>0</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>RUNNING</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>OVERRIDE_ZERO</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PHASE_VELOCONST</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PHASE_ACCPOS</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>PHASE_ACCNEG</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+		</DataType>
+		<DataType>
+			<Name Decoration="30000466" IsDefinedInLibrary="1">E_StartPosType</Name>
+			<Type>INT</Type>
+			<BitSize>16</BitSize>
+			<EnumInfo>
+				<Text>START_ABSOLUTE</Text>
+				<Enum>1</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_RELATIVE</Text>
+				<Enum>2</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_ENDLESS_PLUS</Text>
+				<Enum>3</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_ENDLESS_MINUS</Text>
+				<Enum>4</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_MODULO</Text>
+				<Enum>5</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_MODULO_SHORT</Text>
+				<Enum>261</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_MODULO_PLUS</Text>
+				<Enum>517</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_MODULO_MINUS</Text>
+				<Enum>773</Enum>
+			</EnumInfo>
+			<EnumInfo>
+				<Text>START_ABS_INTERNAL</Text>
+				<Enum>9</Enum>
+			</EnumInfo>
+		</DataType>
+	</DataTypes>
+	<Symbols>
+		<Symbol>
+			<Name TaskPrio="1">MAIN.fbInst</Name>
+			<Type Decoration="1009F7CA">FB_Inst</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>582</IOffset>
+			<BitSize>2144</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name TaskPrio="1">MAIN.iCounter</Name>
+			<Type>INT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>850</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Input">MAIN.bIn</Name>
+			<Type>BOOL</Type>
+			<IGroup>61473</IGroup>
+			<IOffset VarConfig="Changeable">32</IOffset>
+			<BitSize>1</BitSize>
+			<Properties>
+				<Property>
+					<Name>LinkedWith</Name>
+					<Value>
+						<![CDATA[TIID^EtherCAT Master (EtherCAT)^A2P (EK1100)^100 (EL1014)^Channel 1^Input]]>
+					</Value>
+				</Property>
+			</Properties>
+		</Symbol>
+		<Symbol>
+			<Name Static="Input">MAIN.iIn</Name>
+			<Type>INT</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">0</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Input">MAIN.wIn</Name>
+			<Type>WORD</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">2</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Input">MAIN.sNcToPlc</Name>
+			<Type Decoration="10166AA6">NCTOPLC_AXLESTRUCT</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">12</IOffset>
+			<BitSize>1024</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output" TaskPrio="1">MAIN.bOut</Name>
+			<Type>BOOL</Type>
+			<IGroup>61489</IGroup>
+			<IOffset VarConfig="Changeable">32</IOffset>
+			<BitSize>1</BitSize>
+			<Properties>
+				<Property>
+					<Name>LinkedWith</Name>
+					<Value>
+						<![CDATA[TIID^EtherCAT Master (EtherCAT)^A2P (EK1100)^102 (EL2004)^Channel 1^Output;TIID^EtherCAT Master (EtherCAT)^A4P (BK1120)^Term3 (KL2114)^Channel 1^Output;TIID^CANopen Master (EL6751)^Box11 (BK5150)^Term3 (KL2114)^Channel 1^Output;TIID^Profibus Master (EL6731)^Box22 (BK3120)^Term5 (KL2114)^Channel 1^Output;TIID^Virtual USB Interface (USB)^Box 0 (CPX8XX)^Outputs^LED 1]]>
+					</Value>
+				</Property>
+			</Properties>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output" TaskPrio="1">MAIN.iOut</Name>
+			<Type>INT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">0</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output" TaskPrio="1">MAIN.wOut</Name>
+			<Type>WORD</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">2</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output">MAIN.sPlcToNc</Name>
+			<Type Decoration="10074C8A">PLCTONC_AXLESTRUCT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">12</IOffset>
+			<BitSize>1024</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output">MAIN.uiCtrl</Name>
+			<Type>UINT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">268</IOffset>
+			<BitSize>16</BitSize>
+			<Properties>
+				<Property>
+					<Name>LinkedWith</Name>
+					<Value>
+						<![CDATA[TIID^Profibus Master (EL6731)^Axis 23 (ProfiDrive2 MC)^Outputs^A_STW1]]>
+					</Value>
+				</Property>
+			</Properties>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output">MAIN.uiVelo</Name>
+			<Type>UDINT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">276</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output">MAIN.uiCtrl2</Name>
+			<Type>UINT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">272</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Static="Output">MAIN.uiCtrl3</Name>
+			<Type>UINT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">274</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_LOGGER</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>162</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_EVENTLOG</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>164</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_RTIME</Name>
+			<Type>UINT</Type>
+			<Comment>
+				<![CDATA[R0 Real time]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>166</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_IO</Name>
+			<Type>UINT</Type>
+			<Comment>
+				<![CDATA[I/O Driver]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>168</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_NC</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>170</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_NCSAF</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>172</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_NCSVB</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>174</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_ISG</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>176</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_CNC</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>178</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_LINE</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>180</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_PLC</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>182</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_PLC_RTS1</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>184</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_PLC_RTS2</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>186</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_PLC_RTS3</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>188</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_PLC_RTS4</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>190</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_CAM</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>192</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R0_CAMTOOL</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>194</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.AMSPORT_R3_SYSSERV</Name>
+			<Type>UINT</Type>
+			<Comment>
+				<![CDATA[System Service]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>196</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_INVALID</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>198</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_IDLE</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>200</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_RESET</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>202</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_INIT</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>204</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_START</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>206</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_RUN</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>208</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_STOP</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>210</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_SAVECFG</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>212</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_LOADCFG</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>214</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_POWERFAILURE</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>216</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_POWERGOOD</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>218</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_ERROR</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>220</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_SHUTDOWN</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>222</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_SUSPEND</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>224</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_RESUME</Name>
+			<Type>UINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>226</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSSTATE_MAXSTATES</Name>
+			<Type>UINT</Type>
+			<Comment>
+				<![CDATA[ADS reserved index groups]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>228</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYMTAB</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>230</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYMNAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>234</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYMVAL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>238</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_HNDBYNAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>242</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_VALBYNAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>246</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_VALBYHND</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>250</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_RELEASEHND</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>254</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_INFOBYNAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>258</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_VERSION</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>262</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_INFOBYNAMEEX</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>266</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_DOWNLOAD</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>270</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_UPLOAD</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>274</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYM_UPLOADINFO</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>278</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_SYMNOTE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[notification OF named handle]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>282</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RWIB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read/write input BYTE(S)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>286</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RWIX</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read/write input bit]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>290</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RISIZE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read input size (in BYTE)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>294</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RWOB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read/write output BYTE(S)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>298</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RWOX</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read/write output bit]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>302</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_ROSIZE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read/write output bit]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>306</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_CLEARI</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[write inputs TO null]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>310</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_CLEARO</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[write outputs TO null]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>314</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_IOIMAGE_RWIOB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read input AND write output BYTE(S)  ADS-READWRITE]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>318</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIGRP_DEVICE_DATA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[state, name, etc...]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>322</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIOFFS_DEVDATA_ADSSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[ads state OF device]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>326</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSIOFFS_DEVDATA_DEVSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[device state]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>330</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_OPENCREATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>334</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_OPENREAD</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>338</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_OPENWRITE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>342</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_CREATEFILE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>346</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_CLOSEHANDLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>350</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FOPEN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>354</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FCLOSE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>358</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FREAD</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>362</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FWRITE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>366</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FSEEK</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>370</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FTELL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>374</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FGETS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>378</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FPUTS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>382</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FSCANF</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>386</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FPRINTF</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>390</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FEOF</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>394</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FDELETE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>398</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_FRENAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>402</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_REG_HKEYLOCALMACHINE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>406</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_SENDEMAIL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>410</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_TIMESERVICES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>414</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_STARTPROCESS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>418</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSERVICE_CHANGENETID</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[System service index offsets: SYSTEMSERVICE_TIMESERVICES]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>422</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TIMESERVICE_DATEANDTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>426</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TIMESERVICE_SYSTEMTIMES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>430</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TIMESERVICE_RTCTIMEDIFF</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>434</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TIMESERVICE_ADJUSTTIMETORTC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[ADSLOGxxx log control mask types]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>438</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_HINT</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>442</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_WARN</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>446</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_ERROR</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>450</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_LOG</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>454</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_MSGBOX</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>458</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_RESOURCE</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>462</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.ADSLOG_MSGTYPE_STRING</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA[boot data constants (-> SYSTEMINFOTYPE.bootDataFlags)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>466</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.BOOTDATAFLAGS_RETAIN_LOADED</Name>
+			<Type>BYTE</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>470</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.BOOTDATAFLAGS_RETAIN_INVALID</Name>
+			<Type>BYTE</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>471</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.BOOTDATAFLAGS_RETAIN_REQUESTED</Name>
+			<Type>BYTE</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>472</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.BOOTDATAFLAGS_PERSISTENT_LOADED</Name>
+			<Type>BYTE</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>473</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.BOOTDATAFLAGS_PERSISTENT_INVALID</Name>
+			<Type>BYTE</Type>
+			<Comment>
+				<![CDATA[system state constants (-> SYSTEMINFOTYPE.systemStateFlags)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>474</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSTATEFLAGS_BSOD</Name>
+			<Type>BYTE</Type>
+			<Comment>
+				<![CDATA[blue screen of death]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>475</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.SYSTEMSTATEFLAGS_RTVIOLATION</Name>
+			<Type>BYTE</Type>
+			<Comment>
+				<![CDATA[realtime violation - latency time]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>476</IOffset>
+			<BitSize>8</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODEREAD</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["r": Opens for reading. If the file does not exist or cannot be found, the call fails.]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>477</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODEWRITE</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["w": Opens an empty file for writing. If the given file exists, its contents are destroyed.]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>481</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODEAPPEND</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["a": Opens for writing at the end of the file (appending) without removing the EOF marker before writing new data to the file; creates the file first if it doesn’t exist.]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>485</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODEPLUS</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["+": Opens for reading and writing]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>489</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODEBINARY</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["b": Open in binary (untranslated) mode.]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>493</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FOPEN_MODETEXT</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA["t": Open in text (translated) mode.]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>497</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_OPENCREATE</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>501</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_OPENREAD</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>505</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_OPENWRITE</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>509</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_READ</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>513</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_WRITE</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>517</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_SEEKBEGIN</Name>
+			<Type>DWORD</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>521</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.FILE_SEEKEND</Name>
+			<Type>DWORD</Type>
+			<Comment>
+				<![CDATA[END OF OBSOLETE FILE OPERATION CONSTANTS]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>525</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTFLAG_PRIOCLASS</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event class/priority	through textformatter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>529</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTFLAG_FMTSELF</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[format in message]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>531</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTFLAG_LOG</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[write to log file]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>533</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTFLAG_MSGBOX</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[display message box]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>535</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTFLAG_SRCID</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[src id instead of source name]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>537</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTSTATE_INVALID</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event object is not initialized]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>539</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTSTATE_SIGNALED</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event object is in a signaled state]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>541</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTSTATE_RESET</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event object is in a reset state]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>543</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTSTATE_CONFIRMED</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event object is confirmed but not reset]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>545</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENTSTATE_RESETCON</Name>
+			<Type>WORD</Type>
+			<Comment>
+				<![CDATA[event object is confirmed and reset]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>547</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENT_SRCNAMESIZE</Name>
+			<Type>INT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>549</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.TCEVENT_FMTPRGSIZE</Name>
+			<Type>INT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>551</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.PI</Name>
+			<Type>LREAL</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>553</IOffset>
+			<BitSize>64</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1">.VERSION_TCNCUTILITIES</Name>
+			<Type Decoration="40000015">STRING(20)</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>561</IOffset>
+			<BitSize>168</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1" Static="MArea">.SystemInfo</Name>
+			<Type Decoration="10066081">FW_SystemInfoType</Type>
+			<IGroup>16416</IGroup>
+			<IOffset>32768</IOffset>
+			<BitSize>320</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name Constant="1" IsDefinedInLibrary="1" Static="MArea">.SystemTaskInfoArr</Name>
+			<Type Decoration="20017A50">ARRAY [1..4] OF FW_SystemTaskInfoType</Type>
+			<IGroup>16416</IGroup>
+			<IOffset>32832</IOffset>
+			<BitSize>1056</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.VAR_NC_AMSPORT</Name>
+			<Type>UINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Groups]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>890</IOffset>
+			<BitSize>16</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AXPARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>892</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AXSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>896</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AXFUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>900</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AXIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>904</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENCPARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>908</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENCSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>912</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENCFUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>916</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENCIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>920</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTRLPARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>924</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTRLSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>928</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTRLFUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>932</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTRLIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>936</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRIVEPARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>940</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRIVESTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>944</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRIVEFUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>948</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRIVEIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>952</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TABPARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>956</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TABSTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>960</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TABFUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>964</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TABIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>968</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHNPARMS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>972</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHNSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>976</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHNFUNCS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>980</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHNIOAREA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>984</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GROUPPARMS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>988</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GROUPSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>992</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GROUPFUNCS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>996</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GROUPIOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for Axis Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1000</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXRESET</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: reset]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1004</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTOP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1008</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCLEAR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: clear]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1012</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCALIBR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: reference]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1016</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXNEWTARGPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: new endposition]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1020</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSETPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: set actual position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1024</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSETCALFLAG</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: set reference flag]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1028</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSETPOSONTHEFLY</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: set actual position on the fly]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1032</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTART</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: normal start]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1036</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTARTEXT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: extended start]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1040</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTARTVELOCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: special]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1044</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXENABLEEXTGEN</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: enable external set point generator]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1048</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXDISABLEEXTGEN</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: disable external set point generator]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1052</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTARTDRVOUT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: start drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1056</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTOPDRVOUT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1060</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTARTSCOM</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: start compensation]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1064</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXSTOPSCOM</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop compensation]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1068</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCPL</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: couple master-slave]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1072</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXDECPL</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: decouple master-slave]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1076</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCPLCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: change coupleparams]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1080</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTABCPLCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: change coupleparams f. tabs]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1084</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCPLTAB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: couple master-slave w. tabs]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1088</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTABSLVACTIVCOR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: activate corr. tab]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1092</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTABSLVLEAVECYC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: deactivate profile tab]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1096</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXCPLSOLOTAB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: couple master-slave w.solo  tabs]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1100</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXDISABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: disable]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1104</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXENABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: enable]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1108</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXDRIVEDISABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: disable drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1112</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXDRIVEENABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: enable drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1116</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVREFSEARCH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1120</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVSYNCSEARCH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1124</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVSLOWMANUAL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1128</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVFASTMANUAL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1132</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVELOFAST</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1136</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPOSAREAENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1140</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPOSAREARANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1144</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXMOTCNTRLENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1148</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXMOTCNTRLTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1152</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXLOOPENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1156</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXLOOPDISTANCE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1160</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTARGETPOSENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1164</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTARGETPOSRANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1168</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXTARGETPOSTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1172</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPULSDISTPOS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1176</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPULSDISTNEG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1180</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXUNITFLAGS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1184</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXVELOMAXIMUM</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1188</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXMOTCNTRLRANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1192</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPEHCONTROLENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1196</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXPEHCONTROLTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1200</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXBACKLASHCOMPENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1204</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXBACKLASH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1208</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXACCP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1212</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXACCM</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1216</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXJERK</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for Group Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1220</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRRESET</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1224</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTOP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1228</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRCLEAR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1232</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRAXCONFIG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1236</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRFEED</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1240</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRCALIBRPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1244</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRNEWTARGPOSPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1248</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSETPOSPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1252</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSETCALFLAGPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1256</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTARTPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1260</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTARTEXTPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1264</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTARTVELOCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only  (special FUNCTION)]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1268</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTARTDRVOUTPTP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group: internal use only]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1272</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRSTARTFIFO</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1276</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRFILLFIFOENTRIES</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for Group Parameters]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1280</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPNAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1284</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPTYPE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1288</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPSINGLESTEP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1292</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPSCHNID</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1296</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPNRINCHN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1300</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPFIFODIM</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1304</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRPFIFOLEN</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for Group State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1308</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHN_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1312</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHN_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1316</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHN_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1320</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CHN_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1324</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GR_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1328</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GR_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1332</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GR_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1336</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_GR_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1340</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AX_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1344</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AX_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1348</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AX_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1352</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_AX_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1356</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENC_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1360</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENC_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1364</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENC_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1368</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_ENC_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Encoder with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1372</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTR_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1376</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTR_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1380</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTR_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1384</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_CTR_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Controller with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1388</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRV_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1392</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRV_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1396</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRV_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1400</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_DRV_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Drive with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1404</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TAB_PARMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Parameter]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1408</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TAB_STATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1412</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TAB_FUNCS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1416</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXG_TAB_IOAREA</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Tabular with ID: Processdata]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1420</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_ID</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel ID]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1424</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_NAME</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel name]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1428</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_TYPE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Channel type]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1432</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_ITPTYPE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Interpreter type]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1436</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_BUFFERSIZE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1440</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_JOBLISTNR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1444</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_LOADERLOG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1448</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_EXECTRACE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1452</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_FEEDERLOG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1456</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_MDEFS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1460</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_GRPID</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Group ID ( 3D and FIFO channel )]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1464</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_ITPOUTPORT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[interpeter output port	( reserved function, not standard )]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1468</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNP_ITPPRELSH</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[ads addr OF PreLineScannerHook	( reserved function, not standard )]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1472</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_ERROR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1476</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_GROUPCOUNT</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1480</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_ITPSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1484</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_ITPOPMODE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1488</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_BUFPROG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1492</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNS_BUFPROGTXT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for CHANNEL Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1496</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_LOADPROG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1500</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_STARTPROG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1504</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_LOADPROGTXT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Load NC programm by programm name]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1508</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_RESET</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1512</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_STOP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1516</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_RETRY</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1520</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_SKIP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1524</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_SAVENPV</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1528</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_LOADNPV</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1532</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_SAVEWZK</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1536</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_LOADWZK</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1540</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_GOAHEAD</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1544</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_DELDTG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1548</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_CHNF_RESETFASTMFUNC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[reset specified fast m-func]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1552</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_ID</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1556</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_NAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1560</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_TYPE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1564</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_SAFCYCLETIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1568</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_SVBCYCLETIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1572</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_SINGLESTEP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1576</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_MAXSVBENTRIES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1580</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_MAXSAFENTRIES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1584</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_CHNID</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1588</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_NRINCHN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1592</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_VELOMIN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1596</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_VELOJUMPC0X</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1600</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_VELOJUMPC0Y</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1604</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_VELOJUMPC0Z</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1608</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_FIFODIM</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1612</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRP_FIFOLEN</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for GROUP State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1616</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_ERROR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1620</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_MASTERAXIS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1624</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_SLAVEAXIS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1628</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_SVBSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1632</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_SAFSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1636</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_MOTIONSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1640</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_CALIBRATIONSTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1644</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_COUPLESTATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1648</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_COUPLETABLEID</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1652</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_SVBENTRIES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1656</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_SAFENTRIES</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1660</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_ESTOPACTIVE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[E-stop active ?]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1664</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRS_3DAXISIDS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for GROUP Functions]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1668</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_RESET</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1672</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_STOP</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1676</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_CLEAR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1680</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_AXCONFIG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1684</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_SINGLEAXCONFIG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1688</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_AXDISCONNECT</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1692</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_STARTFIFO</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1696</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_GRF_FILLFIFOENTRIES</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for AXIS Parameters]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1700</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ID</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1704</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_NAME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1708</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_TYPE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1712</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_CYCLETIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1716</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOREFSEARCH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1720</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOSYNCSEARCH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1724</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOSLOWMANUAL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1728</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOFASTMANUAL</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1732</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOFAST</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1736</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_POSAREAENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1740</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_POSAREARANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1744</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_MOTCNTRLENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1748</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_MOTCNTRLTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1752</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_LOOPENABLE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1756</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_LOOPDISTANCE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1760</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_TARGETPOSENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1764</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_TARGETPOSRANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1768</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_TARGETPOSTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1772</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_PULSDISTPOS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1776</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_PULSDISTNEG</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1780</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_UNITFLAGS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1784</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOMAXIMUM</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1788</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_MOTCNTRLRANGE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1792</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_PEHCONTROLENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1796</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_PEHCONTROLTIME</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1800</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_BACKLASHCOMPENA</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1804</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_BACKLASH</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1808</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_DATAPERSISTENCE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1812</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_HWAMSADDR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1816</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ACC</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1820</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_DEC</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1824</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_JERK</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1828</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_DELAY</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1832</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_OVERRIDETYPE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1836</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ENCSCALE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1840</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ENABLESOFTENDMIN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1844</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ENABLESOFTENDMAX</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1848</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_SOFTENDMIN</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1852</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_SOFTENDMAX</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1856</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_ENABLEPOSDIFF</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1860</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_POSDIFFMAX</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1864</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_GAINPOS</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1868</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXP_VELOREFERENCE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[NC ADS Index Offsets for AXIS State]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1872</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_ERROR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual runtime error]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1876</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_SETPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[setpoint position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1880</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_MODULOSETPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[setpoint modulo position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1884</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_MODULOSETTURNS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[setpoint modulo turns]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1888</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_SETVELO</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[setpoint velocity]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1892</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_SETACC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[setpoint acceleration]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1896</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_COUPLESTATE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[couple state]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1900</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_CPLPARAMS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[read couple parameters]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1904</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_CPLFACTOR</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>1908</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_ACTPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1912</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_MODULOACTPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual modulo position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1916</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_MODULOACTTURNS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual modulo turns]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1920</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_ACTVELO</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual velocity]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1924</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_ACTACC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual acceleration]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1928</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_ACTINCREMENTS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual increments]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1932</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXS_POSDIFF</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[actual position difference]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1936</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_RESET</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: reset]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1940</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STOP</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1944</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CLEAR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: clear]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1948</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CALIBR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: reference]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1952</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_NEWTARGPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: new endposition]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1956</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_NEWTARGPOSANDVELO</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: new endposition and new velocity]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1960</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_SETPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: set actual position]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1964</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_SETCALFLAG</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: set reference flag]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1968</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_START</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: normal start]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1972</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STARTEXT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: extended start]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1976</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STARTDRVOUT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: start drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1980</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STOPDRVOUT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1984</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CHANGEDRVOUT</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: change drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1988</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STARTSCOM</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: start compensation]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1992</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STOPSCOM</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop compensation]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>1996</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CPL</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: couple master-slave]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2000</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_DECPL</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: decouple master-slave]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2004</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CPLCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: change coupleparams]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2008</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_TABCPLCHANGE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: change coupleparams f. tabs]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2012</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_STOPSLAVE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: stop slave]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2016</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_CPLTAB</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: couple master-slave w. tabs]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2020</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_TABSLVACTIVCOR</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: activate corr. tab]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2024</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_TABSLVLEAVECYC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: deactivate profile tab]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2028</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_DISABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: disable]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2032</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_ENABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: enable]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2036</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_DRIVEDISABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: disable drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2040</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_DRIVEENABLE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[Axis: enable drive output]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2044</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_AXF_RECONFIGURATE</Name>
+			<Type>UDINT</Type>
+			<IGroup>16448</IGroup>
+			<IOffset>2048</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHACTIVE</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch active ?]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2052</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHVALID</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch valid ?]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2056</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHINC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch: hardware value in increments]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2060</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch: position value in base units]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2064</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHDELTAINC</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch: hardware difference in increments]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2068</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCS_EXTLATCHDELTAPOS</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: extern latch: position difference in base units]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2072</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+		<Symbol>
+			<Name IsDefinedInLibrary="1">.NCIDXO_ENCF_ACTEXTLATCH</Name>
+			<Type>UDINT</Type>
+			<Comment>
+				<![CDATA[KL5101: activate extern latch]]>
+			</Comment>
+			<IGroup>16448</IGroup>
+			<IOffset>2076</IOffset>
+			<BitSize>32</BitSize>
+		</Symbol>
+	</Symbols>
+	<VarConfigs>
+		<VarConfig>
+			<Name Static="Input" TaskPrio="1">MAIN.fbInst.bIn</Name>
+			<Type>BOOL</Type>
+			<IGroup>61473</IGroup>
+			<IOffset VarConfig="Changeable">33</IOffset>
+			<BitSize>1</BitSize>
+			<Parent>
+				<Name SubItem="bIn">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Input" TaskPrio="1">MAIN.fbInst.iIn</Name>
+			<Type>INT</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">5</IOffset>
+			<BitSize>16</BitSize>
+			<Parent>
+				<Name SubItem="iIn">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Input" TaskPrio="1">MAIN.fbInst.wIn</Name>
+			<Type>WORD</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">7</IOffset>
+			<BitSize>16</BitSize>
+			<Parent>
+				<Name SubItem="wIn">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Input" TaskPrio="1">MAIN.fbInst.sNcToPlc</Name>
+			<Type Decoration="10166AA6">NCTOPLC_AXLESTRUCT</Type>
+			<IGroup>61472</IGroup>
+			<IOffset VarConfig="Changeable">140</IOffset>
+			<BitSize>1024</BitSize>
+			<Parent>
+				<Name SubItem="sNcToPlc">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Output" TaskPrio="1">MAIN.fbInst.bOut</Name>
+			<Type>BOOL</Type>
+			<IGroup>61489</IGroup>
+			<IOffset VarConfig="Changeable">33</IOffset>
+			<BitSize>1</BitSize>
+			<Parent>
+				<Name SubItem="bOut">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Output" TaskPrio="1">MAIN.fbInst.iOut</Name>
+			<Type>INT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">5</IOffset>
+			<BitSize>16</BitSize>
+			<Parent>
+				<Name SubItem="iOut">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Output" TaskPrio="1">MAIN.fbInst.wOut</Name>
+			<Type>WORD</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">7</IOffset>
+			<BitSize>16</BitSize>
+			<Parent>
+				<Name SubItem="wOut">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+		<VarConfig>
+			<Name Static="Output" TaskPrio="1">MAIN.fbInst.sPlcToNc</Name>
+			<Type Decoration="10074C8A">PLCTONC_AXLESTRUCT</Type>
+			<IGroup>61488</IGroup>
+			<IOffset VarConfig="Changeable">140</IOffset>
+			<BitSize>1024</BitSize>
+			<Parent>
+				<Name SubItem="sPlcToNc">MAIN.fbInst</Name>
+				<Type Decoration="1009F7CA">FB_Inst</Type>
+			</Parent>
+		</VarConfig>
+	</VarConfigs>
+</PlcProjectInfo>
