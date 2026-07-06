@@ -119,8 +119,21 @@ pipeline is a later problem, not a v1 concern.
   inferred mirrored folder path. No XML parsing/conversion needed.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
   run automatically before every sync.
-- Re-investigate Event Class automation using the user's known-working
-  recipe before deciding whether it needs a manual-then-export fallback.
+- Event Class "declared vs actual" checker (replaces the write-based
+  `EventClassSync.cs`, since automating Event Class *creation* is a
+  confirmed dead end). **DONE (2026-07-06)**: new read-only
+  `Sync/EventClassChecker.cs` reads `events.xml` (via the existing
+  `EventManifestParser`) and compares against the `.tsproj`'s
+  `Project/System/DataType/Name` elements directly (no VS session needed),
+  reporting which declared classes are present vs missing — a human still
+  has to create missing ones via the XAE UI. Wired into `Program.cs` in the
+  same early spot the old write used to run. `--events-only` now exits
+  right after this check, before opening Visual Studio at all (it no longer
+  needs to, since there's no write to validate through a VS round-trip).
+  The old `EventClassSync.cs` (confirmed non-working file-edit approach)
+  was deleted — no longer referenced anywhere. Verified functionally with a
+  scratch fake `.tsproj` + `events.xml` (2 declared, 1 present, 1 missing
+  reported correctly), no real project or VS involved.
 
 ## Not Doing (for now, and why)
 - Continuous file-watcher daemon — a background always-on process is more
@@ -133,7 +146,6 @@ pipeline is a later problem, not a v1 concern.
   useful as a reference for the XML shape, not as a dependency.
 
 ## Open Questions
-- None blocking MVP start — next concrete step is the Event Class
-  re-investigation (get the user's prior working .tsproj-edit recipe) and
-  the ProduceXml() spike, since several other pieces (export command,
-  formatter) build on those results.
+- None blocking further MVP work — remaining pieces (ST formatter, incremental
+  sync mode, git hook, `--export` command) are independent of each other and
+  can proceed in any order.

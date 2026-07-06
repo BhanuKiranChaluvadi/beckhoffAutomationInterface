@@ -84,7 +84,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--name <name>` | `--source`'s folder name | Project/solution name |
 | `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. |
 | `--build-only` | off | Skip the `.st`/library/IO sync steps; just reopen the existing project, build, and report. Use for fast iteration on compile errors when the `.st` source hasn't changed. |
-| `--events-only` | off | Sync `events.xml` into the `.tsproj` file only, then stop (see Known limitations) |
+| `--events-only` | off | Check `events.xml` against the `.tsproj` (declared vs actual) and stop — no Visual Studio session needed (see Known limitations) |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 
 ### Ignoring source files
@@ -130,18 +130,22 @@ Alongside the `.st` files, a project folder can contain:
 
 - **`libraries.xml`** — PLC library references (`<Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />`)
 - **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
-- **`events.xml`** — Event Classes for `Tc3_EventLogger` (see Known limitations — not yet functional)
+- **`events.xml`** — Event Classes for `Tc3_EventLogger` (see Known limitations — checked, not auto-created)
 
 All three are synced idempotently: existing entries are left alone, missing
 ones are added, removed-from-manifest ones are cleaned up (library/IO only).
 
 ## Known limitations
 
-- **Event Classes are not yet automatable.** Both the Automation Interface
+- **Event Classes are not auto-creatable.** Both the Automation Interface
   (`CreateChild`/`ConsumeXml`) and direct `.tsproj` XML editing were tried
-  and don't work — see `EventClassSync.cs`'s doc comment for the full
-  investigation. Until resolved, create any needed Event Class once by hand
-  via the TwinCAT UI (`SYSTEM ▸ Type System ▸ Event Classes ▸ New`).
+  and don't work — Visual Studio silently drops any hand-authored
+  `<DataType>` block on its own next save, regardless of schema. Create any
+  needed Event Class once by hand via the TwinCAT UI (`SYSTEM ▸ Type System
+  ▸ Event Classes ▸ New`). The tool DOES check `events.xml` against the live
+  project (`Sync/EventClassChecker.cs`) and reports which declared classes
+  are still missing, so you always know what needs manual creation — it
+  just can't create them for you.
 - **IO variable linking** requires the PLC instance's I/O image to exist,
   which normally only materializes after *Activate Configuration* against a
   real or simulated target. If a declared link can't be resolved, the tool

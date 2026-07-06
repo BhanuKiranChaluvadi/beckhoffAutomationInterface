@@ -111,7 +111,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --name <name>     Project/solution name (default: the --source folder's own name)");
             Console.WriteLine("  --parse-only      Parse all .st files without opening Visual Studio");
             Console.WriteLine("  --build-only      Skip .st/library/IO sync; just open, build, and report");
-            Console.WriteLine("  --events-only     Sync events.xml into the .tsproj only, then stop");
+            Console.WriteLine("  --events-only     Check events.xml against the .tsproj (declared vs actual) and stop");
             Console.WriteLine("  --ignore <glob>   Exclude .st files matching this pattern (repeatable);");
             Console.WriteLine("                    merged with a \".stignore\" file in --source, if present");
             Console.WriteLine("  --help, -h        Show this message");

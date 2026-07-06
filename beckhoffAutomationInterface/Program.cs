@@ -95,20 +95,28 @@ namespace BeckhoffAutomationInterface
             }
 
             // Event Classes (events.xml) are a .tsproj-level config item with no known
-            // Automation Interface creation path (see EventClassSync) — sync them by editing
-            // the .tsproj file directly, which MUST happen before Visual Studio opens the
-            // project (devenv holds its own in-memory copy and would overwrite this on save).
-            if ((!options.BuildOnly || options.EventsOnly) && File.Exists(options.TsprojFilePath))
+            // Automation Interface creation path — automating creation is a confirmed dead
+            // end (see docs/ideas/st-plc-bidirectional-sync.md), so Event Classes must be
+            // created ONCE, manually, via the real XAE UI. This is a read-only "declared vs
+            // actual" check (reads the .tsproj directly, no VS session needed) that reports
+            // which declared classes are still missing, rather than attempting to write them.
+            if (File.Exists(options.TsprojFilePath))
             {
                 var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
                 if (desiredEventClasses.Count > 0)
                 {
-                    Console.WriteLine("{0}: Syncing {1} event class(es) into '{2}'...", Now(), desiredEventClasses.Count, options.TsprojFilePath);
-                    EventClassSync.Sync(options.TsprojFilePath, desiredEventClasses);
-                    Console.WriteLine("{0}: Event class sync complete.", Now());
+                    EventClassCheckReport eventReport = EventClassChecker.Check(options.TsprojFilePath, desiredEventClasses);
+                    Console.WriteLine("{0}: Event class check: {1} declared, {2} present, {3} missing.",
+                        Now(), desiredEventClasses.Count, eventReport.Present.Count, eventReport.Missing.Count);
+                    foreach (string name in eventReport.Missing)
+                        Console.WriteLine("    ! MISSING '{0}' — create manually via SYSTEM \u25b8 Type System \u25b8 Event Classes \u25b8 New (see events.xml), then re-run.", name);
                 }
             }
-
+            if (options.EventsOnly)
+            {
+                Console.WriteLine("{0}: --events-only: event class check complete, skipping Visual Studio.", Now());
+                Environment.Exit(0);
+            }
             // Pre-flight checks
             if (!File.Exists(options.TwinCatTemplate))
             {
@@ -132,12 +140,6 @@ namespace BeckhoffAutomationInterface
             project.Save();
             dte.Solution.SaveAs(options.SolutionFilePath);
             Console.WriteLine("{0}: Solution saved.", Now());
-
-            if (options.EventsOnly)
-            {
-                Console.WriteLine("{0}: --events-only: skipping POU/library/IO sync and build.", Now());
-                return;
-            }
 
             if (!options.BuildOnly)
             {
