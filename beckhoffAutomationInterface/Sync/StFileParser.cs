@@ -92,12 +92,12 @@ namespace BeckhoffAutomationInterface.Sync
             return new List<StPouSource> { new StPouSource(name, kind, ownerName, declaration, implementation) };
         }
 
-        public static List<StPouSource> ParseFolder(string sourceFolder)
+        public static List<StPouSource> ParseFolder(string sourceFolder, IgnoreRules ignore)
         {
             string root = Path.GetFullPath(sourceFolder).TrimEnd(Path.DirectorySeparatorChar);
             var result = new List<StPouSource>();
 
-            foreach (string file in Directory.GetFiles(root, "*.st", SearchOption.AllDirectories))
+            foreach (string file in GetStFiles(root, ignore))
             {
                 string relativeFolder = GetRelativeFolder(root, file);
                 foreach (StPouSource src in ParseFile(file))
@@ -108,6 +108,25 @@ namespace BeckhoffAutomationInterface.Sync
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Lists every .st file under sourceFolder, excluding any whose source-root-relative
+        /// path matches an IgnoreRules pattern (.stignore file / --ignore CLI args). Shared by
+        /// ParseFolder and Program's --parse-only preflight so both see the same file set.
+        /// </summary>
+        public static IEnumerable<string> GetStFiles(string sourceFolder, IgnoreRules ignore)
+        {
+            string root = Path.GetFullPath(sourceFolder).TrimEnd(Path.DirectorySeparatorChar);
+            foreach (string file in Directory.GetFiles(root, "*.st", SearchOption.AllDirectories))
+            {
+                string relativePath = GetRelativeFolder(root, file);
+                string fileName = Path.GetFileName(file);
+                relativePath = relativePath.Length > 0 ? relativePath + "/" + fileName : fileName;
+                if (ignore != null && ignore.IsIgnored(relativePath))
+                    continue;
+                yield return file;
+            }
         }
 
         /// <summary>

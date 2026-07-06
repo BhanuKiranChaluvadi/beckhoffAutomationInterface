@@ -85,6 +85,24 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. |
 | `--build-only` | off | Skip the `.st`/library/IO sync steps; just reopen the existing project, build, and report. Use for fast iteration on compile errors when the `.st` source hasn't changed. |
 | `--events-only` | off | Sync `events.xml` into the `.tsproj` file only, then stop (see Known limitations) |
+| `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
+
+### Ignoring source files
+
+Add a `.stignore` file at the root of `--source` to permanently exclude `.st`
+files from every sync (one gitignore-style glob pattern per line, `#`
+comments and blank lines allowed):
+
+```
+# .stignore
+*_deprecated.st
+Lib/Legacy/**
+```
+
+A pattern with no `/` matches the file name at any depth; a pattern with `/`
+is matched against the whole source-relative path. `*` matches within a path
+segment, `**` matches across segments. Use `--ignore <glob>` for one-off,
+per-invocation exclusions on top of `.stignore`.
 
 ### Typical workflow
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -24,6 +25,10 @@ namespace BeckhoffAutomationInterface
         public bool EventsOnly { get; }
         public bool ParseOnly { get; }
 
+        /// <summary>Extra ignore glob patterns from repeated --ignore &lt;pattern&gt; CLI args,
+        /// merged with any ".stignore" file found in SourceFolder (see Sync.IgnoreRules).</summary>
+        public IReadOnlyList<string> IgnorePatterns { get; }
+
         // Fixed OS-install locations — not per-run configuration, so not exposed as CLI flags.
         public string TwinCatTemplate { get; } =
             @"C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\PrjTemplate\TwinCAT Project.tsproj";
@@ -44,7 +49,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -52,6 +57,7 @@ namespace BeckhoffAutomationInterface
             BuildOnly = buildOnly;
             EventsOnly = eventsOnly;
             ParseOnly = parseOnly;
+            IgnorePatterns = ignorePatterns;
         }
 
         /// <summary>
@@ -76,13 +82,24 @@ namespace BeckhoffAutomationInterface
                 sourceFolder, destinationFolder, projectName,
                 buildOnly: args.Contains("--build-only"),
                 eventsOnly: args.Contains("--events-only"),
-                parseOnly: args.Contains("--parse-only"));
+                parseOnly: args.Contains("--parse-only"),
+                ignorePatterns: GetOptions(args, "--ignore"));
         }
 
         static string GetOption(string[] args, string flag)
         {
             int i = Array.IndexOf(args, flag);
             return (i >= 0 && i + 1 < args.Length) ? args[i + 1] : null;
+        }
+
+        /// <summary>Collects every value following a repeated flag, e.g. "--ignore a --ignore b" -> [a, b].</summary>
+        static List<string> GetOptions(string[] args, string flag)
+        {
+            var values = new List<string>();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == flag)
+                    values.Add(args[i + 1]);
+            return values;
         }
 
         static void PrintUsage()
@@ -95,6 +112,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --parse-only      Parse all .st files without opening Visual Studio");
             Console.WriteLine("  --build-only      Skip .st/library/IO sync; just open, build, and report");
             Console.WriteLine("  --events-only     Sync events.xml into the .tsproj only, then stop");
+            Console.WriteLine("  --ignore <glob>   Exclude .st files matching this pattern (repeatable);");
+            Console.WriteLine("                    merged with a \".stignore\" file in --source, if present");
             Console.WriteLine("  --help, -h        Show this message");
         }
     }

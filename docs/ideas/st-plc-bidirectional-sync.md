@@ -38,13 +38,60 @@ pipeline is a later problem, not a v1 concern.
       element, an additional required reference elsewhere in the file, or a
       GUID that must match something else already present). Do not
       re-attempt blind guessing again; anchor to the known-working example.
-- [ ] `ProduceXml()` on a POU/DUT tree item returns XML shape close enough to
-      a real exported .TcPOU/.TcDUT file to convert — spike this first, before
-      building the export command around it.
-- [ ] Setting DeclarationText/ImplementationText to unchanged text does (or
-      doesn't) actually touch the PLC repo's file hashes/timestamps — test
-      directly; this determines how much the incremental-write optimization
-      actually buys us for "git noise" beyond just speed.
+- [x] **RESOLVED (spike, 2026-07-06):** `ProduceXml()` on a POU tree item
+      does **not** return the ST source — it returns only metadata
+      (`FileName`/`FullPath`/export flags/VSProperties; `ChildCount=16` with
+      no inline Declaration/Implementation text). Confirmed against
+      `FB_HeatZone` in the real Shark project. The correct export path is the
+      read-side counterpart of the existing write-side sync engine: read
+      `((ITcPlcDeclaration)item).DeclarationText` and
+      `((ITcPlcImplementation)item).ImplementationText` directly (both are
+      documented as get/set, per
+      `example/TC_AI_DOTNET_Samples/.../GeneratePlcProject.cs` lines ~766-773).
+      No XML-to-ST converter is needed — `PouSyncEngine.cs` already writes
+      these same properties for sync-to-PLC, so export is just the getter
+      side of code that already exists. This de-risks Phase 5 significantly.
+- [x] **RE-VERIFIED empirically (2026-07-06):** cross-checked the finding
+      above against the official examples knowledge graph (94 files: TC2
+      samples, TC_AI_DOTNET_Samples, ELT/soup01 tutorials) — no better/more
+      complete export mechanism exists anywhere in the examples;
+      `TcXmlConverter.cs` is unrelated hex/bool XML parsing, and the
+      `ProduceXml`/`ConsumeXml` docs are TC2 EtherCAT/routes-specific, not
+      TC3 PLC POU source. Then did a live read-back spike (`FB_HeatZone`,
+      including 2+ child METHODs) and diffed the actual returned text
+      against the real `.st` source. Two new concrete facts confirmed:
+      1. **No `END_METHOD`/`END_FUNCTION_BLOCK`/etc. terminators are stored**
+         in `DeclarationText`/`ImplementationText` — matches
+         `StFileParser.StripPouTerminators` exactly. Export must **re-add**
+         the correct terminator per POU/member kind (the exact reverse
+         operation) to produce valid `.st` files.
+      2. **Encoding fidelity gotcha**: a `→` (U+2192) character inside a
+         comment was silently dropped on round-trip (source: "any channel
+         fault → zone fault", read back: "any channel fault  zone fault" —
+         arrow replaced with nothing, not even a placeholder). Likely
+         TwinCAT stores POU text in a legacy ANSI/codepage format
+         internally. This doesn't affect code semantics (comments only, in
+         this case) but the export command should document this as a known
+         lossy-round-trip risk for non-ASCII characters in ST source
+         (comments or string literals), not silently pretend it's lossless.
+- [x] **RESOLVED (spike, 2026-07-06):** Setting `DeclarationText`/
+      `ImplementationText` unconditionally on ALL 1261 objects (a full
+      resync with zero .st source changes) produces **zero git diff** on any
+      `.TcPOU`/`.TcDUT`/`.TcGVL` file. Verified by temporarily `git init`-ing
+      the real Shark project, committing a clean baseline, running a full
+      non-build-only resync, then checking `git status`/`git diff`: only
+      Visual Studio's own IDE cache (`.vs/Shark/v17/.suo`,
+      `.vs/Shark/v17/fileList.bin` — both binary, normally gitignored) and a
+      transient `Shark.~u` lock file changed; zero PLC source files changed.
+      **This disproves the original "unchanged writes cause git noise"
+      assumption** — TwinCAT's own project save appears to be
+      content-aware/idempotent internally, regardless of whether our code
+      calls the setter. Consequence: the incremental sync mode (Phase 3) is
+      still valuable for **speed** (a full 1261-object resync takes ~2
+      minutes; only touching changed/deleted objects would be much faster),
+      but is NOT needed to avoid git noise — that concern was unfounded.
+      Temporary git repo was removed after the test; the Shark folder is
+      back to its original (non-git-tracked) state.
 - [ ] A detached/background hook process can reliably report success/failure
       back to the developer (log file? Windows toast? VS Code task?) without
       blocking `git commit`.
@@ -56,13 +103,20 @@ pipeline is a later problem, not a v1 concern.
 - Incremental sync mode: given a list of changed/deleted .st file paths,
   sync only those objects (create/update the changed ones, delete PLC
   objects whose .st file is gone) — new PouSyncEngine entry point; the
-  existing full engine stays as-is for the first bootstrap run.
+  existing full engine stays as-is for the first bootstrap run. (Motivation
+  is now SPEED only, not git noise — see resolved assumption above.)
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
   launches the sync detached.
-- .stignore file + --ignore CLI flag, applied during ParseFolder.
-- `--export <ObjectName>` command: ProduceXml() → native C# converter → .st
-  file written to the inferred mirrored folder path.
+- .stignore file + --ignore CLI flag, applied during ParseFolder. **DONE
+  (2026-07-06)**: `Sync/IgnoreRules.cs` (gitignore-style glob matching),
+  wired into `StFileParser.GetStFiles`/`ParseFolder` and both call sites in
+  `Program.cs` (`--parse-only` preflight and the main sync path). Verified
+  functionally against a scratch temp folder (not the real project).
+- `--export <ObjectName>` command: read
+  `DeclarationText`/`ImplementationText` directly from the tree item (same
+  properties `PouSyncEngine` already writes) → .st file written to the
+  inferred mirrored folder path. No XML parsing/conversion needed.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
   run automatically before every sync.
 - Re-investigate Event Class automation using the user's known-working

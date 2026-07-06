@@ -29,11 +29,11 @@ namespace BeckhoffAutomationInterface
         /// <summary>Parses every .st file under the source folder without opening Visual
         /// Studio, aggregating and printing all parser failures. Returns a process exit code
         /// (0 = all parsed, 1 = one or more failed). Used by the --parse-only preflight.</summary>
-        static int ParseOnly(string stSourceFolder)
+        static int ParseOnly(string stSourceFolder, IgnoreRules ignore)
         {
             var failures = new List<string>();
             int ok = 0, objects = 0;
-            foreach (string file in Directory.GetFiles(stSourceFolder, "*.st", SearchOption.AllDirectories))
+            foreach (string file in Sync.StFileParser.GetStFiles(stSourceFolder, ignore))
             {
                 try
                 {
@@ -85,12 +85,13 @@ namespace BeckhoffAutomationInterface
         {
             RunOptions options = RunOptions.Parse(args);
             Console.WriteLine("{0}: Source='{1}'  Dest='{2}'  Project='{3}'", Now(), options.SourceFolder, options.DestinationFolder, options.ProjectName);
+            IgnoreRules ignore = IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns);
 
             // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser
             // issues surface in seconds (not after a ~40s VS round-trip). Run with --parse-only.
             if (options.ParseOnly)
             {
-                Environment.Exit(ParseOnly(options.SourceFolder));
+                Environment.Exit(ParseOnly(options.SourceFolder, ignore));
             }
 
             // Event Classes (events.xml) are a .tsproj-level config item with no known
@@ -120,11 +121,11 @@ namespace BeckhoffAutomationInterface
             // Create the Visual Studio DTE instance
             using (VisualStudioSession vs = VisualStudioSession.Start())
             {
-                RunSync(vs.Dte, options);
+                RunSync(vs.Dte, options, ignore);
             }
         }
 
-        static void RunSync(EnvDTE80.DTE2 dte, RunOptions options)
+        static void RunSync(EnvDTE80.DTE2 dte, RunOptions options, IgnoreRules ignore)
         {
             (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(dte, options);
 
@@ -142,7 +143,7 @@ namespace BeckhoffAutomationInterface
             {
             // Sync .st files -> POUs (create/update/delete)
             Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), options.SourceFolder);
-            var desiredPous = StFileParser.ParseFolder(options.SourceFolder);
+            var desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             var syncEngine = new PouSyncEngine(sysManager, options.ProjectRootPath);
