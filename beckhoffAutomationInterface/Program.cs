@@ -153,9 +153,50 @@ namespace BeckhoffAutomationInterface
 
             if (!options.BuildOnly)
             {
-            // Sync .st files -> POUs (create/update/delete)
-            Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), options.SourceFolder);
-            var desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
+            // Sync .st files -> POUs (create/update/delete). --incremental narrows this to
+            // only the files git says changed/were deleted since the last recorded sync,
+            // instead of re-parsing/re-syncing the whole source folder every time.
+            List<StPouSource> desiredPous;
+            if (options.Incremental)
+            {
+                string lastSha = SyncState.Read(options.SyncStatePath);
+                if (lastSha == null)
+                {
+                    Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
+                    Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
+                    Environment.Exit(1);
+                }
+
+                Console.WriteLine("{0}: Computing .st changes since {1}...", Now(), lastSha);
+                GitDiffResult diff = GitDiffHelper.GetChangedStFiles(options.SourceFolder, lastSha);
+
+                desiredPous = new List<StPouSource>();
+                foreach (string relativePath in diff.Changed)
+                {
+                    if (ignore.IsIgnored(relativePath))
+                        continue;
+                    string fullPath = Path.Combine(options.SourceFolder, relativePath.Replace('/', Path.DirectorySeparatorChar));
+                    string relativeFolder = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? "";
+                    foreach (StPouSource source in StFileParser.ParseFile(fullPath))
+                    {
+                        source.RelativeFolder = relativeFolder;
+                        desiredPous.Add(source);
+                    }
+                }
+
+                Console.WriteLine("{0}: {1} file(s) changed, {2} file(s) deleted since last sync.",
+                    Now(), diff.Changed.Count, diff.Deleted.Count);
+                if (diff.Deleted.Count > 0)
+                {
+                    Console.WriteLine("{0}: NOTE: deleting the corresponding PLC object(s) is not yet automated — remove manually if desired:", Now());
+                    foreach (string f in diff.Deleted) Console.WriteLine("    ! {0}", f);
+                }
+            }
+            else
+            {
+                Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), options.SourceFolder);
+                desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
+            }
 
             List<string> lintIssues = StLinter.Lint(desiredPous);
             if (lintIssues.Count > 0)
@@ -176,6 +217,15 @@ namespace BeckhoffAutomationInterface
             project.Save();
             Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted).",
                 Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count);
+
+            // Record the new sync baseline (best-effort; silently skipped if SourceFolder
+            // isn't inside a git repo, since --incremental is opt-in and needs one anyway).
+            string headSha = GitDiffHelper.TryGetHeadSha(options.SourceFolder);
+            if (headSha != null)
+            {
+                SyncState.Write(options.SyncStatePath, headSha);
+                Console.WriteLine("{0}: Recorded sync baseline {1} in '{2}'.", Now(), headSha, options.SyncStatePath);
+            }
 
             // Sync library references from libraries.xml (config data, not .st source)
             Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), options.LibraryManifestPath);

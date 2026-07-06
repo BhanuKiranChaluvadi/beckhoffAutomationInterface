@@ -25,6 +25,12 @@ namespace BeckhoffAutomationInterface
         public bool EventsOnly { get; }
         public bool ParseOnly { get; }
 
+        /// <summary>When set, sync only the .st files changed/deleted since the commit
+        /// recorded in SyncStatePath (via Sync.GitDiffHelper), instead of the whole source
+        /// folder. Requires SourceFolder to be inside a git repo with a prior recorded
+        /// baseline (see Sync.SyncState) — refuses to run without one rather than guessing.</summary>
+        public bool Incremental { get; }
+
         /// <summary>Extra ignore glob patterns from repeated --ignore &lt;pattern&gt; CLI args,
         /// merged with any ".stignore" file found in SourceFolder (see Sync.IgnoreRules).</summary>
         public IReadOnlyList<string> IgnorePatterns { get; }
@@ -42,6 +48,10 @@ namespace BeckhoffAutomationInterface
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
 
+        /// <summary>Records the last-synced commit SHA (see Sync.SyncState); consulted/updated
+        /// by --incremental and updated after every successful full sync too.</summary>
+        public string SyncStatePath => Path.Combine(SourceFolder, ".st-sync-state");
+
         public string PousTreePath => TreePath("POUs");
         public string ReferencesTreePath => TreePath("References");
         public string ProjectRootPath => string.Format("TIPC^{0}^{0} Project", ProjectName);
@@ -49,7 +59,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -58,6 +68,7 @@ namespace BeckhoffAutomationInterface
             EventsOnly = eventsOnly;
             ParseOnly = parseOnly;
             IgnorePatterns = ignorePatterns;
+            Incremental = incremental;
         }
 
         /// <summary>
@@ -83,7 +94,8 @@ namespace BeckhoffAutomationInterface
                 buildOnly: args.Contains("--build-only"),
                 eventsOnly: args.Contains("--events-only"),
                 parseOnly: args.Contains("--parse-only"),
-                ignorePatterns: GetOptions(args, "--ignore"));
+                ignorePatterns: GetOptions(args, "--ignore"),
+                incremental: args.Contains("--incremental"));
         }
 
         static string GetOption(string[] args, string flag)
@@ -114,6 +126,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --events-only     Check events.xml against the .tsproj (declared vs actual) and stop");
             Console.WriteLine("  --ignore <glob>   Exclude .st files matching this pattern (repeatable);");
             Console.WriteLine("                    merged with a \".stignore\" file in --source, if present");
+            Console.WriteLine("  --incremental     Sync only .st files changed/deleted since the last recorded");
+            Console.WriteLine("                    sync (see .st-sync-state); requires a prior full sync's baseline");
             Console.WriteLine("  --help, -h        Show this message");
         }
     }

@@ -115,6 +115,30 @@ pipeline is a later problem, not a v1 concern.
   verification. Still TODO: wire this into an actual incremental
   PouSyncEngine entry point + `.st-sync-state` file + CLI flag — this slice
   only proves the diff mechanism, it isn't called from anywhere yet.
+  **Slice 2 DONE (2026-07-06)**: `--incremental` CLI flag wired end-to-end.
+  New `Sync/SyncState.cs` (read/write `.st-sync-state`) +
+  `GitDiffHelper.TryGetHeadSha` (best-effort, null if not a git repo).
+  `Program.cs`: when `--incremental`, reads the baseline SHA (refuses with
+  exit code 1 if none exists — "run a full sync first"), computes the diff,
+  parses ONLY changed files via `StFileParser.ParseFile` per file (reusing
+  the exact same `PouSyncEngine.Sync()` call unmodified — it already just
+  takes whatever `StPouSource` list it's given), and prints deleted-file
+  paths as a manual-action warning rather than deleting anything. Every
+  successful `.st` sync (full or incremental) now records the new baseline.
+  Verified END-TO-END against a disposable scratch project (2 FBs, real git
+  commits): full bootstrap sync created both + recorded baseline; after
+  modifying only one FB and committing, `--incremental` correctly detected
+  1 changed/0 deleted, synced ONLY that one object (not the untouched one),
+  recorded the new baseline, and the build passed. Scratch project fully
+  cleaned up afterward — never touched the real project.
+  **Known limitation** (by design, deferred): deletion is not automated yet
+  — a method/property file split across a SEPARATE file from its owning
+  FB/INTERFACE (a rare, documented edge case in `StPouSource.cs`) would
+  fail incrementally if only the member file changes without its owner's
+  file also being in the same changed-set, since `PouSyncEngine`'s owner
+  lookup is only built from the current call's sources — not hit in
+  testing (methods are normally inline in the owner's own file), but worth
+  knowing before assuming 100% incremental-sync parity with a full sync.
 - .st-sync-state file tracking the last-synced commit SHA.
 - post-commit git hook (PowerShell script) that computes the diff and
   launches the sync detached.

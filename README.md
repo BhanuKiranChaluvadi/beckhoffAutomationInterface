@@ -86,6 +86,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 | `--build-only` | off | Skip the `.st`/library/IO sync steps; just reopen the existing project, build, and report. Use for fast iteration on compile errors when the `.st` source hasn't changed. |
 | `--events-only` | off | Check `events.xml` against the `.tsproj` (declared vs actual) and stop — no Visual Studio session needed (see Known limitations) |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
+| `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
 
 ### Ignoring source files
 
@@ -103,6 +104,30 @@ A pattern with no `/` matches the file name at any depth; a pattern with `/`
 is matched against the whole source-relative path. `*` matches within a path
 segment, `**` matches across segments. Use `--ignore <glob>` for one-off,
 per-invocation exclusions on top of `.stignore`.
+
+### Incremental sync
+
+Every successful `.st` sync (full or `--incremental`) records the current git
+commit SHA in `.st-sync-state` at the root of `--source` (requires `--source`
+to be inside a git repo; skipped silently otherwise). A later run with
+`--incremental` reads that SHA, computes `git diff --name-status` against it,
+and parses/syncs ONLY the changed `.st` files instead of the whole folder —
+much faster once a project has many objects.
+
+```powershell
+# First run: full sync, establishes the baseline in .st-sync-state
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+
+# Later runs, after committing .st changes: only re-syncs what changed
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental
+```
+
+**Current limitation**: deletion is NOT yet automated. If `git diff` reports
+a `.st` file was deleted, the tool prints which PLC object(s) that implies
+should be removed, but does not remove them — remove manually via the XAE UI,
+or run a full sync's orphan-cleanup path once that's built (see
+`docs/ideas/st-plc-bidirectional-sync.md`). `--incremental` refuses to run
+(exit code 1) if no baseline exists yet — run a full sync first.
 
 ### Naming-convention linting
 

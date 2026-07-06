@@ -22,6 +22,22 @@ namespace BeckhoffAutomationInterface.Sync
     static class GitDiffHelper
     {
         /// <summary>
+        /// <summary>Returns the current HEAD commit SHA for the repo containing folder, or
+        /// null if folder isn't inside a git repository (or git itself isn't available) —
+        /// callers should treat that as "can't establish a sync baseline here", not an error.</summary>
+        public static string TryGetHeadSha(string folder)
+        {
+            try
+            {
+                return RunGit(folder, "rev-parse HEAD").Trim();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// sourceFolder must be inside a git repository (it can be the repo root or any
         /// subdirectory). sinceSha is any commit-ish (SHA, tag, "HEAD~5", etc.) to diff
         /// against the current HEAD. Returned paths are relative to sourceFolder (uses
