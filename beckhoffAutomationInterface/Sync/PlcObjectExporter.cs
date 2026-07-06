@@ -11,26 +11,33 @@ namespace BeckhoffAutomationInterface.Sync
     /// findings in docs/ideas/st-plc-bidirectional-sync.md: ProduceXml() only returns
     /// metadata, DeclarationText/ImplementationText are the real source).
     ///
-    /// Currently supports DUTs (STRUCT/ENUM/ALIAS) and GVLs only — for these,
-    /// DeclarationText already IS the complete file content (the whole "TYPE X : ...
-    /// END_TYPE"/"VAR_GLOBAL ... END_VAR" text), matching exactly what
-    /// StFileParser.ParseFile stores as DeclarationText for these kinds, so no
-    /// reconstruction is needed: read it, write it, done.
+    /// Supports DUTs (STRUCT/ENUM/ALIAS) and GVLs — for these, DeclarationText already
+    /// IS the complete file content (the whole "TYPE X : ... END_TYPE"/"VAR_GLOBAL ...
+    /// END_VAR" text), matching exactly what StFileParser.ParseFile stores as
+    /// DeclarationText for these kinds, so no reconstruction is needed: read it, write
+    /// it, done.
     ///
-    /// FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects with NO child METHODs/
-    /// PROPERTIES are also supported: Declaration + Implementation (if any) + the
-    /// correct POU-level terminator re-added (never stored in Declaration/
-    /// ImplementationText — see StPouSource.StripPouTerminators). INTERFACE has no
-    /// Implementation section at all (StFileParser never sets one), so only its
-    /// Declaration + END_INTERFACE are used.
-    ///
-    /// FB/PROGRAM/INTERFACE objects that DO have child METHODs/PROPERTIES are NOT
-    /// yet supported (stitching members back together in the right order/format is
-    /// a separate, more involved piece of work) — Export() throws
-    /// NotSupportedException for those; check IsSupported first.
+    /// Also supports FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects, with or without
+    /// child METHODs/PROPERTIES: Declaration + Implementation (if any) + the correct
+    /// POU-level terminator re-added (never stored in Declaration/ImplementationText —
+    /// see StPouSource.StripPouTerminators), followed by each child METHOD/PROPERTY
+    /// stitched back in as its own "METHOD ... END_METHOD" or "PROPERTY ... GET ...
+    /// END_GET SET ... END_SET END_PROPERTY" section, in tree (creation) order — the
+    /// exact reverse of PouSyncEngine.SyncMethods/SyncProperties. INTERFACE has no
+    /// Implementation section at all (StFileParser never sets one for it), and
+    /// interface members have no Implementation body (casting throws
+    /// InvalidCastException, matching the write side's own catch pattern) — both
+    /// handled by TryGetImplementationText.
     /// </summary>
     static class PlcObjectExporter
     {
+        // Property kinds have no named TREEITEMTYPES members in this interop assembly
+        // (PouSyncEngine.cs casts these same raw ints) — see repo memory
+        // "Tree types: PLCPROP=611, PLCITFPROP=612 (accessors: 613/614, itf 654/655)".
+        // Accessors themselves are identified by name ("Get"/"Set"), matching exactly how
+        // PouSyncEngine.SyncProperties creates them, so their raw type ints aren't needed here.
+        const int PLCPROP = 611, PLCITFPROP = 612;
+
         static readonly HashSet<int> DeclarationOnlyKinds = new HashSet<int>
         {
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTENUM,
@@ -90,8 +97,19 @@ namespace BeckhoffAutomationInterface.Sync
         {
             if (DeclarationOnlyKinds.Contains(item.ItemType))
                 return true;
-            return PouTerminators.ContainsKey(item.ItemType) && item.ChildCount == 0;
+            if (!PouTerminators.ContainsKey(item.ItemType))
+                return false;
+
+            for (int i = 1; i <= item.ChildCount; i++)
+                if (!IsMemberKind(item.get_Child(i).ItemType))
+                    return false;
+            return true;
         }
+
+        static bool IsMemberKind(int itemType) =>
+            itemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD ||
+            itemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCITFMETH ||
+            itemType == PLCPROP || itemType == PLCITFPROP;
 
         /// <summary>Returns the exact text to write to the .st file. Throws
         /// NotSupportedException if item's kind isn't a currently-supported one — check
@@ -101,31 +119,91 @@ namespace BeckhoffAutomationInterface.Sync
             if (DeclarationOnlyKinds.Contains(item.ItemType))
                 return ((ITcPlcDeclaration)item).DeclarationText;
 
-            if (PouTerminators.TryGetValue(item.ItemType, out string terminator) && item.ChildCount == 0)
-            {
-                string declaration = ((ITcPlcDeclaration)item).DeclarationText;
-                // INTERFACE has no Implementation section at all (StFileParser never sets
-                // one for it — see ParseInterfaceFile), so skip reading it for that kind.
-                string implementation = item.ItemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCITF
-                    ? null
-                    : ((ITcPlcImplementation)item).ImplementationText;
+            if (!IsSupported(item))
+                throw new NotSupportedException(
+                    $"Export of '{item.Name}' ({item.ItemSubTypeName}) is not yet supported — " +
+                    "only DUTs (STRUCT/ENUM/ALIAS), GVLs, and FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE " +
+                    "objects (whose children are all recognized METHOD/PROPERTY members) can be exported so far.");
 
-                var text = new System.Text.StringBuilder();
-                text.AppendLine(declaration);
+            string terminator = PouTerminators[item.ItemType];
+            bool isInterface = item.ItemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCITF;
+
+            var text = new System.Text.StringBuilder();
+            text.AppendLine(((ITcPlcDeclaration)item).DeclarationText);
+
+            // INTERFACE has no Implementation section at all (StFileParser never sets one
+            // for it — see ParseInterfaceFile), so skip reading it for that kind.
+            if (!isInterface)
+            {
+                string baseImplementation = ((ITcPlcImplementation)item).ImplementationText;
+                if (!string.IsNullOrEmpty(baseImplementation))
+                {
+                    text.AppendLine();
+                    text.AppendLine(baseImplementation);
+                }
+            }
+
+            for (int i = 1; i <= item.ChildCount; i++)
+            {
+                text.AppendLine();
+                AppendMember(text, item.get_Child(i));
+            }
+
+            text.AppendLine(terminator);
+            return text.ToString();
+        }
+
+        /// <summary>Appends one child METHOD or PROPERTY section, mirroring the exact shape
+        /// StFileParser.ParseMethodSegments/ParseProperty expect on re-import.</summary>
+        static void AppendMember(System.Text.StringBuilder text, ITcSmTreeItem member)
+        {
+            if (member.ItemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCMETHOD ||
+                member.ItemType == (int)TREEITEMTYPES.TREEITEMTYPE_PLCITFMETH)
+            {
+                text.AppendLine(((ITcPlcDeclaration)member).DeclarationText);
+                string implementation = TryGetImplementationText(member);
                 if (!string.IsNullOrEmpty(implementation))
                 {
                     text.AppendLine();
                     text.AppendLine(implementation);
                 }
-                text.AppendLine(terminator);
-                return text.ToString();
+                text.AppendLine("END_METHOD");
+                return;
             }
 
-            throw new NotSupportedException(
-                $"Export of '{item.Name}' ({item.ItemSubTypeName}) is not yet supported — " +
-                (item.ChildCount > 0
-                    ? "it has child METHODs/PROPERTIES, which export doesn't stitch back together yet."
-                    : "only DUTs (STRUCT/ENUM/ALIAS), GVLs, and childless FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects can be exported so far."));
+            if (member.ItemType == PLCPROP || member.ItemType == PLCITFPROP)
+            {
+                text.AppendLine(((ITcPlcDeclaration)member).DeclarationText);
+                for (int i = 1; i <= member.ChildCount; i++)
+                {
+                    ITcSmTreeItem accessor = member.get_Child(i);
+                    string body = TryGetImplementationText(accessor) ?? "";
+                    if (string.Equals(accessor.Name, "Get", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text.AppendLine("GET");
+                        if (body.Length > 0) text.AppendLine(body);
+                        text.AppendLine("END_GET");
+                    }
+                    else if (string.Equals(accessor.Name, "Set", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text.AppendLine("SET");
+                        if (body.Length > 0) text.AppendLine(body);
+                        text.AppendLine("END_SET");
+                    }
+                }
+                text.AppendLine("END_PROPERTY");
+                return;
+            }
+
+            throw new NotSupportedException($"Export of member '{member.Name}' ({member.ItemSubTypeName}) is not supported.");
+        }
+
+        /// <summary>Interface members have no Implementation body — casting throws
+        /// InvalidCastException, matching PouSyncEngine's own write-side catch pattern.</summary>
+        static string TryGetImplementationText(ITcSmTreeItem item)
+        {
+            try { return ((ITcPlcImplementation)item).ImplementationText; }
+            catch (InvalidCastException) { return null; }
         }
     }
 }

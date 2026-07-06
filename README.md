@@ -164,16 +164,19 @@ needed) — the read-side counterpart of the normal sync, using the same
 .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export T_Beckhoff_AmbientSensor
 ```
 
-**Current limitation**: only DUTs (STRUCT/ENUM/ALIAS), GVLs, and
-FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects with **no child
-METHODs/PROPERTIES** are supported. For the POU kinds, the correct
-terminator (`END_FUNCTION_BLOCK`/`END_PROGRAM`/`END_FUNCTION`/
-`END_INTERFACE`) is re-added since it's never stored in `Declaration`/
-`ImplementationText`. Objects with METHODs/PROPERTIES aren't implemented
-yet (stitching members back together in the right order/format is a
-separate, more involved piece of work) — `--export` refuses with a clear
-error for those. Errors also refuse cleanly if the name isn't found, or
-matches more than one object.
+`--export` now supports every PLC object kind synced from `.st` source: DUTs
+(STRUCT/ENUM/ALIAS), GVLs, and FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE
+objects — including their child METHODs and PROPERTIES, stitched back
+together in tree order with the correct terminators
+(`END_FUNCTION_BLOCK`/`END_PROGRAM`/`END_FUNCTION`/`END_INTERFACE`/
+`END_METHOD`/`END_PROPERTY`/`END_GET`/`END_SET`) re-added, since none of
+these are ever stored in `Declaration`/`ImplementationText`. Errors refuse
+cleanly if the name isn't found, or matches more than one object.
+
+**Known caveat**: non-ASCII characters can be lossy on round-trip (see the
+Phase 1 spike findings in `docs/ideas/st-plc-bidirectional-sync.md`) —
+TwinCAT appears to store POU text internally in a legacy codepage, so rare
+special characters in comments/strings may not survive an export exactly.
 
 ### Naming-convention linting
 

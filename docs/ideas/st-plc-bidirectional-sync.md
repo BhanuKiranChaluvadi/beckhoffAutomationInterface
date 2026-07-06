@@ -176,16 +176,13 @@ pipeline is a later problem, not a v1 concern.
   `DeclarationText`/`ImplementationText` directly from the tree item (same
   properties `PouSyncEngine` already writes) → .st file written to the
   inferred mirrored folder path. No XML parsing/conversion needed.
-  **PARTIALLY DONE (2026-07-06)**: new `Sync/PlcObjectExporter.cs` +
-  `--export` CLI flag, supporting DUTs (STRUCT/ENUM/ALIAS) and GVLs — the
-  ORIGINAL motivating use case (IO-scanned DUTs) — since for these kinds
-  `DeclarationText` already IS the complete file content verbatim (no
+  **DONE (2026-07-06)**: new `Sync/PlcObjectExporter.cs` +
+  `--export` CLI flag. Slice 1 supported DUTs (STRUCT/ENUM/ALIAS) and GVLs
+  — the ORIGINAL motivating use case (IO-scanned DUTs) — since for these
+  kinds `DeclarationText` already IS the complete file content verbatim (no
   terminator reconstruction needed at all, confirmed by re-checking
   `StFileParser.ParseFile`'s own DUT/GVL branch: it stores the WHOLE
-  trimmed file as DeclarationText for these kinds). FUNCTION_BLOCK/PROGRAM/
-  INTERFACE/FUNCTION export (separate implementation section + re-added
-  terminators + child METHODs/PROPERTIES to stitch together) is explicitly
-  NOT done yet — refuses with a clear error naming the unsupported kind.
+  trimmed file as DeclarationText for these kinds).
   Found and fixed a real bug during testing: `ITcSmTreeItem.ItemSubType`
   and `.ItemSubTypeName` do NOT correspond to each other in this COM API
   (confirmed against the official `example/.../SysManSamples/Form1.cs`,
@@ -197,6 +194,26 @@ pipeline is a later problem, not a v1 concern.
   (re-exported text byte-identical to the original source), correct
   not-found error, and correct unsupported-kind error (tried exporting a
   FUNCTION_BLOCK). Scratch project fully cleaned up afterward.
+  Slice 2 extended `Export`/`IsSupported` to FUNCTION_BLOCK/PROGRAM/
+  FUNCTION/INTERFACE objects with `ChildCount == 0`: reconstructs
+  Declaration + Implementation (if any) + the correct re-added terminator.
+  Verified against a disposable scratch project (childless FB and PROGRAM
+  both exported with exact byte-for-byte round-trip fidelity; an FB WITH
+  one child METHOD correctly refused instead of crashing).
+  Slice 3 (final) added full METHOD/PROPERTY stitching: each child is
+  appended in tree order as its own "METHOD ... END_METHOD" or
+  "PROPERTY ... GET ... END_GET SET ... END_SET END_PROPERTY" section —
+  the exact reverse of `PouSyncEngine.SyncMethods`/`SyncProperties`.
+  Interface members correctly handle having no Implementation body
+  (`InvalidCastException` caught, matching the write side's own pattern).
+  Verified against a disposable scratch project covering all three
+  remaining cases — FB with a METHOD, FB with a PROPERTY (GET+SET),
+  INTERFACE with a bodyless METHOD — all three exported with EXACT
+  byte-for-byte round-trip fidelity to the original source, AND the
+  exported files were successfully re-parsed via `--parse-only` (3 files,
+  6 PLC objects, 0 failures) as an extra full-round-trip confirmation.
+  `--export` now covers every PLC object kind the sync engine creates —
+  this MVP item is complete.
 - Native C# ST formatter (indentation/style) + linter (naming/syntax),
   run automatically before every sync. **PARTIALLY DONE (2026-07-06)**: the
   linter half is done — new `Sync/StLinter.cs` checks each parsed object's
