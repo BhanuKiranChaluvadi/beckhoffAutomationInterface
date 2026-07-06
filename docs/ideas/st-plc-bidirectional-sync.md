@@ -157,8 +157,8 @@ pipeline is a later problem, not a v1 concern.
   diff --name-only HEAD~1 HEAD -- '*.st'` detection against this repo's own
   real history (correctly empty for non-.st commits); (2) the worker script
   end-to-end against a disposable scratch project — fast-fail path (no
-  baseline \u2192 instant FAILED in log, no VS opened) and success path
-  (bootstrap \u2192 commit a change \u2192 worker correctly reused the SAME
+  baseline → instant FAILED in log, no VS opened) and success path
+  (bootstrap → commit a change → worker correctly reused the SAME
   project, "~ updated FB_Gamma", SUCCESS marker). Scratch project fully
   cleaned up afterward, never touched the real project.
   KNOWN CAVEAT: the worker script doesn't pass `--name`, relying on the
