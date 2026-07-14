@@ -156,15 +156,25 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
-            // Create the Visual Studio DTE instance
-            using (VisualStudioSession vs = VisualStudioSession.Start())
+            // Create the Visual Studio DTE instance. Not a `using` statement: RunSync
+            // may close and reopen this session mid-run (see the Create PLC Data Type
+            // step below), which needs to reassign `vs` through a `ref` parameter --
+            // disallowed for `using`-declared variables (CS1657) -- so disposal is
+            // handled explicitly here instead, covering whichever session is live.
+            VisualStudioSession vs = VisualStudioSession.Start();
+            try
             {
-                RunSync(vs.Dte, options, ignore);
+                RunSync(ref vs, options, ignore);
+            }
+            finally
+            {
+                vs.Dispose();
             }
         }
 
-        static void RunSync(EnvDTE80.DTE2 dte, RunOptions options, IgnoreRules ignore)
+        static void RunSync(ref VisualStudioSession vs, RunOptions options, IgnoreRules ignore)
         {
+            EnvDTE80.DTE2 dte = vs.Dte;
             (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(dte, options);
 
             project.Save();
@@ -338,6 +348,35 @@ namespace BeckhoffAutomationInterface
             project.Save();
             Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s)).",
                 Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count);
+
+            // ---------------------------------------------------------------
+            // Turn on "Create PLC Data Type" for terminals that declare it (e.g.
+            // EL3174/EL3214 analog channels, so they resolve as a named PLC type such
+            // as MDP5001_300_7E2119CA -- see tasks/todo.md Task 3). Confirmed that
+            // ITcSmTreeItem.ProduceXml/ConsumeXml use a different XML schema entirely
+            // than the .tsproj project file and cannot express this setting, so
+            // TsprojPlcDataTypeEditor edits the same file Visual Studio itself saves,
+            // directly on disk. That MUST happen while the project is closed (no DTE
+            // holding the file), hence closing and reopening the VS session around it.
+            // ---------------------------------------------------------------
+            List<PlcDataTypeTarget> plcDataTypeTargets = PlcDataTypeTarget.CollectFrom(desiredIoDevices);
+            if (plcDataTypeTargets.Count > 0)
+            {
+                Console.WriteLine("{0}: Closing Visual Studio to edit the project file for Create PLC Data Type ({1} terminal(s))...",
+                    Now(), plcDataTypeTargets.Count);
+                vs.Dispose();
+
+                PlcDataTypeEditResult editResult = TsprojPlcDataTypeEditor.Apply(options.TsprojFilePath, plcDataTypeTargets, options.SourceFolder);
+                foreach (string name in editResult.Applied) Console.WriteLine("    ~ set       {0}", name);
+                foreach (string warning in editResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
+                Console.WriteLine("{0}: Create PLC Data Type complete ({1} applied, {2} warning(s)).",
+                    Now(), editResult.Applied.Count, editResult.Warnings.Count);
+
+                Console.WriteLine("{0}: Reopening Visual Studio...", Now());
+                vs = VisualStudioSession.Start();
+                dte = vs.Dte;
+                (project, sysManager) = TwinCatProjectOpener.Open(dte, options);
+            }
 
             // ---------------------------------------------------------------
             // Sync PLC-variable <-> IO-channel links declared in <Links> of
