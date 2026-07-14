@@ -38,23 +38,23 @@
   <Device Name="BH2" Disabled="true">
     <Box Name="Box 44 (CU2508)" Product="CU2508">
       <Box Name="EK1100_2.1" Product="EK1100">
-        <Terminal Name="EL3174_2.1" Product="EL3174" />
-        <Terminal Name="EL3174_2.2" Product="EL3174" />
-        <Terminal Name="EL3174_2.3" Product="EL3174" />
+        <Terminal Name="EL3174_2.1" Product="EL3174" CreatePlcType="Channel" />
+        <Terminal Name="EL3174_2.2" Product="EL3174" CreatePlcType="Channel" />
+        <Terminal Name="EL3174_2.3" Product="EL3174" CreatePlcType="Channel" />
         <Terminal Name="EL1008_2.1" Product="EL1008" />
         <Terminal Name="EL1008_2.2" Product="EL1008" />
         <Terminal Name="EL9410_2.1" Product="EL9410" />
-        <Terminal Name="EL3214_2.1" Product="EL3214" />
-        <Terminal Name="EL3214_2.2" Product="EL3214" />
-        <Terminal Name="EL3214_2.3" Product="EL3214" />
-        <Terminal Name="EL3214_2.4" Product="EL3214" />
-        <Terminal Name="EL3214_2.5" Product="EL3214" />
-        <Terminal Name="EL3214_2.6" Product="EL3214" />
-        <Terminal Name="EL3214_2.7" Product="EL3214" />
-        <Terminal Name="EL3214_2.8" Product="EL3214" />
-        <Terminal Name="EL3214_2.9" Product="EL3214" />
-        <Terminal Name="EL3214_2.10" Product="EL3214" />
-        <Terminal Name="EL3214_2.11" Product="EL3214" />
+        <Terminal Name="EL3214_2.1" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.2" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.3" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.4" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.5" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.6" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.7" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.8" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.9" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.10" Product="EL3214" CreatePlcType="Channel" />
+        <Terminal Name="EL3214_2.11" Product="EL3214" CreatePlcType="Channel" />
         <Terminal Name="EL3443_2.1" Product="EL3443" />
         <Terminal Name="EL6022_2.1" Product="EL6022" />
         <Terminal Name="EL9011_2.1" Product="EL9011" />

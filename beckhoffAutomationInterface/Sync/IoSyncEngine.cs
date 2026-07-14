@@ -44,7 +44,7 @@ namespace BeckhoffAutomationInterface.Sync
         const int TSM_DEV_TYPE_ETHERCAT = 94;
         const int TREEITEMTYPE_TERM = 6;
 
-        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices)
+        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices, string sourceFolder)
         {
             var report = new IoSyncReport();
             ITcSmTreeItem ioRoot = sysManager.LookupTreeItem("TIID");
@@ -69,6 +69,7 @@ namespace BeckhoffAutomationInterface.Sync
                 }
 
                 SyncChildren(sysManager, device, deviceSpec.Children, report);
+                ApplyPlcDataTypesForDevice(device, deviceSpec, sourceFolder, report);
             }
 
             return report;
@@ -85,51 +86,121 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (IoNodeSpec nodeSpec in desiredChildren)
             {
                 ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
-                if (nodeSpec.CreatePlcType != null)
-                    ApplyPlcDataTypeSetting(node, nodeSpec.CreatePlcType, report);
                 SyncChildren(sysManager, node, nodeSpec.Children, report);
             }
         }
 
         /// <summary>
-        /// Turns on a terminal's "Plc" tab "Create PLC Data Type" setting (needed for
-        /// e.g. EL3174/EL3214 analog channels to resolve as a named PLC type such as
-        /// MDP5001_300_7E2119CA — see tasks/todo.md Task 3). Confirmed by reading a
-        /// working reference project's saved .xti: the setting is the EtherCAT
-        /// element's CreateDeviceDataType/DeviceDataTypePerChannel attributes. Modifies
-        /// only those two attributes via ProduceXml/ConsumeXml (rather than
-        /// hand-authoring XML) so everything else about the node's current
-        /// configuration is preserved untouched.
+        /// Turns on "Create PLC Data Type" for every node under deviceSpec that declares
+        /// a CreatePlcType (e.g. EL3174/EL3214 analog channels, so they resolve as a
+        /// named PLC type such as MDP5001_300_7E2119CA — see tasks/todo.md Task 3).
+        ///
+        /// Confirmed against a real project that setting just the CreateDeviceDataType/
+        /// DeviceDataTypePerChannel attributes on a TERMINAL's own ProduceXml/ConsumeXml
+        /// does NOT make TwinCAT compute/persist the derived types. The authoritative
+        /// state instead lives at the DEVICE level: a working reference project's
+        /// recursive device dump (ProduceXml(true) on the top-level EtherCAT master, as
+        /// saved e.g. to BH2.xti) carries a single shared top-level &lt;DataTypes&gt; pool
+        /// plus each configured terminal's own &lt;PlcDataTypes&gt; list. So instead of
+        /// asking TwinCAT to derive anything, this reads the device's own recursive XML,
+        /// merges in the already-computed DataType/PlcDataType XML from
+        /// PlcDataTypeTemplate (extracted from that reference project) for each node
+        /// needing it, and writes the whole device back in one ConsumeXml call.
         /// </summary>
-        static void ApplyPlcDataTypeSetting(ITcSmTreeItem node, string createPlcType, IoSyncReport report)
+        static void ApplyPlcDataTypesForDevice(ITcSmTreeItem device, IoDeviceSpec deviceSpec, string sourceFolder, IoSyncReport report)
         {
-            bool perChannel = string.Equals(createPlcType, "Channel", StringComparison.OrdinalIgnoreCase);
-            if (!perChannel && !string.Equals(createPlcType, "Device", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException($"CreatePlcType must be \"Device\" or \"Channel\" (got \"{createPlcType}\") for '{node.Name}'.");
-
-            XDocument doc = XDocument.Parse(node.ProduceXml(false));
-            XElement etherCat = doc.Descendants("EtherCAT").FirstOrDefault();
-            if (etherCat == null)
-                return; // not an EtherCAT slave item (e.g. a non-terminal box) -- nothing to set
-
-            bool alreadySet = (bool?)etherCat.Attribute("CreateDeviceDataType") == true
-                && ((bool?)etherCat.Attribute("DeviceDataTypePerChannel") ?? false) == perChannel;
-            if (alreadySet)
+            List<IoNodeSpec> targets = FlattenNodesNeedingPlcType(deviceSpec.Children).ToList();
+            if (targets.Count == 0)
                 return;
 
-            etherCat.SetAttributeValue("CreateDeviceDataType", "true");
-            etherCat.SetAttributeValue("DeviceDataTypePerChannel", perChannel ? "true" : "false");
-            node.ConsumeXml(doc.ToString());
+            XDocument doc = XDocument.Parse(device.ProduceXml(true));
+            XElement dataTypesEl = doc.Root.Element("DataTypes");
+            if (dataTypesEl == null)
+            {
+                dataTypesEl = new XElement("DataTypes");
+                doc.Root.AddFirst(dataTypesEl);
+            }
 
-            // ConsumeXml not throwing does NOT mean the attribute actually stuck --
-            // confirmed 2026-07-14 against a real project that it can silently no-op.
-            // Re-read the node's own XML and verify before claiming success.
-            XElement verifyEtherCat = XDocument.Parse(node.ProduceXml(false)).Descendants("EtherCAT").FirstOrDefault();
-            bool applied = verifyEtherCat != null && (bool?)verifyEtherCat.Attribute("CreateDeviceDataType") == true;
-            if (applied)
-                report.StateChanged.Add($"{node.Name} -> Create PLC Data Type ({createPlcType})");
-            else
-                report.Warnings.Add($"{node.Name}: Create PLC Data Type ({createPlcType}) did not take effect (ConsumeXml silently no-op'd)");
+            var applied = new List<IoNodeSpec>();
+            foreach (IoNodeSpec node in targets)
+            {
+                bool perChannel = string.Equals(node.CreatePlcType, "Channel", StringComparison.OrdinalIgnoreCase);
+                if (!perChannel && !string.Equals(node.CreatePlcType, "Device", StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException($"CreatePlcType must be \"Device\" or \"Channel\" (got \"{node.CreatePlcType}\") for '{node.Name}'.");
+
+                PlcDataTypeTemplate template = PlcDataTypeTemplate.Load(sourceFolder, node.Product);
+                if (template == null)
+                {
+                    report.Warnings.Add($"{node.Name}: no plc-data-types/{node.Product}.xml template found -- CreatePlcType not applied");
+                    continue;
+                }
+
+                XElement box = doc.Descendants("Box").FirstOrDefault(b => (string)b.Element("Name") == node.Name);
+                XElement etherCat = box?.Element("EtherCAT");
+                if (etherCat == null)
+                {
+                    report.Warnings.Add($"{node.Name}: not found as an EtherCAT Box in the device's own XML -- CreatePlcType not applied");
+                    continue;
+                }
+
+                MergeDataTypes(dataTypesEl, template.DataTypes);
+
+                etherCat.SetAttributeValue("CreateDeviceDataType", "true");
+                etherCat.SetAttributeValue("DeviceDataTypePerChannel", perChannel ? "true" : "false");
+                etherCat.Element("PlcDataTypes")?.Remove();
+                etherCat.Add(new XElement("PlcDataTypes", template.PlcDataTypes.Select(e => new XElement(e))));
+
+                applied.Add(node);
+            }
+
+            if (applied.Count == 0)
+                return;
+
+            device.ConsumeXml(doc.ToString());
+
+            // ConsumeXml not throwing does NOT mean it actually persisted -- confirmed
+            // 2026-07-14 against a real project. Re-read the device's own XML afterward
+            // and only report success for nodes that actually show CreateDeviceDataType.
+            XDocument verifyDoc = XDocument.Parse(device.ProduceXml(true));
+            foreach (IoNodeSpec node in applied)
+            {
+                XElement verifyEtherCat = verifyDoc.Descendants("Box")
+                    .FirstOrDefault(b => (string)b.Element("Name") == node.Name)?.Element("EtherCAT");
+                bool ok = verifyEtherCat != null && (bool?)verifyEtherCat.Attribute("CreateDeviceDataType") == true;
+                if (ok)
+                    report.StateChanged.Add($"{node.Name} -> Create PLC Data Type ({node.CreatePlcType})");
+                else
+                    report.Warnings.Add($"{node.Name}: Create PLC Data Type ({node.CreatePlcType}) did not take effect (ConsumeXml silently no-op'd)");
+            }
+        }
+
+        /// <summary>Merges template DataType elements into the device's shared DataTypes
+        /// pool, skipping any whose GUID (on its Name element) is already present.</summary>
+        static void MergeDataTypes(XElement dataTypesEl, IReadOnlyList<XElement> templateDataTypes)
+        {
+            var existingGuids = new HashSet<string>(
+                dataTypesEl.Elements("DataType")
+                    .Select(dt => (string)dt.Element("Name")?.Attribute("GUID"))
+                    .Where(guid => guid != null));
+
+            foreach (XElement dataType in templateDataTypes)
+            {
+                string guid = (string)dataType.Element("Name")?.Attribute("GUID");
+                if (guid != null && existingGuids.Contains(guid))
+                    continue;
+                dataTypesEl.Add(new XElement(dataType));
+            }
+        }
+
+        static IEnumerable<IoNodeSpec> FlattenNodesNeedingPlcType(IReadOnlyList<IoNodeSpec> nodes)
+        {
+            foreach (IoNodeSpec node in nodes)
+            {
+                if (node.CreatePlcType != null)
+                    yield return node;
+                foreach (IoNodeSpec descendant in FlattenNodesNeedingPlcType(node.Children))
+                    yield return descendant;
+            }
         }
 
         /// <summary>

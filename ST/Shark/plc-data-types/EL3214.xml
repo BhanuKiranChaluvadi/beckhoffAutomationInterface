@@ -1,0 +1,146 @@
+<!--
+  Exact DataType/PlcDataType definitions for an EL3214 (4Ch. Ana. Input PT100
+  (RTD)) with "Create PLC Data Type" + "Channel/Slot" enabled, copied verbatim
+  from a working reference project
+  (C:\Users\BhanuKiranChaluvadi\workspace\A3D\PLC\PLC_NFL_SHARK_V2, BH2.xti).
+  See Sync/PlcDataTypeTemplate.cs and Sync/IoSyncEngine.ApplyPlcDataTypesForDevice.
+-->
+<PlcDataTypeTemplate>
+  <DataTypes>
+    <DataType>
+      <Name GUID="{18071995-0000-0000-0000-002000000004}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..3] OF BIT</Name>
+      <BitSize>4</BitSize>
+      <BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
+      <ArrayInfo>
+        <LBound>0</LBound>
+        <Elements>4</Elements>
+      </ArrayInfo>
+    </DataType>
+    <DataType>
+      <Name GUID="{18071995-0000-0000-0000-002000000007}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..6] OF BIT</Name>
+      <BitSize>7</BitSize>
+      <BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
+      <ArrayInfo>
+        <LBound>0</LBound>
+        <Elements>7</Elements>
+      </ArrayInfo>
+    </DataType>
+    <DataType>
+      <Name GUID="{1795D3C2-2709-7B8D-B946-7F78B0392E4B}" AutoDeleteType="true" ForceIecDecl="true">Status_5F498BC1_Plc</Name>
+      <BitSize>16</BitSize>
+      <SubItem>
+        <Name>Underrange</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Overrange</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>1</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Error</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>6</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>TxPDO_State</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>14</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>TxPDO_Toggle</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>15</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{F27EBF53-2CC3-ABEF-490A-6714DC309FEE}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_I_A369A904</Name>
+      <BitSize>32</BitSize>
+      <SubItem>
+        <Name>MDP5001_320_Status</Name>
+        <Type GUID="{1795D3C2-2709-7B8D-B946-7F78B0392E4B}">Status_5F498BC1_Plc</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>MDP5001_320_Value</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000006}">INT</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>16</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_A369A904</Name>
+      <BitSize>32</BitSize>
+      <SubItem>
+        <Name>MDP5001_320_Input</Name>
+        <Type GUID="{F27EBF53-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_I_A369A904</Type>
+        <BitSize>32</BitSize>
+        <BitOffs>0</BitOffs>
+        <Properties>
+          <Property>
+            <Name>TcDataArea</Name>
+            <Value>Input</Value>
+          </Property>
+        </Properties>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{92884CAB-5364-9B01-8223-06F29F5CA3E3}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_I_182C60D3</Name>
+      <BitSize>128</BitSize>
+      <SubItem>
+        <Name>WcState_WcState</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>WcState_InputToggle</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>1</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>InfoData_State</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000005}">UINT</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>16</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>InfoData_AdsAddr</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000042}">AMSADDR</Type>
+        <BitSize>64</BitSize>
+        <BitOffs>64</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{92884CAA-5364-9B01-8223-06F29F5CA3E3}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_182C60D3</Name>
+      <BitSize>128</BitSize>
+      <SubItem>
+        <Name>MDP5001_320_Input</Name>
+        <Type GUID="{92884CAB-5364-9B01-8223-06F29F5CA3E3}">MDP5001_320_I_182C60D3</Type>
+        <BitSize>128</BitSize>
+        <BitOffs>0</BitOffs>
+        <Properties>
+          <Property>
+            <Name>TcDataArea</Name>
+            <Value>Input</Value>
+          </Property>
+        </Properties>
+      </SubItem>
+    </DataType>
+  </DataTypes>
+  <PlcDataTypes>
+    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
+    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
+    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
+    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
+    <PlcDataType GUID="{92884CAA-5364-9B01-8223-06F29F5CA3E3}">MDP5001_320_182C60D3</PlcDataType>
+  </PlcDataTypes>
+</PlcDataTypeTemplate>

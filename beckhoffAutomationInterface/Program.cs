@@ -329,7 +329,7 @@ namespace BeckhoffAutomationInterface
 
             Console.WriteLine("{0}: Syncing {1} IO device(s)...", Now(), desiredIoDevices.Count);
             IoSyncReport ioReport = null;
-            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices), "syncing IO tree");
+            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices, options.SourceFolder), "syncing IO tree");
 
             foreach (string name in ioReport.Created) Console.WriteLine("    + created  {0}", name);
             foreach (string name in ioReport.Deleted) Console.WriteLine("    - deleted  {0}", name);

@@ -1,0 +1,170 @@
+<!--
+  Exact DataType/PlcDataType definitions for an EL3174 (4Ch. Ana. Input +/-10V
+  Diff., +/-20mA SingleEnded, 16 Bit) with "Create PLC Data Type" + "Channel/Slot"
+  enabled, copied verbatim from a working reference project
+  (C:\Users\BhanuKiranChaluvadi\workspace\A3D\PLC\PLC_NFL_SHARK_V2, BH2.xti /
+  Term 13 (EL3174).xti). See Sync/PlcDataTypeTemplate.cs and
+  Sync/IoSyncEngine.ApplyPlcDataTypesForDevice.
+
+  Setting just the CreateDeviceDataType/DeviceDataTypePerChannel attributes via
+  ConsumeXml does NOT make TwinCAT compute these (confirmed against a real
+  project, see tasks/todo.md Task 3). This file supplies the already-computed
+  state instead of asking TwinCAT to derive it.
+-->
+<PlcDataTypeTemplate>
+  <DataTypes>
+    <DataType>
+      <Name GUID="{18071995-0000-0000-0000-002000000001}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..0] OF BIT</Name>
+      <BitSize>1</BitSize>
+      <BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
+      <ArrayInfo>
+        <LBound>0</LBound>
+        <Elements>1</Elements>
+      </ArrayInfo>
+    </DataType>
+    <DataType>
+      <Name GUID="{18071995-0000-0000-0000-002000000005}" IecBaseType="true" BitType="true" AutoDeleteType="true" HideSubItems="true">ARRAY [0..4] OF BIT</Name>
+      <BitSize>5</BitSize>
+      <BaseType GUID="{18071995-0000-0000-0000-000000000010}">BIT</BaseType>
+      <ArrayInfo>
+        <LBound>0</LBound>
+        <Elements>5</Elements>
+      </ArrayInfo>
+    </DataType>
+    <DataType>
+      <Name GUID="{0A10ECA3-CFF4-C97F-78EC-A7BE69857303}" AutoDeleteType="true" ForceIecDecl="true">Status_7EBB4A47_Plc</Name>
+      <BitSize>16</BitSize>
+      <SubItem>
+        <Name>Underrange</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Overrange</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>1</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Limit_1</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000011}">BIT2</Type>
+        <BitSize>2</BitSize>
+        <BitOffs>2</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Limit_2</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000011}">BIT2</Type>
+        <BitSize>2</BitSize>
+        <BitOffs>4</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Error</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>6</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>Sync_error</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>13</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>TxPDO_State</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>14</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>TxPDO_Toggle</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>15</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{D98A3B13-1241-5A12-F4B8-1F0F6D88A6F2}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_300_I_7E2119CA</Name>
+      <BitSize>32</BitSize>
+      <SubItem>
+        <Name>MDP5001_300_Status</Name>
+        <Type GUID="{0A10ECA3-CFF4-C97F-78EC-A7BE69857303}">Status_7EBB4A47_Plc</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>MDP5001_300_Value</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000006}">INT</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>16</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{D98A3B12-1241-5A12-F4B8-1F0F6D88A6F2}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_300_7E2119CA</Name>
+      <BitSize>32</BitSize>
+      <SubItem>
+        <Name>MDP5001_300_Input</Name>
+        <Type GUID="{D98A3B13-1241-5A12-F4B8-1F0F6D88A6F2}">MDP5001_300_I_7E2119CA</Type>
+        <BitSize>32</BitSize>
+        <BitOffs>0</BitOffs>
+        <Properties>
+          <Property>
+            <Name>TcDataArea</Name>
+            <Value>Input</Value>
+          </Property>
+        </Properties>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{26776774-4508-3235-125C-7805F22C1D1F}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_300_I_0E27529B</Name>
+      <BitSize>128</BitSize>
+      <SubItem>
+        <Name>WcState_WcState</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>0</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>WcState_InputToggle</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000010}">BIT</Type>
+        <BitSize>1</BitSize>
+        <BitOffs>1</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>InfoData_State</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000005}">UINT</Type>
+        <BitSize>16</BitSize>
+        <BitOffs>16</BitOffs>
+      </SubItem>
+      <SubItem>
+        <Name>InfoData_AdsAddr</Name>
+        <Type GUID="{18071995-0000-0000-0000-000000000042}">AMSADDR</Type>
+        <BitSize>64</BitSize>
+        <BitOffs>64</BitOffs>
+      </SubItem>
+    </DataType>
+    <DataType>
+      <Name GUID="{26776773-4508-3235-125C-7805F22C1D1F}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_300_0E27529B</Name>
+      <BitSize>128</BitSize>
+      <SubItem>
+        <Name>MDP5001_300_Input</Name>
+        <Type GUID="{26776774-4508-3235-125C-7805F22C1D1F}">MDP5001_300_I_0E27529B</Type>
+        <BitSize>128</BitSize>
+        <BitOffs>0</BitOffs>
+        <Properties>
+          <Property>
+            <Name>TcDataArea</Name>
+            <Value>Input</Value>
+          </Property>
+        </Properties>
+      </SubItem>
+    </DataType>
+  </DataTypes>
+  <PlcDataTypes>
+    <PlcDataType GUID="{D98A3B12-1241-5A12-F4B8-1F0F6D88A6F2}">MDP5001_300_7E2119CA</PlcDataType>
+    <PlcDataType GUID="{D98A3B12-1241-5A12-F4B8-1F0F6D88A6F2}">MDP5001_300_7E2119CA</PlcDataType>
+    <PlcDataType GUID="{D98A3B12-1241-5A12-F4B8-1F0F6D88A6F2}">MDP5001_300_7E2119CA</PlcDataType>
+    <PlcDataType GUID="{D98A3B12-1241-5A12-F4B8-1F0F6D88A6F2}">MDP5001_300_7E2119CA</PlcDataType>
+    <PlcDataType GUID="{26776773-4508-3235-125C-7805F22C1D1F}">MDP5001_300_0E27529B</PlcDataType>
+  </PlcDataTypes>
+</PlcDataTypeTemplate>
