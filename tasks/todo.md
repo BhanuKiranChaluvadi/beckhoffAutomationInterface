@@ -150,6 +150,38 @@ terminal scan, in which case the hardcoded literal in the two `.st` alias
 pairs might need updating to whatever TwinCAT actually generates once the
 terminals exist — can't confirm this without adding them and re-checking.
 
+**Update (2026-07-14) — deeper than expected, still open.** Got the
+topology from the user (`images/devices.jpg`), extended
+`IoDeviceSpec`/`IoManifestParser`/`IoSyncEngine` to support arbitrarily
+nested Box/Terminal hierarchy (Task 4, done), and authored
+`ST/Shark/io-devices.xml` for BH1/BH2 (Task 5). Ran it against the real
+project: **the IO tree was created correctly** (34 items, right
+nesting — `CreateChild` + recursion works exactly as designed) **but the
+build still fails with the identical 4 `Unknown type` errors.**
+
+Conclusion: `CreateChild(name, TREEITEMTYPE_TERM, "", "EL3174")` creates a
+generic terminal placeholder, but does NOT trigger whatever TwinCAT
+mechanism generates the instance-specific `MDP5001_*` PDO/parameter DUT —
+that appears to only come from a real hardware/topology scan (Insert via
+ESI catalog against real or simulated hardware), not from the bare
+Automation Interface creation call. This matches the same category of
+dead-end already documented elsewhere in this repo (Event Class creation
+in `docs/ideas/st-plc-bidirectional-sync.md`, and IO channel linking
+requiring Activate Configuration in `docs/ideas/st-source-twincat-sync.md`)
+— some things the Automation Interface can create structurally, it
+apparently can't fully instantiate without a real scan.
+
+**Not yet investigated / needs a decision:**
+- Does `ITcSmTreeItem`/`ITcSysManager` expose any call to trigger PDO/type
+  generation for an already-created terminal (short of a full hardware
+  scan)? Unconfirmed — would need targeted spiking against the
+  Automation Interface docs/object model.
+- Alternatively: is Activate Configuration (against a real or simulated
+  target) the only path, same as the existing IO-linking limitation? If
+  so, this bug may not be fixable through this tool alone — it may need
+  to stay a manual one-time step (create terminals via this tool, then a
+  human runs Activate Configuration once), similar to Event Classes.
+
 ---
 
 ## Checkpoint: Known bugs closed
