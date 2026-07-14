@@ -16,9 +16,13 @@ namespace BeckhoffAutomationInterface.Sync
     /// missing from the live project, WITHOUT attempting to write them — a human (or a future,
     /// better-understood automation) still has to create them.
     ///
-    /// "Actual" state is read directly from the .tsproj file's &lt;Project&gt;/&lt;System&gt;
-    /// &lt;DataType&gt;&lt;Name&gt; elements — no Visual Studio session needed, so this check can run
-    /// standalone (fast) or as a preflight before a full sync.
+    /// "Actual" state is read directly from the .tsproj file's top-level
+    /// &lt;DataTypes&gt;&lt;DataType&gt;&lt;Name&gt; elements — the same shared pool PLC Data
+    /// Types merge into (see Sync/TsprojPlcDataTypeEditor.cs), confirmed by inspecting
+    /// a working reference project's .tsproj (tasks/todo.md Task 3): Event Classes are
+    /// NOT nested under &lt;Project&gt;/&lt;System&gt; despite the "SYSTEM ▸ Type System"
+    /// UI path suggesting otherwise. No Visual Studio session needed, so this check
+    /// can run standalone (fast) or as a preflight before a full sync.
     /// </summary>
     static class EventClassChecker
     {
@@ -29,10 +33,10 @@ namespace BeckhoffAutomationInterface.Sync
             if (File.Exists(tsprojFilePath))
             {
                 XDocument doc = XDocument.Load(tsprojFilePath);
-                XElement systemEl = doc.Root.Element("Project")?.Element("System");
-                if (systemEl != null)
+                XElement dataTypesEl = doc.Root.Element("DataTypes");
+                if (dataTypesEl != null)
                 {
-                    foreach (XElement dataType in systemEl.Elements("DataType"))
+                    foreach (XElement dataType in dataTypesEl.Elements("DataType"))
                     {
                         string name = (string)dataType.Element("Name");
                         if (name != null)
