@@ -62,22 +62,25 @@ namespace BeckhoffAutomationInterface.Sync
                     report.StateChanged.Add($"{deviceSpec.Name} -> {(deviceSpec.Disabled ? "disabled" : "enabled")}");
                 }
 
-                var desiredBoxNames = new HashSet<string>(deviceSpec.Boxes.Select(b => b.Name));
-                DeleteOrphans(device, desiredBoxNames, report);
-
-                foreach (IoBoxSpec boxSpec in deviceSpec.Boxes)
-                {
-                    ITcSmTreeItem box = GetOrCreate(sysManager, device, boxSpec.Name, TREEITEMTYPE_TERM, boxSpec.Product, report);
-
-                    var desiredTerminalNames = new HashSet<string>(boxSpec.Terminals.Select(t => t.Name));
-                    DeleteOrphans(box, desiredTerminalNames, report);
-
-                    foreach (IoTerminalSpec terminalSpec in boxSpec.Terminals)
-                        GetOrCreate(sysManager, box, terminalSpec.Name, TREEITEMTYPE_TERM, terminalSpec.Product, report);
-                }
+                SyncChildren(sysManager, device, deviceSpec.Children, report);
             }
 
             return report;
+        }
+
+        /// <summary>Recursively reconciles a Box/Terminal node's children against parent,
+        /// to match arbitrarily deep real topologies (e.g. Device -> CU2508 -> EK1100 ->
+        /// EL2008). Box and Terminal are the same underlying node kind — see IoNodeSpec.</summary>
+        static void SyncChildren(ITcSysManager sysManager, ITcSmTreeItem parent, IReadOnlyList<IoNodeSpec> desiredChildren, IoSyncReport report)
+        {
+            var desiredNames = new HashSet<string>(desiredChildren.Select(c => c.Name));
+            DeleteOrphans(parent, desiredNames, report);
+
+            foreach (IoNodeSpec nodeSpec in desiredChildren)
+            {
+                ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
+                SyncChildren(sysManager, node, nodeSpec.Children, report);
+            }
         }
 
         /// <summary>

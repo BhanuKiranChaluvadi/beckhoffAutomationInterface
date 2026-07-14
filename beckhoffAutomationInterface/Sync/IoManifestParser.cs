@@ -18,6 +18,11 @@ namespace BeckhoffAutomationInterface.Sync
     ///   &lt;/Device&gt;
     /// &lt;/IoTree&gt;
     /// </code>
+    /// "Box" and "Terminal" elements are interchangeable and nest arbitrarily deep
+    /// (both parse to the same IoNodeSpec — see its doc comment) so a real topology
+    /// like Device -> Box(CU2508 junction) -> Box(EK1100 coupler) -> Terminal(EL2008)
+    /// is expressible; use whichever tag name reads better at each level.
+    ///
     /// Hardware topology is not IEC 61131-3 source code, so — like
     /// libraries.xml — it's config data synced directly against the
     /// Automation Interface's I/O tree (TIID) rather than going through the
@@ -31,6 +36,8 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     static class IoManifestParser
     {
+        static readonly string[] NodeElementNames = { "Box", "Terminal" };
+
         public static List<IoDeviceSpec> Parse(string manifestFilePath)
         {
             if (!File.Exists(manifestFilePath))
@@ -42,16 +49,20 @@ namespace BeckhoffAutomationInterface.Sync
                 .Select(deviceEl => new IoDeviceSpec(
                     (string)deviceEl.Attribute("Name"),
                     (bool?)deviceEl.Attribute("Disabled") ?? false,
-                    deviceEl.Elements("Box").Select(ParseBox).ToList()))
+                    ParseChildNodes(deviceEl)))
                 .ToList();
         }
 
-        static IoBoxSpec ParseBox(XElement boxEl) => new IoBoxSpec(
-            (string)boxEl.Attribute("Name"),
-            (string)boxEl.Attribute("Product"),
-            boxEl.Elements("Terminal")
-                .Select(t => new IoTerminalSpec((string)t.Attribute("Name"), (string)t.Attribute("Product")))
-                .ToList());
+        static List<IoNodeSpec> ParseChildNodes(XElement parentEl) =>
+            parentEl.Elements()
+                .Where(e => NodeElementNames.Contains(e.Name.LocalName))
+                .Select(ParseNode)
+                .ToList();
+
+        static IoNodeSpec ParseNode(XElement nodeEl) => new IoNodeSpec(
+            (string)nodeEl.Attribute("Name"),
+            (string)nodeEl.Attribute("Product"),
+            ParseChildNodes(nodeEl));
 
         /// <summary>Parses the optional &lt;Links&gt; section: PLC-variable-to-IO-channel links.</summary>
         public static List<LinkSpec> ParseLinks(string manifestFilePath)

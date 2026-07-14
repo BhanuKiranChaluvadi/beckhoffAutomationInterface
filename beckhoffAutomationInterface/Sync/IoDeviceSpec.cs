@@ -5,45 +5,42 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>
     /// Desired-state model for one EtherCAT master device and its bus topology,
     /// parsed from an io-devices.xml manifest. Mirrors the real hardware tree:
-    /// Device (master) -> Box (e.g. an EK1100 coupler) -> Terminal (e.g. EL1008).
+    /// Device (master) -> Box (e.g. a CU2508 junction or EK1100 coupler) -> Box/
+    /// Terminal, nested arbitrarily deep (e.g. Device -> CU2508 -> EK1100 -> EL2008).
     /// </summary>
     class IoDeviceSpec
     {
         public string Name { get; }
         public bool Disabled { get; }
-        public List<IoBoxSpec> Boxes { get; }
+        public List<IoNodeSpec> Children { get; }
 
-        public IoDeviceSpec(string name, bool disabled, List<IoBoxSpec> boxes)
+        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children)
         {
             Name = name;
             Disabled = disabled;
-            Boxes = boxes;
+            Children = children;
         }
     }
 
-    class IoBoxSpec
+    /// <summary>
+    /// One Box or Terminal in the bus topology. TwinCAT creates both identically
+    /// (CreateChild(name, TREEITEMTYPE_TERM=6, "", product) — see IoSyncEngine), so a
+    /// "Box" (e.g. a coupler with terminals plugged into it) and a "Terminal" (a leaf
+    /// module) are the same underlying concept here: a named node with a product code
+    /// and, possibly, its own children. Nesting is unbounded to match real topologies
+    /// like Device -> Box(CU2508) -> Box(EK1100) -> Terminal(EL2008).
+    /// </summary>
+    class IoNodeSpec
     {
         public string Name { get; }
         public string Product { get; }
-        public List<IoTerminalSpec> Terminals { get; }
+        public List<IoNodeSpec> Children { get; }
 
-        public IoBoxSpec(string name, string product, List<IoTerminalSpec> terminals)
+        public IoNodeSpec(string name, string product, List<IoNodeSpec> children)
         {
             Name = name;
             Product = product;
-            Terminals = terminals;
-        }
-    }
-
-    class IoTerminalSpec
-    {
-        public string Name { get; }
-        public string Product { get; }
-
-        public IoTerminalSpec(string name, string product)
-        {
-            Name = name;
-            Product = product;
+            Children = children;
         }
     }
 }
