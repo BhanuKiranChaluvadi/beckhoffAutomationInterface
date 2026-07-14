@@ -1,0 +1,64 @@
+<!--
+  EtherCAT I/O hardware tree for the Shark project (see Sync/IoManifestParser.cs).
+  Transcribed from images/devices.jpg (Solution Explorer capture of the live
+  PLC_NFL_SHARK project's I/O tree).
+
+  Scope: BH1 and BH2 only. BH3/BH4/BH5 (in the same screenshot) are deliberately
+  omitted for now:
+    - BH3's "Term 33 (EK1100)" coupler's own terminals aren't expanded in the
+      screenshot, so its contents are unknown.
+    - BH4's boxes (EX260-SEC1, "Mass Flow / Pressure Controller - RJ45" x3) and
+      BH5's box (MARPOSS P3XF STANDARD) aren't standard Beckhoff EL/EK catalog
+      codes — the exact Product string CreateChild needs to instantiate them
+      correctly isn't derivable from the display name alone.
+  Add these once confirmed; guessing here risks creating the wrong hardware in
+  the live project.
+
+  All devices are Disabled="true" for now: an enabled EtherCAT master with no
+  variable linked to a task blocks the build with a modal "needs sync master"
+  dialog (see IoManifestParser's doc comment), and no <Links> section exists
+  yet for these devices.
+-->
+<IoTree>
+  <Device Name="BH1" Disabled="true">
+    <Box Name="Box 1 (CU2508)" Product="CU2508">
+      <Box Name="EK1100_1.1" Product="EK1100">
+        <Terminal Name="EL2008_1.1" Product="EL2008" />
+        <Terminal Name="EL2008_1.2" Product="EL2008" />
+        <Terminal Name="EL2008_1.3" Product="EL2008" />
+        <Terminal Name="EL2008_1.4" Product="EL2008" />
+        <Terminal Name="EL2008_1.5" Product="EL2008" />
+        <Terminal Name="EL2008_1.6" Product="EL2008" />
+        <Terminal Name="EL9505_1.1" Product="EL9505" />
+        <Terminal Name="EL9011_1.1" Product="EL9011" />
+      </Box>
+    </Box>
+  </Device>
+
+  <Device Name="BH2" Disabled="true">
+    <Box Name="Box 44 (CU2508)" Product="CU2508">
+      <Box Name="EK1100_2.1" Product="EK1100">
+        <Terminal Name="EL3174_2.1" Product="EL3174" />
+        <Terminal Name="EL3174_2.2" Product="EL3174" />
+        <Terminal Name="EL3174_2.3" Product="EL3174" />
+        <Terminal Name="EL1008_2.1" Product="EL1008" />
+        <Terminal Name="EL1008_2.2" Product="EL1008" />
+        <Terminal Name="EL9410_2.1" Product="EL9410" />
+        <Terminal Name="EL3214_2.1" Product="EL3214" />
+        <Terminal Name="EL3214_2.2" Product="EL3214" />
+        <Terminal Name="EL3214_2.3" Product="EL3214" />
+        <Terminal Name="EL3214_2.4" Product="EL3214" />
+        <Terminal Name="EL3214_2.5" Product="EL3214" />
+        <Terminal Name="EL3214_2.6" Product="EL3214" />
+        <Terminal Name="EL3214_2.7" Product="EL3214" />
+        <Terminal Name="EL3214_2.8" Product="EL3214" />
+        <Terminal Name="EL3214_2.9" Product="EL3214" />
+        <Terminal Name="EL3214_2.10" Product="EL3214" />
+        <Terminal Name="EL3214_2.11" Product="EL3214" />
+        <Terminal Name="EL3443_2.1" Product="EL3443" />
+        <Terminal Name="EL6022_2.1" Product="EL6022" />
+        <Terminal Name="EL9011_2.1" Product="EL9011" />
+      </Box>
+    </Box>
+  </Device>
+</IoTree>
