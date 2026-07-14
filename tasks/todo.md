@@ -182,6 +182,71 @@ apparently can't fully instantiate without a real scan.
   to stay a manual one-time step (create terminals via this tool, then a
   human runs Activate Configuration once), similar to Event Classes.
 
+**Update (2026-07-14) — attempted fix via ConsumeXml, confirmed NOT
+working.** User pointed at `images/create_PLC_dataType.jpg` (a working
+reference project, `PLC_NFL_SHARK`, with "Create PLC Data Type" +
+"Channel/Slot" checked on its real EL3174 terminals) and its saved
+`.xti` file, which showed the setting is
+`CreateDeviceDataType="true" DeviceDataTypePerChannel="true"` on the
+Box's `<EtherCAT>` element, with the generated `MDP5001_*` DUTs stored
+inline in the same file. Confirmed via reflection that `ITcSmTreeItem`
+exposes `ProduceXml(bool)`/`ConsumeXml(string)`/`GetLastXmlError()`.
+Implemented `IoSyncEngine.ApplyPlcDataTypeSetting`: read the terminal's
+current XML, flip only those two attributes, write back via
+`ConsumeXml`. Added a `CreatePlcType="Channel"` attribute to
+`IoNodeSpec`/`io-devices.xml` and applied it to all EL3174/EL3214
+terminals.
+
+Ran it against the real project (which had to be rebuilt from scratch
+in this same session — see below): `ConsumeXml` did not throw, and the
+tool reported `~ state EL3174_2.1 -> Create PLC Data Type (Channel)`
+for all 14 terminals. **But checking the actual saved `Shark.tsproj`
+afterward shows `CreateDeviceDataType` is completely absent from
+`EL3174_2.1`'s `<EtherCAT>` element — not `false`, missing entirely.**
+The write did not persist, and the build shows the identical 4
+`Unknown type` errors. `ConsumeXml` not throwing does not mean it did
+what we asked; something about the XML round-trip (wrong scope from
+`ProduceXml(false)`, a required companion element we didn't include, or
+this attribute being rejected outside interactive UI context) is
+silently dropping the change. Not spending more full-project-rebuild
+cycles (~15-20 min each) guessing further without new information —
+next step needs either Beckhoff documentation/support on this specific
+attribute, or accepting this as a manual one-time UI step per terminal
+(same precedent as Event Classes below).
+
+**Separate regression surfaced by this session's rebuild:** the user
+deleted the live `A3D/Shark` project mid-session, and the tool's
+"reopen if exists, else bootstrap new" logic (`TwinCatProjectOpener`)
+silently took the bootstrap-new path since `Shark.sln` no longer
+existed. The fresh project has no Event Classes (they were created
+once, manually, in the now-deleted project — matches the documented
+dead-end in `docs/ideas/st-plc-bidirectional-sync.md`), so the build
+now also shows 19 new errors referencing `TC_EVENTS.BeckhoffLibEvents`
+in `FB_TcEventLoggerSink`. Not a tool bug, but a real consequence: this
+tool cannot recreate Event Classes, so deleting the project loses them.
+User feedback from this: check destination project state before
+launching a run that could silently switch from "reuse" to "rebuild
+from scratch" — flag it up front rather than after the fact.
+
+**Fixed (2026-07-14):** `ApplyPlcDataTypeSetting` now re-reads the
+node's XML after `ConsumeXml` and only reports success if
+`CreateDeviceDataType` is actually present; otherwise it adds to a new
+`IoSyncReport.Warnings` list (printed as `!! WARNING`). No more silent
+false-positive "state changed" claims.
+
+**User direction (2026-07-14) on workflow going forward:** before
+compiling, verify (1) devices are present — create if missing — and
+(2) event classes are present, and only proceed to POU/build work once
+both are confirmed. Devices are already checked/created every run via
+`IoSyncEngine` (idempotent), and Events already have a fast, no-VS
+read-only check (`--events-only`, via `EventClassChecker`) — but neither
+is being used as an explicit go/no-go gate before the expensive full
+sync+build. **Possible follow-up task (not started):** reorder
+`Program.RunSync` so IO device sync (and an events check) run — and are
+confirmed — before the POU sync/build, so a missing prerequisite is
+caught before spending ~5+ minutes syncing 1261 POUs. Not implemented
+yet; flagging for a decision on priority.
+
 ---
 
 ## Checkpoint: Known bugs closed
