@@ -113,7 +113,14 @@ namespace BeckhoffAutomationInterface.Sync
             if (targets.Count == 0)
                 return;
 
-            XDocument doc = XDocument.Parse(device.ProduceXml(true));
+            string rawXml = device.ProduceXml(true);
+            // TEMP DIAGNOSTIC (2026-07-14): dump the raw produced XML so its actual shape
+            // can be inspected after the run -- the Box-by-Name lookup below is currently
+            // failing for every node and the cause isn't confirmed yet. Remove once fixed.
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"io-sync-diag-{device.Name}.xml"), rawXml);
+
+            XDocument doc = XDocument.Parse(rawXml);
             XElement dataTypesEl = doc.Root.Element("DataTypes");
             if (dataTypesEl == null)
             {

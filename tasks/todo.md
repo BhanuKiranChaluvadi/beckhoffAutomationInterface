@@ -182,7 +182,49 @@ apparently can't fully instantiate without a real scan.
   to stay a manual one-time step (create terminals via this tool, then a
   human runs Activate Configuration once), similar to Event Classes.
 
-**Update (2026-07-14) — attempted fix via ConsumeXml, confirmed NOT
+**Update (2026-07-14) — root cause of the ConsumeXml failures found:
+`ProduceXml`/`ConsumeXml` use a different XML schema than the project
+file.** Dumped `device.ProduceXml(true)` to disk for inspection. It
+returns `<TreeItem><ItemName>...<EtherCAT>{master-level settings only:
+DC, EoE, SlaveSettings, ...}</EtherCAT></TreeItem>` — a "TreeItem"
+schema entirely different from the `.tsproj`/`.xti` **project file**
+schema (`<TcSmItem><Box Id="..."><EtherCAT CreateDeviceDataType="true"
+...>`). No `<Box>` element appears anywhere in the `TreeItem` output
+despite `ChildCount=22` and `bRecursive=true` — this schema doesn't
+expose per-slave/per-terminal configuration, `CreateDeviceDataType`, or
+`PlcDataTypes` at all. Every attempt so far (both the original
+per-terminal one and the later device-level merge) fed project-file-
+shaped XML into an API that doesn't speak that dialect — the write
+wasn't rejected, it was just building a document with fields TwinCAT's
+`ConsumeXml` doesn't recognize as instructions to change anything, so
+nothing changed.
+
+**Conclusion: "Create PLC Data Type" does not appear to be settable via
+the documented `ITcSmTreeItem` Automation Interface at all** (checked
+every interface version 2-10; nothing else exists). This is the same
+category of dead-end already hit for Event Classes and IO-channel
+linking-without-Activate-Configuration elsewhere in this repo — some
+project settings are UI-only / project-file-only, with no Automation
+Interface equivalent.
+
+**Options going forward (needs a decision, not a code fix):**
+1. **Accept as a manual, one-time step.** The tool already creates the
+   device/terminal tree correctly and already verifies+warns when
+   CreateDeviceDataType isn't set (see the Warnings mechanism above) —
+   extend that warning to give clear, specific instructions ("check
+   'Create PLC Data Type' + 'Channel/Slot' on the Plc tab of terminal X,
+   then re-run"), same UX as the existing Event Class dead-end.
+2. **Edit the `.tsproj` file directly on disk**, outside COM entirely,
+   injecting the exact known-good `<Box>/<EtherCAT
+   CreateDeviceDataType=...>` + `<DataTypes>`/`<PlcDataTypes>` XML
+   (already extracted and validated against the reference project — see
+   `ST/Shark/plc-data-types/*.xml`) into the live `.tsproj`, then having
+   Visual Studio reload before building. More ambitious, and carries
+   real risk (concurrent-write/corruption if VS has the file open,
+   timing around save/reload) — would need its own careful, isolated
+   implementation and testing before trusting it against a real project.
+
+**(Older) update (2026-07-14) — attempted fix via ConsumeXml, confirmed NOT
 working.** User pointed at `images/create_PLC_dataType.jpg` (a working
 reference project, `PLC_NFL_SHARK`, with "Create PLC Data Type" +
 "Channel/Slot" checked on its real EL3174 terminals) and its saved
