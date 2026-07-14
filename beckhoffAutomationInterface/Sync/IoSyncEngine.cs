@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Xml.Linq;
 using Interop.TCatSysManager;
 
 namespace BeckhoffAutomationInterface.Sync
@@ -79,8 +80,42 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (IoNodeSpec nodeSpec in desiredChildren)
             {
                 ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
+                if (nodeSpec.CreatePlcType != null)
+                    ApplyPlcDataTypeSetting(node, nodeSpec.CreatePlcType, report);
                 SyncChildren(sysManager, node, nodeSpec.Children, report);
             }
+        }
+
+        /// <summary>
+        /// Turns on a terminal's "Plc" tab "Create PLC Data Type" setting (needed for
+        /// e.g. EL3174/EL3214 analog channels to resolve as a named PLC type such as
+        /// MDP5001_300_7E2119CA — see tasks/todo.md Task 3). Confirmed by reading a
+        /// working reference project's saved .xti: the setting is the EtherCAT
+        /// element's CreateDeviceDataType/DeviceDataTypePerChannel attributes. Modifies
+        /// only those two attributes via ProduceXml/ConsumeXml (rather than
+        /// hand-authoring XML) so everything else about the node's current
+        /// configuration is preserved untouched.
+        /// </summary>
+        static void ApplyPlcDataTypeSetting(ITcSmTreeItem node, string createPlcType, IoSyncReport report)
+        {
+            bool perChannel = string.Equals(createPlcType, "Channel", StringComparison.OrdinalIgnoreCase);
+            if (!perChannel && !string.Equals(createPlcType, "Device", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"CreatePlcType must be \"Device\" or \"Channel\" (got \"{createPlcType}\") for '{node.Name}'.");
+
+            XDocument doc = XDocument.Parse(node.ProduceXml(false));
+            XElement etherCat = doc.Descendants("EtherCAT").FirstOrDefault();
+            if (etherCat == null)
+                return; // not an EtherCAT slave item (e.g. a non-terminal box) -- nothing to set
+
+            bool alreadySet = (bool?)etherCat.Attribute("CreateDeviceDataType") == true
+                && ((bool?)etherCat.Attribute("DeviceDataTypePerChannel") ?? false) == perChannel;
+            if (alreadySet)
+                return;
+
+            etherCat.SetAttributeValue("CreateDeviceDataType", "true");
+            etherCat.SetAttributeValue("DeviceDataTypePerChannel", perChannel ? "true" : "false");
+            node.ConsumeXml(doc.ToString());
+            report.StateChanged.Add($"{node.Name} -> Create PLC Data Type ({createPlcType})");
         }
 
         /// <summary>

@@ -62,7 +62,8 @@ namespace BeckhoffAutomationInterface.Sync
         static IoNodeSpec ParseNode(XElement nodeEl) => new IoNodeSpec(
             (string)nodeEl.Attribute("Name"),
             (string)nodeEl.Attribute("Product"),
-            ParseChildNodes(nodeEl));
+            ParseChildNodes(nodeEl),
+            (string)nodeEl.Attribute("CreatePlcType"));
 
         /// <summary>Parses the optional &lt;Links&gt; section: PLC-variable-to-IO-channel links.</summary>
         public static List<LinkSpec> ParseLinks(string manifestFilePath)

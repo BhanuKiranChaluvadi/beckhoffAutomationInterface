@@ -87,6 +87,24 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void CreatePlcType_IsParsedWhenPresent_AndNullWhenAbsent()
+        {
+            string path = WriteManifest(@"
+<IoTree>
+  <Device Name=""BH2"">
+    <Box Name=""EK1100_2.1"" Product=""EK1100"">
+      <Terminal Name=""EL3174_2.1"" Product=""EL3174"" CreatePlcType=""Channel"" />
+      <Terminal Name=""EL2008_2.1"" Product=""EL2008"" />
+    </Box>
+  </Device>
+</IoTree>");
+            IoNodeSpec coupler = IoManifestParser.Parse(path)[0].Children[0];
+
+            Assert.Equal("Channel", coupler.Children[0].CreatePlcType);
+            Assert.Null(coupler.Children[1].CreatePlcType);
+        }
+
+        [Fact]
         public void DisabledAttribute_DefaultsToFalseWhenAbsent()
         {
             string path = WriteManifest(@"<IoTree><Device Name=""D1"" /></IoTree>");

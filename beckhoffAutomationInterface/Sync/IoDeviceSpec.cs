@@ -36,11 +36,20 @@ namespace BeckhoffAutomationInterface.Sync
         public string Product { get; }
         public List<IoNodeSpec> Children { get; }
 
-        public IoNodeSpec(string name, string product, List<IoNodeSpec> children)
+        /// <summary>Mirrors the terminal's "Plc" tab "Create PLC Data Type" setting
+        /// (null = leave unchanged/off; "Device" or "Channel" = the matching
+        /// granularity radio button — see IoSyncEngine.ApplyPlcDataTypeSetting).
+        /// Needed for terminals like EL3174/EL3214 whose analog channels are only
+        /// resolvable as a named PLC type (e.g. MDP5001_300_7E2119CA) once this is
+        /// turned on; plain digital terminals (EL2008 etc.) typically leave it null.</summary>
+        public string CreatePlcType { get; }
+
+        public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null)
         {
             Name = name;
             Product = product;
             Children = children;
+            CreatePlcType = createPlcType;
         }
     }
 }
