@@ -334,10 +334,11 @@ namespace BeckhoffAutomationInterface
             foreach (string name in ioReport.Created) Console.WriteLine("    + created  {0}", name);
             foreach (string name in ioReport.Deleted) Console.WriteLine("    - deleted  {0}", name);
             foreach (string change in ioReport.StateChanged) Console.WriteLine("    ~ state    {0}", change);
+            foreach (string warning in ioReport.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
 
             project.Save();
-            Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s)).",
-                Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count);
+            Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s), {4} warning(s)).",
+                Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count, ioReport.Warnings.Count);
 
             // ---------------------------------------------------------------
             // Sync PLC-variable <-> IO-channel links declared in <Links> of

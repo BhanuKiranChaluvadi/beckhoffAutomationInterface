@@ -12,6 +12,11 @@ namespace BeckhoffAutomationInterface.Sync
         public List<string> Created { get; } = new List<string>();
         public List<string> Deleted { get; } = new List<string>();
         public List<string> StateChanged { get; } = new List<string>();
+
+        /// <summary>Attempted changes that were confirmed NOT to have taken effect
+        /// (e.g. a ConsumeXml call that didn't throw but also didn't persist) --
+        /// surfaced explicitly instead of being reported as a silent success.</summary>
+        public List<string> Warnings { get; } = new List<string>();
     }
 
     /// <summary>
@@ -115,7 +120,16 @@ namespace BeckhoffAutomationInterface.Sync
             etherCat.SetAttributeValue("CreateDeviceDataType", "true");
             etherCat.SetAttributeValue("DeviceDataTypePerChannel", perChannel ? "true" : "false");
             node.ConsumeXml(doc.ToString());
-            report.StateChanged.Add($"{node.Name} -> Create PLC Data Type ({createPlcType})");
+
+            // ConsumeXml not throwing does NOT mean the attribute actually stuck --
+            // confirmed 2026-07-14 against a real project that it can silently no-op.
+            // Re-read the node's own XML and verify before claiming success.
+            XElement verifyEtherCat = XDocument.Parse(node.ProduceXml(false)).Descendants("EtherCAT").FirstOrDefault();
+            bool applied = verifyEtherCat != null && (bool?)verifyEtherCat.Attribute("CreateDeviceDataType") == true;
+            if (applied)
+                report.StateChanged.Add($"{node.Name} -> Create PLC Data Type ({createPlcType})");
+            else
+                report.Warnings.Add($"{node.Name}: Create PLC Data Type ({createPlcType}) did not take effect (ConsumeXml silently no-op'd)");
         }
 
         /// <summary>
