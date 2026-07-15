@@ -35,14 +35,16 @@ Aliases: `--build-only` → Build only (deprecated), `--events-only` →
 `--check-events` (deprecated). Update `PrintUsage` with the new table.
 
 **Acceptance criteria:**
-- [ ] Each stage flag alone yields exactly that stage; combinations OR together
-- [ ] No stage flags → Stages == All
-- [ ] Aliases map as specified; old invocations keep working
-- [ ] `--init`/`--check-events` parsed
+- [x] Each stage flag alone yields exactly that stage; combinations OR together
+- [x] No stage flags → Stages == All
+- [x] Aliases map as specified; old invocations keep working
+- [x] `--init`/`--check-events` parsed
 
 **Verification:**
-- [ ] New `RunOptionsTests.cs` covers: each flag alone, a combination,
-      default=All, both aliases, --init; `dotnet test` green
+- [x] New `RunOptionsTests.cs` covers: each flag alone, a combination,
+      default=All, both aliases, --init; `dotnet test` green (73/73)
+
+**Status: DONE.**
 
 **Dependencies:** Task 0
 **Files:** `RunOptions.cs`, `beckhoffAutomationInterface.Tests/RunOptionsTests.cs`
@@ -60,14 +62,18 @@ EVERY mode. `TwinCatProjectOpener.Open`'s bootstrap branch only runs under
 `--init`.
 
 **Acceptance criteria:**
-- [ ] Missing solution without --init: exit 1, message names the checked path,
+- [x] Missing solution without --init: exit 1, message names the checked path,
       no VS process launched, nothing created on disk
-- [ ] Missing solution with --init: bootstraps exactly as today
-- [ ] Existing solution: unaffected in every mode
+- [x] Missing solution with --init: bootstraps exactly as today
+- [x] Existing solution: unaffected in every mode
 
 **Verification:**
-- [ ] Scratch run both ways; `$LASTEXITCODE` checked; empty dest confirmed
-      still empty after the refused run
+- [x] Scratch run both ways; `$LASTEXITCODE` checked; empty dest confirmed
+      still empty after the refused run (0 items, no devenv process)
+
+**Status: DONE.** Guard is defense-in-depth: `Program.Main` refuses before VS
+launches, and `TwinCatProjectOpener.Open` also throws if ever reached without
+`--init`.
 
 **Dependencies:** Task 1
 **Files:** `Program.cs`, `TwinCatProjectOpener.cs`
@@ -76,8 +82,8 @@ EVERY mode. `TwinCatProjectOpener.Open`'s bootstrap branch only runs under
 ---
 
 ## Checkpoint A
-- [ ] `dotnet test` green
-- [ ] Scratch full run (with --init on first run) behaves exactly as before
+- [x] `dotnet test` green
+- [x] Scratch full run (with --init on first run) behaves exactly as before
 
 ---
 
@@ -91,11 +97,16 @@ private methods with the state they need passed explicitly: `SyncCode`
 the current order. NO behavior change.
 
 **Acceptance criteria:**
-- [ ] Default full-run log output is line-for-line the same shape as before
-- [ ] All existing tests pass unmodified
+- [x] Default full-run log output is line-for-line the same shape as before
+- [x] All existing tests pass unmodified
 
 **Verification:**
-- [ ] `dotnet test` green; scratch full run: same stage messages, BUILD PASSED
+- [x] `dotnet test` green (73/73); scratch full run: same stage messages, BUILD PASSED
+
+**Status: DONE.** `Program.RunSync` extracted into `SyncCode`/`SyncLibraries`/
+`SyncIoTree`/`ApplyTsprojEdits`/`SyncLinks`/`RunBuild`, all taking a new
+`TwinCatSession` (owns the VS/project/sysManager handles and knows how to
+lazily open/close) instead of the old `ref VisualStudioSession` threading.
 
 **Dependencies:** Task 2
 **Files:** `Program.cs`
@@ -113,16 +124,25 @@ reopen is skipped when nothing needs it. `--check-events`: read-only check,
 exit 1 when any declared class is missing (0 otherwise), no VS.
 
 **Acceptance criteria:**
-- [ ] `--sync-events` alone: .tsproj edited, NO devenv spawned, second run
+- [x] `--sync-events` alone: .tsproj edited, NO devenv spawned, second run
       "already present" with file unchanged
-- [ ] `--sync-io` alone: tree + templates + links only; no POU/lib/build lines
-- [ ] `--sync-code` alone: POUs only; no lib/IO/build lines
-- [ ] `--sync-io --sync-events`: both stages, one invocation, one VS session
-- [ ] No stage flags: full run identical to today
-- [ ] `--check-events` exit codes: 1 missing / 0 present
+- [x] `--sync-io` alone: tree + templates + links only; no POU/lib/build lines
+- [x] `--sync-code` alone: POUs only; no lib/IO/build lines
+- [x] `--sync-io --sync-events`: both stages, one invocation, one VS session
+- [x] No stage flags: full run identical to today
+- [x] `--check-events` exit codes: 1 missing / 0 present
 
 **Verification:**
-- [ ] Scratch matrix runs above, checking logs + `$LASTEXITCODE` + process list
+- [x] Scratch matrix (8 runs) — all passed:
+      1) `--sync-events` alone: 0 devenv processes, `BeckhoffLibEvents` present
+      2) re-run: "already present", tsproj mtime unchanged
+      3) `--sync-code` alone: only Sync-complete lines
+      4) `--sync-io` alone: only IO-sync lines, `ScratchDev` created
+      5) `--sync-io --sync-events` combined: both stages, one session
+      6-7) `--build` with broken/fixed code: exit 1 → exit 0 (see Task 5)
+      8) default (no flags): all stages + BUILD PASSED, exit 0
+
+**Status: DONE.**
 
 **Dependencies:** Task 3
 **Files:** `Program.cs`
@@ -138,12 +158,15 @@ set `Environment.ExitCode = 1` on BUILD FAILED and on `BuildTimeoutException`;
 wrong path in CI fails loudly.
 
 **Acceptance criteria:**
-- [ ] Broken POU → `--build` exits 1, errors printed with mapped .st:line
-- [ ] Fixed → exits 0
+- [x] Broken POU → `--build` exits 1, errors printed with mapped .st:line
+- [x] Fixed → exits 0
 
 **Verification:**
-- [ ] Scratch: break, `--build`, `echo $LASTEXITCODE` → 1; fix via
-      `--sync-code`, `--build` → 0
+- [x] Scratch: broken FB_Broken.st referenced from MAIN → `--build` exit 1,
+      error mapped to `FB_Broken.st:5`; fixed + `--sync-code` + `--build` → exit 0
+
+**Status: DONE.** `Environment.ExitCode = 1` set on both BUILD FAILED and
+`BuildTimeoutException`; never bootstraps (Task 2's guard covers that).
 
 **Dependencies:** Task 3 (RunBuild extracted)
 **Files:** `Program.cs`
@@ -152,7 +175,7 @@ wrong path in CI fails loudly.
 ---
 
 ## Checkpoint B
-- [ ] Full scratch matrix green (modes, combination, default, exit codes)
+- [x] Full scratch matrix green (modes, combination, default, exit codes)
 
 ---
 
@@ -166,11 +189,15 @@ Then a light real-project smoke: `--check-events` (expect exit 0),
 exit 0). Commit.
 
 **Acceptance criteria:**
-- [ ] README documents every stage flag with its VS behavior + a CI example
-- [ ] Real-project smoke passes as listed
+- [x] README documents every stage flag with its VS behavior + a CI example
+- [x] Real-project smoke passes as listed
 
 **Verification:**
-- [ ] The three real-project runs; final `dotnet test` green; committed
+- [x] Real Shark project: `--check-events` → exit 0 (1 declared, 1 present);
+      `--sync-events` → "all declared classes already present", no VS launched;
+      `--build` → BUILD PASSED, exit 0. Final `dotnet test`: 73/73 green.
+
+**Status: DONE.**
 
 **Dependencies:** Tasks 4-5
 **Files:** `README.md`, `RunOptions.cs`
@@ -179,6 +206,8 @@ exit 0). Commit.
 ---
 
 ## Checkpoint: Complete
-- [ ] All modes verified on scratch; real project smoke green
-- [ ] `dotnet test` green
-- [ ] Committed
+- [x] All modes verified on scratch; real project smoke green
+- [x] `dotnet test` green (73/73)
+- [x] Committed
+
+## PLAN COMPLETE (2026-07-15) — all tasks and checkpoints closed.

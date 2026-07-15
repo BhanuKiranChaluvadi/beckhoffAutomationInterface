@@ -114,33 +114,35 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(0);
             }
 
-            // Event Classes (events.xml) are a .tsproj-level config item with no known
-            // Automation Interface creation path — automating creation is a confirmed dead
-            // end (see docs/ideas/st-plc-bidirectional-sync.md), so Event Classes must be
-            // created ONCE, manually, via the real XAE UI. This is a read-only "declared vs
-            // actual" check (reads the .tsproj directly, no VS session needed) that reports
-            // which declared classes are still missing, rather than attempting to write them.
+            // Read-only "declared vs actual" Event Class preflight (reads the .tsproj
+            // directly, no VS session needed). Informational on a normal run — the Events
+            // stage creates anything missing via TsprojEventClassEditor later. Under
+            // --check-events it's the whole run: report and exit, code 1 if anything is
+            // missing (usable as a fast CI/pipeline gate).
+            int missingEventClassCount = 0;
             if (File.Exists(options.TsprojFilePath))
             {
                 var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
                 if (desiredEventClasses.Count > 0)
                 {
                     EventClassCheckReport eventReport = EventClassChecker.Check(options.TsprojFilePath, desiredEventClasses);
+                    missingEventClassCount = eventReport.Missing.Count;
                     Console.WriteLine("{0}: Event class check: {1} declared, {2} present, {3} missing.",
                         Now(), desiredEventClasses.Count, eventReport.Present.Count, eventReport.Missing.Count);
                     foreach (string name in eventReport.Missing)
-                        Console.WriteLine("    ! MISSING '{0}' — create manually via SYSTEM \u25b8 Type System \u25b8 Event Classes \u25b8 New (see events.xml), then re-run.", name);
+                        Console.WriteLine("    ! MISSING '{0}' — will be created by the events stage (--sync-events or a full run).", name);
                 }
             }
-            if (options.EventsOnly)
+            if (options.CheckEvents)
             {
-                Console.WriteLine("{0}: --events-only: event class check complete, skipping Visual Studio.", Now());
-                Environment.Exit(0);
+                Console.WriteLine("{0}: --check-events: event class check complete, skipping Visual Studio.", Now());
+                Environment.Exit(missingEventClassCount > 0 ? 1 : 0);
             }
 
             // Fail fast (before opening Visual Studio) if --incremental has nothing to diff
             // against — no point paying the ~30-40s VS round-trip just to refuse.
-            if (options.Incremental && !options.BuildOnly && SyncState.Read(options.SyncStatePath) == null)
+            // Only relevant when the Code stage will actually run.
+            if (options.Incremental && options.Stages.HasFlag(SyncStages.Code) && SyncState.Read(options.SyncStatePath) == null)
             {
                 Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
                 Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
@@ -156,74 +158,127 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
-            // Create the Visual Studio DTE instance. Not a `using` statement: RunSync
-            // may close and reopen this session mid-run (see the Create PLC Data Type
-            // step below), which needs to reassign `vs` through a `ref` parameter --
-            // disallowed for `using`-declared variables (CS1657) -- so disposal is
-            // handled explicitly here instead, covering whichever session is live.
-            VisualStudioSession vs = VisualStudioSession.Start();
-            try
+            // Creating a NEW project is explicit (--init), never a silent fallback: a
+            // mistyped --dest/--name used to quietly bootstrap a fresh empty project
+            // (and once planted one inside the real project's own folder tree — see
+            // tasks/archive/2026-07-14-post-review-hardening/). In CI, a wrong path now
+            // fails loudly instead of green-building an empty project.
+            if (!File.Exists(options.SolutionFilePath) && !options.Init)
             {
-                RunSync(ref vs, options, ignore);
+                Console.Error.WriteLine("ERROR: solution not found at:");
+                Console.Error.WriteLine("  {0}", options.SolutionFilePath);
+                Console.Error.WriteLine("Check --source/--dest/--name point at the intended project, or pass --init");
+                Console.Error.WriteLine("to create a brand-new solution/TwinCAT/PLC project at that path.");
+                Environment.Exit(1);
             }
-            finally
+
+            // The Visual Studio session is owned by TwinCatSession: stages open it
+            // lazily and the pipeline legitimately closes/reopens it mid-run for the
+            // direct .tsproj edits — `using` here just guarantees final disposal.
+            using (var session = new TwinCatSession(options))
             {
-                vs.Dispose();
+                RunSync(session, options, ignore);
             }
         }
 
-        static void RunSync(ref VisualStudioSession vs, RunOptions options, IgnoreRules ignore)
+        /// <summary>
+        /// Executes the selected stages (see SyncStages; all of them when no stage flag
+        /// was given) in a fixed three-phase order regardless of flag order:
+        ///   Phase A (VS open):    code -> libraries -> io-tree
+        ///   Phase B (VS CLOSED):  direct .tsproj edits (io's Create-PLC-Data-Type
+        ///                         templates, events' Event Classes)
+        ///   Phase C (VS open):    io's variable links, build
+        /// Visual Studio is opened lazily by whichever stage first needs it — a run
+        /// selecting only the Events stage is a pure file edit and never launches VS.
+        /// </summary>
+        static void RunSync(TwinCatSession session, RunOptions options, IgnoreRules ignore)
         {
-            EnvDTE80.DTE2 dte = vs.Dte;
-            (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(dte, options);
-
-            project.Save();
-            dte.Solution.SaveAs(options.SolutionFilePath);
-            Console.WriteLine("{0}: Solution saved.", Now());
-
             if (options.ExportObjectName != null)
             {
-                // Uses Environment.ExitCode (not Environment.Exit) on error paths so this
-                // method can still `return` normally and let the enclosing `using
-                // (VisualStudioSession ...)` block in Main dispose/close VS properly.
-                List<ITcSmTreeItem> matches = PlcObjectExporter.FindByName(sysManager.LookupTreeItem(options.ProjectRootPath), options.ExportObjectName);
-                if (matches.Count == 0)
-                {
-                    Console.Error.WriteLine("ERROR: no PLC object named '{0}' found.", options.ExportObjectName);
-                    Environment.ExitCode = 1;
-                    return;
-                }
-                if (matches.Count > 1)
-                {
-                    Console.Error.WriteLine("ERROR: {0} object(s) named '{1}' found — ambiguous.", matches.Count, options.ExportObjectName);
-                    Environment.ExitCode = 1;
-                    return;
-                }
-
-                ITcSmTreeItem item = matches[0];
-                if (!PlcObjectExporter.IsSupported(item))
-                {
-                    Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported.", item.Name, item.ItemSubTypeName);
-                    Environment.ExitCode = 1;
-                    return;
-                }
-
-                string text = PlcObjectExporter.Export(item);
-                string relativeFolder = PlcObjectExporter.GetRelativeFolder(item, options.ProjectRootPath);
-                string folderPath = Path.Combine(options.SourceFolder, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
-                Directory.CreateDirectory(folderPath);
-                string filePath = Path.Combine(folderPath, item.Name + ".st");
-                File.WriteAllText(filePath, text);
-
-                Console.WriteLine("{0}: Exported '{1}' -> '{2}'.", Now(), item.Name, filePath);
+                session.EnsureOpen();
+                ExportObject(session, options);
                 return;
             }
 
-            if (!options.BuildOnly)
+            SyncStages stages = options.Stages;
+
+            // Phase A — stages that work through the open project's Automation Interface.
+            if (stages.HasFlag(SyncStages.Code))
             {
-            // Sync .st files -> POUs (create/update/delete). --incremental narrows this to
-            // only the files git says changed/were deleted since the last recorded sync,
-            // instead of re-parsing/re-syncing the whole source folder every time.
+                session.EnsureOpen();
+                SyncCode(session, options, ignore);
+            }
+            if (stages.HasFlag(SyncStages.Libraries))
+            {
+                session.EnsureOpen();
+                SyncLibraries(session, options);
+            }
+            List<IoDeviceSpec> desiredIoDevices = null;
+            if (stages.HasFlag(SyncStages.Io))
+            {
+                session.EnsureOpen();
+                desiredIoDevices = SyncIoTree(session, options);
+            }
+
+            // Phase B — direct .tsproj file edits, which need VS closed (no DTE holding
+            // the file). Contributes nothing (and touches nothing) unless the Io stage
+            // declared Create-PLC-Data-Type targets and/or the Events stage found
+            // missing Event Classes.
+            ApplyTsprojEdits(session, options, desiredIoDevices, includeEvents: stages.HasFlag(SyncStages.Events));
+
+            // Phase C — back through the Automation Interface, reopening VS lazily.
+            if (stages.HasFlag(SyncStages.Io))
+                SyncLinks(session, options);
+            if (stages.HasFlag(SyncStages.Build))
+            {
+                session.EnsureOpen();
+                RunBuild(session, options, ignore);
+            }
+        }
+
+        /// <summary>--export: write the named live PLC object's text back to its mirrored
+        /// .st file. Uses Environment.ExitCode (not Environment.Exit) on error paths so
+        /// Main's `using` still disposes/closes Visual Studio properly.</summary>
+        static void ExportObject(TwinCatSession session, RunOptions options)
+        {
+            List<ITcSmTreeItem> matches = PlcObjectExporter.FindByName(session.SysManager.LookupTreeItem(options.ProjectRootPath), options.ExportObjectName);
+            if (matches.Count == 0)
+            {
+                Console.Error.WriteLine("ERROR: no PLC object named '{0}' found.", options.ExportObjectName);
+                Environment.ExitCode = 1;
+                return;
+            }
+            if (matches.Count > 1)
+            {
+                Console.Error.WriteLine("ERROR: {0} object(s) named '{1}' found — ambiguous.", matches.Count, options.ExportObjectName);
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            ITcSmTreeItem item = matches[0];
+            if (!PlcObjectExporter.IsSupported(item))
+            {
+                Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported.", item.Name, item.ItemSubTypeName);
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            string text = PlcObjectExporter.Export(item);
+            string relativeFolder = PlcObjectExporter.GetRelativeFolder(item, options.ProjectRootPath);
+            string folderPath = Path.Combine(options.SourceFolder, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(folderPath);
+            string filePath = Path.Combine(folderPath, item.Name + ".st");
+            File.WriteAllText(filePath, text);
+
+            Console.WriteLine("{0}: Exported '{1}' -> '{2}'.", Now(), item.Name, filePath);
+        }
+
+        /// <summary>Code stage: .st files -> PLC POUs (create/update/delete), plus the
+        /// warn-only drift detection, the naming lint, and the sync/known-names
+        /// baselines. --incremental narrows the parse to files git says changed/were
+        /// deleted since the recorded baseline.</summary>
+        static void SyncCode(TwinCatSession session, RunOptions options, IgnoreRules ignore)
+        {
             List<StPouSource> desiredPous;
             if (options.Incremental)
             {
@@ -252,7 +307,7 @@ namespace BeckhoffAutomationInterface
                 {
                     if (options.ConfirmDelete)
                     {
-                        List<DeleteResult> deleteResults = IncrementalDeleter.Delete(sysManager, options.ProjectRootPath, diff.Deleted);
+                        List<DeleteResult> deleteResults = IncrementalDeleter.Delete(session.SysManager, options.ProjectRootPath, diff.Deleted);
                         Console.WriteLine("{0}: --confirm-delete: {1} of {2} deleted PLC object(s) removed.",
                             Now(), deleteResults.Count(r => r.Deleted), deleteResults.Count);
                         foreach (DeleteResult r in deleteResults)
@@ -276,11 +331,11 @@ namespace BeckhoffAutomationInterface
                 desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
             }
 
-            // Warn-only drift detection (tasks/todo.md Tasks 7-8 decision: warn always,
-            // prune opt-in): a previously-synced name missing from the current parse means
-            // its .st source was renamed/deleted, but the PLC object still compiles
-            // silently. Report it — never delete (deletion stays behind --incremental
-            // --confirm-delete for whole top-level objects only).
+            // Warn-only drift detection (see tasks/archive/2026-07-14-post-review-hardening/,
+            // Tasks 7-8 decision: warn always, prune opt-in): a previously-synced name
+            // missing from the current parse means its .st source was renamed/deleted, but
+            // the PLC object still compiles silently. Report it — never delete (deletion
+            // stays behind --incremental --confirm-delete for whole top-level objects only).
             List<string> currentNames = KnownNamesTracker.CollectNames(desiredPous);
             List<string> previousNames = KnownNamesTracker.Read(options.KnownNamesPath);
             var staleNames = new List<string>();
@@ -306,14 +361,14 @@ namespace BeckhoffAutomationInterface
             }
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            var syncEngine = new PouSyncEngine(sysManager, options.ProjectRootPath);
+            var syncEngine = new PouSyncEngine(session.SysManager, options.ProjectRootPath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);
 
             foreach (string name in syncReport.Created) Console.WriteLine("    + created  {0}", name);
             foreach (string name in syncReport.Updated) Console.WriteLine("    ~ updated  {0}", name);
             foreach (string name in syncReport.Deleted) Console.WriteLine("    - deleted  {0}", name);
 
-            project.Save();
+            session.Project.Save();
             Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted).",
                 Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count);
 
@@ -332,13 +387,17 @@ namespace BeckhoffAutomationInterface
             KnownNamesTracker.Write(options.KnownNamesPath, options.Incremental
                 ? KnownNamesTracker.Merge(previousNames ?? new List<string>(), currentNames, staleNames)
                 : currentNames);
+        }
 
-            // Sync library references from libraries.xml (config data, not .st source)
+        /// <summary>Libraries stage: libraries.xml -> PLC library references (config
+        /// data, not .st source).</summary>
+        static void SyncLibraries(TwinCatSession session, RunOptions options)
+        {
             Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), options.LibraryManifestPath);
             var desiredLibraries = LibraryManifestParser.Parse(options.LibraryManifestPath);
 
             Console.WriteLine("{0}: Syncing {1} library reference(s)...", Now(), desiredLibraries.Count);
-            ITcSmTreeItem referencesItem = sysManager.LookupTreeItem(options.ReferencesTreePath);
+            ITcSmTreeItem referencesItem = session.SysManager.LookupTreeItem(options.ReferencesTreePath);
             ITcPlcLibraryManager libManager = (ITcPlcLibraryManager)referencesItem;
             LibrarySyncReport libraryReport = null;
             RetryOnBusy(() => libraryReport = LibrarySyncEngine.Sync(libManager, desiredLibraries), "syncing library references");
@@ -346,142 +405,148 @@ namespace BeckhoffAutomationInterface
             foreach (string name in libraryReport.Added) Console.WriteLine("    + added    {0}", name);
             foreach (string name in libraryReport.Removed) Console.WriteLine("    - removed  {0}", name);
 
-            project.Save();
+            session.Project.Save();
             Console.WriteLine("{0}: Library sync complete ({1} added, {2} removed).",
                 Now(), libraryReport.Added.Count, libraryReport.Removed.Count);
+        }
 
-            // ---------------------------------------------------------------
-            // Sync the I/O hardware tree (Device -> Box -> Terminal) from
-            // io-devices.xml (config data, not .st source — same rationale as
-            // libraries.xml). Idempotent: existing items are detected via
-            // LookupTreeItem and left untouched; only missing ones are created,
-            // and only orphaned ones (removed from the manifest) are deleted.
-            // The master is then linked to the PLC %I*/%Q* variables (see the
-            // <Links> section handling below) so the "needs sync master"
-            // validation is satisfied and the build passes with the master
-            // enabled — no popup, fully unattended.
-            // ---------------------------------------------------------------
-            string ioManifestPath = options.IoManifestPath;
-            Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), ioManifestPath);
-            var desiredIoDevices = IoManifestParser.Parse(ioManifestPath);
+        /// <summary>Io stage, part 1: reconcile the I/O hardware tree (Device -> Box ->
+        /// Terminal) from io-devices.xml. Idempotent; orphans are only WARNED about
+        /// unless --confirm-delete-io (see IoSyncEngine). Returns the parsed manifest so
+        /// the tsproj-edit step can collect Create-PLC-Data-Type targets from it.</summary>
+        static List<IoDeviceSpec> SyncIoTree(TwinCatSession session, RunOptions options)
+        {
+            Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), options.IoManifestPath);
+            var desiredIoDevices = IoManifestParser.Parse(options.IoManifestPath);
 
             Console.WriteLine("{0}: Syncing {1} IO device(s)...", Now(), desiredIoDevices.Count);
             IoSyncReport ioReport = null;
-            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices, options.ConfirmDeleteIo), "syncing IO tree");
+            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(session.SysManager, desiredIoDevices, options.ConfirmDeleteIo), "syncing IO tree");
 
             foreach (string name in ioReport.Created) Console.WriteLine("    + created  {0}", name);
             foreach (string name in ioReport.Deleted) Console.WriteLine("    - deleted  {0}", name);
             foreach (string change in ioReport.StateChanged) Console.WriteLine("    ~ state    {0}", change);
             foreach (string warning in ioReport.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
 
-            project.Save();
+            session.Project.Save();
             Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s), {4} warning(s)).",
                 Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count, ioReport.Warnings.Count);
+            return desiredIoDevices;
+        }
 
-            // ---------------------------------------------------------------
-            // Turn on "Create PLC Data Type" for terminals that declare it (e.g.
-            // EL3174/EL3214 analog channels, so they resolve as a named PLC type such
-            // as MDP5001_300_7E2119CA), and add any missing Event Classes -- see
-            // tasks/todo.md Task 3. Confirmed that ITcSmTreeItem.ProduceXml/ConsumeXml
-            // use a different XML schema entirely than the .tsproj project file and
-            // cannot express either setting, so TsprojPlcDataTypeEditor/
-            // TsprojEventClassEditor edit the same file Visual Studio itself saves,
-            // directly on disk. That MUST happen while the project is closed (no DTE
-            // holding the file), hence closing and reopening the VS session around it.
-            // ---------------------------------------------------------------
-            List<PlcDataTypeTarget> plcDataTypeTargets = PlcDataTypeTarget.CollectFrom(desiredIoDevices);
-            var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
-            List<string> missingEventClasses = desiredEventClasses.Count > 0
-                ? EventClassChecker.Check(options.TsprojFilePath, desiredEventClasses).Missing
-                : new List<string>();
+        /// <summary>Direct .tsproj file edits — the two settings with no Automation
+        /// Interface path (confirmed; see TsprojPlcDataTypeEditor/TsprojEventClassEditor):
+        /// "Create PLC Data Type" for terminals declaring CreatePlcType (Io stage), and
+        /// missing Event Classes from events.xml (Events stage, gated on includeEvents).
+        /// Both MUST happen while the project is NOT open in Visual Studio, hence
+        /// closing the session around them; later stages reopen it lazily when they
+        /// need it. desiredIoDevices is null when the Io stage didn't run.</summary>
+        static void ApplyTsprojEdits(TwinCatSession session, RunOptions options, List<IoDeviceSpec> desiredIoDevices, bool includeEvents)
+        {
+            List<PlcDataTypeTarget> plcDataTypeTargets = desiredIoDevices != null
+                ? PlcDataTypeTarget.CollectFrom(desiredIoDevices)
+                : new List<PlcDataTypeTarget>();
 
-            if (plcDataTypeTargets.Count > 0 || missingEventClasses.Count > 0)
+            List<string> missingEventClasses = new List<string>();
+            if (includeEvents)
+            {
+                var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
+                if (desiredEventClasses.Count > 0)
+                    missingEventClasses = EventClassChecker.Check(options.TsprojFilePath, desiredEventClasses).Missing;
+                if (missingEventClasses.Count == 0)
+                    Console.WriteLine("{0}: Event classes: all declared classes already present.", Now());
+            }
+
+            if (plcDataTypeTargets.Count == 0 && missingEventClasses.Count == 0)
+                return;
+
+            if (session.IsOpen)
             {
                 Console.WriteLine("{0}: Closing Visual Studio to edit the project file directly ({1} terminal(s), {2} event class(es))...",
                     Now(), plcDataTypeTargets.Count, missingEventClasses.Count);
-                vs.Dispose();
-
-                if (plcDataTypeTargets.Count > 0)
-                {
-                    PlcDataTypeEditResult editResult = TsprojPlcDataTypeEditor.Apply(options.TsprojFilePath, plcDataTypeTargets, options.PlcDataTypesFolder);
-                    foreach (string name in editResult.Applied) Console.WriteLine("    ~ set       {0}", name);
-                    foreach (string warning in editResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
-                    Console.WriteLine("{0}: Create PLC Data Type complete ({1} applied, {2} warning(s)).",
-                        Now(), editResult.Applied.Count, editResult.Warnings.Count);
-                }
-
-                if (missingEventClasses.Count > 0)
-                {
-                    EventClassEditResult eventEditResult = TsprojEventClassEditor.Apply(options.TsprojFilePath, missingEventClasses, options.EventClassesFolder);
-                    foreach (string name in eventEditResult.Applied) Console.WriteLine("    ~ added     {0}", name);
-                    foreach (string warning in eventEditResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
-                    Console.WriteLine("{0}: Event Class sync complete ({1} applied, {2} warning(s)).",
-                        Now(), eventEditResult.Applied.Count, eventEditResult.Warnings.Count);
-                }
-
-                Console.WriteLine("{0}: Reopening Visual Studio...", Now());
-                vs = VisualStudioSession.Start();
-                dte = vs.Dte;
-                (project, sysManager) = TwinCatProjectOpener.Open(dte, options);
+                session.EnsureClosed();
             }
 
-            // ---------------------------------------------------------------
-            // Sync PLC-variable <-> IO-channel links declared in <Links> of
-            // io-devices.xml. Path format confirmed from Beckhoff's official
-            // EtherCATLinking.cs sample. If any declared link can't be resolved
-            // (the PLC instance image and EtherCAT channels only materialize as
-            // tree items after Activate Configuration on a real/simulated target
-            // — unavailable in a plain dev environment), we fall back to
-            // disabling the master(s) so the build stays green and unattended.
-            // ---------------------------------------------------------------
-            var desiredLinks = IoManifestParser.ParseLinks(ioManifestPath);
-            if (desiredLinks.Count > 0)
+            if (plcDataTypeTargets.Count > 0)
             {
-                Console.WriteLine("{0}: Syncing {1} variable link(s)...", Now(), desiredLinks.Count);
-                VariableLinkReport linkReport = null;
-                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(sysManager, options.ProjectName, desiredLinks), "linking variables");
-
-                foreach (string s in linkReport.Linked) Console.WriteLine("    + linked   {0}", s);
-                foreach (string s in linkReport.Failed) Console.WriteLine("    x unlinked {0}", s);
-
-                if (!linkReport.AllLinked)
-                {
-                    Console.WriteLine("{0}: Some links unresolved (the PLC instance image / EtherCAT channels", Now());
-                    Console.WriteLine("        require Activate Configuration against a real or simulated target).");
-                    List<string> disabled = IoSyncEngine.DisableAllMasters(sysManager);
-                    foreach (string name in disabled)
-                        Console.WriteLine("        ~ disabled master '{0}' to keep the build green.", name);
-                }
-                project.Save();
-                Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
-                    Now(), linkReport.Linked.Count, linkReport.Failed.Count);
+                PlcDataTypeEditResult editResult = TsprojPlcDataTypeEditor.Apply(options.TsprojFilePath, plcDataTypeTargets, options.PlcDataTypesFolder);
+                foreach (string name in editResult.Applied) Console.WriteLine("    ~ set       {0}", name);
+                foreach (string warning in editResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
+                Console.WriteLine("{0}: Create PLC Data Type complete ({1} applied, {2} warning(s)).",
+                    Now(), editResult.Applied.Count, editResult.Warnings.Count);
             }
-            } // end if (!options.BuildOnly)
 
-            // Build and report
+            if (missingEventClasses.Count > 0)
+            {
+                EventClassEditResult eventEditResult = TsprojEventClassEditor.Apply(options.TsprojFilePath, missingEventClasses, options.EventClassesFolder);
+                foreach (string name in eventEditResult.Applied) Console.WriteLine("    ~ added     {0}", name);
+                foreach (string warning in eventEditResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
+                Console.WriteLine("{0}: Event Class sync complete ({1} applied, {2} warning(s)).",
+                    Now(), eventEditResult.Applied.Count, eventEditResult.Warnings.Count);
+            }
+            // No eager reopen: whichever later stage needs Visual Studio (links, build)
+            // calls session.EnsureOpen() itself, and an events-only run just ends here.
+        }
+
+        /// <summary>Io stage, part 2: PLC-variable to IO-channel links declared in the
+        /// Links section of io-devices.xml. If any declared link can't be resolved (the
+        /// PLC instance image / EtherCAT channels only materialize after Activate
+        /// Configuration on a real or simulated target), all masters are disabled as a
+        /// fallback so the build stays green and unattended.</summary>
+        static void SyncLinks(TwinCatSession session, RunOptions options)
+        {
+            var desiredLinks = IoManifestParser.ParseLinks(options.IoManifestPath);
+            if (desiredLinks.Count == 0)
+                return;
+
+            session.EnsureOpen(); // lazily reopens after the .tsproj edits closed VS
+            Console.WriteLine("{0}: Syncing {1} variable link(s)...", Now(), desiredLinks.Count);
+            VariableLinkReport linkReport = null;
+            RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(session.SysManager, options.ProjectName, desiredLinks), "linking variables");
+
+            foreach (string s in linkReport.Linked) Console.WriteLine("    + linked   {0}", s);
+            foreach (string s in linkReport.Failed) Console.WriteLine("    x unlinked {0}", s);
+
+            if (!linkReport.AllLinked)
+            {
+                Console.WriteLine("{0}: Some links unresolved (the PLC instance image / EtherCAT channels", Now());
+                Console.WriteLine("        require Activate Configuration against a real or simulated target).");
+                List<string> disabled = IoSyncEngine.DisableAllMasters(session.SysManager);
+                foreach (string name in disabled)
+                    Console.WriteLine("        ~ disabled master '{0}' to keep the build green.", name);
+            }
+            session.Project.Save();
+            Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
+                Now(), linkReport.Linked.Count, linkReport.Failed.Count);
+        }
+
+        /// <summary>Build stage: compile and report, with error locations translated back
+        /// to the original .st path/line (see Sync/ErrorLocationResolver.cs). Unmapped
+        /// locations print raw, clearly labeled — never silently dropped.</summary>
+        static void RunBuild(TwinCatSession session, RunOptions options, IgnoreRules ignore)
+        {
             Console.WriteLine("{0}: Building solution...", Now());
             BuildReport buildReport = null;
             try
             {
-                RetryOnBusy(() => buildReport = BuildRunner.Build(dte), "building solution");
+                RetryOnBusy(() => buildReport = BuildRunner.Build(session.Dte), "building solution");
             }
             catch (BuildTimeoutException ex)
             {
-                Console.WriteLine("{0}: BUILD TIMED OUT \u2014 {1}", Now(), ex.Message);
-                return; // finally in Main will force-close VS (dialog is still up)
+                Console.WriteLine("{0}: BUILD TIMED OUT — {1}", Now(), ex.Message);
+                Environment.ExitCode = 1; // CI contract: anything but BUILD PASSED is non-zero
+                return; // Main's using will force-close VS (dialog is still up)
             }
 
             if (buildReport.Success)
             {
-                Console.WriteLine("{0}: BUILD PASSED \u2014 project compiled cleanly with no errors.", Now());
+                Console.WriteLine("{0}: BUILD PASSED — project compiled cleanly with no errors.", Now());
             }
             else
             {
-                // Translate TwinCAT's exported-file locations (FB_X.TcPOU@Method (Impl):2)
-                // back to the original .st path/line (see Sync/ErrorLocationResolver.cs).
-                // Unmapped locations print raw, clearly labeled \u2014 never silently dropped.
+                Environment.ExitCode = 1; // CI contract: build failure = exit code 1
                 Dictionary<string, StPouSource> provenance = TryBuildProvenanceIndex(options, ignore);
-                Console.WriteLine("{0}: BUILD FAILED \u2014 {1} error(s):", Now(), buildReport.Errors.Count);
+                Console.WriteLine("{0}: BUILD FAILED — {1} error(s):", Now(), buildReport.Errors.Count);
                 foreach (BuildError error in buildReport.Errors)
                     Console.WriteLine("    [ERROR] {0} {1}", error.Description, FormatErrorLocation(error, provenance));
 

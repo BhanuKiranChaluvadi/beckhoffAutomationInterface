@@ -72,9 +72,14 @@ current directory) if omitted; the project/solution name defaults to
 ```powershell
 cd beckhoffAutomationInterface\bin\Debug\net48
 
-# Full run: sync .st files, libraries, IO devices/links, then build and report.
-# Takes several minutes for a large source tree (Visual Studio has to load,
-# the whole PLC tree gets reconciled, then the project is compiled).
+# First-ever run for a project: --init explicitly allows creating the
+# solution/TwinCAT/PLC project. Without it, a missing solution is a hard
+# error (exit 1) in EVERY mode — so a mistyped path fails loudly instead of
+# silently building a fresh empty project.
+.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+
+# Full run: sync .st files, libraries, IO devices/links, events, then build
+# and report. Takes several minutes for a large source tree.
 .\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
 
 # Bare invocation or --help prints usage and exits.
@@ -82,20 +87,57 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 .\beckhoffAutomationInterface.exe --help
 ```
 
-### Flags
+### Stage flags (composable one-shot modes)
+
+The pipeline is made of five stages. Passing any stage flag(s) runs **exactly
+those stages** — in a fixed order, regardless of flag order — then exits.
+Passing **none** of them runs everything (the full sync+build above). This is
+how one-time per-project setup (device tree, Create PLC Data Type, Event
+Classes) runs in isolation without touching code or compiling.
+
+| Stage flag | What it does | Visual Studio? |
+|---|---|---|
+| `--sync-code` | `.st` files → PLC POUs (parse, lint, drift warnings, sync, save). No build. | opens VS |
+| `--sync-libs` | `libraries.xml` → PLC library references. | opens VS |
+| `--sync-io` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
+| `--sync-events` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
+| `--build` (alias `--build-only`, deprecated) | Open, compile, report errors mapped back to `.st file:line`. **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** | opens VS |
+
+Stage execution order for any subset: code → libs → io-tree → `.tsproj` edits
+(io templates + events) → io links → build. Visual Studio is opened lazily by
+the first stage that needs it and closed for the `.tsproj` edits.
+
+```powershell
+# One-time setup, in isolation (no code sync, no build):
+.\beckhoffAutomationInterface.exe --source ... --dest ... --sync-io --sync-events
+
+# Only push ST code changes into the project, don't compile:
+.\beckhoffAutomationInterface.exe --source ... --dest ... --sync-code
+
+# CI pipeline: compile only, fail the job on errors. Never bootstraps —
+# a wrong path exits 1 instead of green-building an empty project.
+.\beckhoffAutomationInterface.exe --source ... --dest ... --build
+if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
+```
+
+### Other flags
 
 | Flag | Default | Purpose |
 |---|---|---|
 | `--source <path>` (alias `--src`) | `.` | Folder containing the `.st` files |
-| `--dest <path>` (alias `--dst`) | `.` | Folder under which `<name>/<name>.sln` is created/opened |
+| `--dest <path>` (alias `--dst`) | `.` | Folder under which `<name>/<name>.sln` lives |
 | `--name <name>` | `--source`'s folder name | Project/solution name |
+| `--init` | off | Allow creating the solution/TwinCAT/PLC project when missing. Without it, a missing solution is a hard error (exit 1) in every mode. |
+| `--check-events` (alias `--events-only`, deprecated) | off | Read-only check of `events.xml` against the `.tsproj` (declared vs actual), then exit — code 1 if any declared class is missing, 0 otherwise. No Visual Studio session. Usable as a fast pipeline gate. |
 | `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. |
-| `--build-only` | off | Skip the `.st`/library/IO sync steps; just reopen the existing project, build, and report. Use for fast iteration on compile errors when the `.st` source hasn't changed. |
-| `--events-only` | off | Check `events.xml` against the `.tsproj` (declared vs actual) and stop — no Visual Studio session needed (see Known limitations) |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 | `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
+| `--confirm-delete-io` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
 | `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (all supported kinds — see below). |
 | `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
+
+The `githooks/` incremental worker is unaffected by `--init`: it always
+targets an already-bootstrapped project (the reopen path).
 
 ### Ignoring source files
 
@@ -239,22 +281,25 @@ possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
 ### Typical workflow
 
 ```powershell
+# 0. First time only: bootstrap the TwinCAT solution + one-time project setup
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --init
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --sync-io --sync-events
+
 # 1. Fast syntax check after editing .st files (no Visual Studio, ~instant)
 .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --parse-only
 
-# 2. Full sync + build (first run bootstraps a new TwinCAT solution;
-#    later runs reopen and reconcile the existing one)
+# 2. Full sync + build (reopens and reconciles the existing project)
 .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
 # 3. Fix compile errors reported, then iterate quickly without re-syncing
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --build-only
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --build
 ```
 
 > **Safety note:** `--dest` + the project name determine exactly which
-> `.sln`/`.tsproj` get created or overwritten. If nothing exists yet at that
-> location, the tool bootstraps a brand-new project there — **always point
-> `--dest` at a location you intend to (re)create**, never assume it's a
-> no-op to point it somewhere with existing unrelated content.
+> `.sln`/`.tsproj` are targeted. Creating a NEW project always requires
+> `--init` — without it, a missing solution is a hard error, so a mistyped
+> path can never silently bootstrap (or bury a duplicate project inside)
+> the wrong location.
 
 ## Manifests (config data, not `.st` source)
 
@@ -262,22 +307,30 @@ Alongside the `.st` files, a project folder can contain:
 
 - **`libraries.xml`** — PLC library references (`<Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />`)
 - **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
-- **`events.xml`** — Event Classes for `Tc3_EventLogger` (see Known limitations — checked, not auto-created)
+- **`events.xml`** — Event Classes for `Tc3_EventLogger`, created from matching
+  `event-classes/<Name>.xml` templates via a direct `.tsproj` edit (the
+  Automation Interface has no path for this — see `Sync/TsprojEventClassEditor.cs`)
 
 All three are synced idempotently: existing entries are left alone, missing
-ones are added, removed-from-manifest ones are cleaned up (library/IO only).
+ones are added, removed-from-manifest ones are cleaned up (library/IO only —
+and IO cleanup requires the explicit `--confirm-delete-io` flag, otherwise
+undeclared items are only warned about).
 
 ## Known limitations
 
-- **Event Classes are not auto-creatable.** Both the Automation Interface
-  (`CreateChild`/`ConsumeXml`) and direct `.tsproj` XML editing were tried
-  and don't work — Visual Studio silently drops any hand-authored
-  `<DataType>` block on its own next save, regardless of schema. Create any
-  needed Event Class once by hand via the TwinCAT UI (`SYSTEM ▸ Type System
-  ▸ Event Classes ▸ New`). The tool DOES check `events.xml` against the live
-  project (`Sync/EventClassChecker.cs`) and reports which declared classes
-  are still missing, so you always know what needs manual creation — it
-  just can't create them for you.
+- **Event Classes have no Automation Interface path** (`CreateChild`/
+  `ConsumeXml` can't express them), so the tool creates them by editing the
+  `.tsproj` directly while Visual Studio is closed
+  (`Sync/TsprojEventClassEditor.cs`), using the exact `<DataType>` XML from a
+  matching `event-classes/<Name>.xml` template with its REAL GUID. Verified
+  surviving VS reload + build on the live project (2026-07-14). The read-only
+  `--check-events` still exists as a fast preflight/pipeline gate.
+- **`MDP5001_*` PLC data type names are config-hash suffixes** TwinCAT
+  computes from a terminal's PDO/revision configuration — they are NOT
+  portable across machines whose ESI catalogs instantiate different terminal
+  revisions. If `.st` aliases report `Unknown type` for one, run `--build`
+  once and read the actual generated `MDP5001_*` names out of the saved
+  `.tsproj`, then update the aliases and `plc-data-types/*.xml` template.
 - **IO variable linking** requires the PLC instance's I/O image to exist,
   which normally only materializes after *Activate Configuration* against a
   real or simulated target. If a declared link can't be resolved, the tool

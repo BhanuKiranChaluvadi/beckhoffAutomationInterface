@@ -19,6 +19,14 @@ namespace BeckhoffAutomationInterface
         {
             if (File.Exists(options.SolutionFilePath))
                 return ReopenExisting(dte, options);
+
+            // Program.Main refuses a missing solution without --init before VS even
+            // launches; this is defense-in-depth so no other caller can ever silently
+            // fall into the bootstrap-a-new-project path (see RunOptions.Init).
+            if (!options.Init)
+                throw new InvalidOperationException(
+                    $"Solution '{options.SolutionFilePath}' does not exist and --init was not given.");
+
             return BootstrapNew(dte, options);
         }
 

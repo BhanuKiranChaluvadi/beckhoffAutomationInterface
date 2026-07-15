@@ -60,27 +60,29 @@ build. VS launches lazily — `--sync-events` alone never opens it.
 
 ### Phase 1: Foundation
 - [x] Task 0: Archive completed plan, commit current tree
-- [ ] Task 1: SyncStages flags in RunOptions + RunOptionsTests
-- [ ] Task 2: --init guard against silent bootstrap
+- [x] Task 1: SyncStages flags in RunOptions + RunOptionsTests
+- [x] Task 2: --init guard against silent bootstrap
 
 ### Checkpoint A
-- [ ] All tests green; scratch full run behaves exactly as before (bootstrap via --init)
+- [x] All tests green; scratch full run behaves exactly as before (bootstrap via --init)
 
 ### Phase 2: Stage execution
-- [ ] Task 3: Extract stage methods from RunSync (pure refactor, no behavior change)
-- [ ] Task 4: Wire stage selection + lazy VS lifecycle (+ --check-events exit code)
-- [ ] Task 5: CI build exit codes (0 pass / 1 fail or timeout)
+- [x] Task 3: Extract stage methods from RunSync (pure refactor, no behavior change)
+- [x] Task 4: Wire stage selection + lazy VS lifecycle (+ --check-events exit code)
+- [x] Task 5: CI build exit codes (0 pass / 1 fail or timeout)
 
 ### Checkpoint B
-- [ ] Scratch matrix: each mode alone, --sync-io --sync-events combined, default full
-      run, exit codes verified via $LASTEXITCODE
+- [x] Scratch matrix: each mode alone, --sync-io --sync-events combined, default full
+      run, exit codes verified via $LASTEXITCODE (8-run matrix, all passed)
 
 ### Phase 3: Docs + real-project smoke
-- [ ] Task 6: README/usage; real Shark smoke (--check-events 0, --sync-events no-op,
+- [x] Task 6: README/usage; real Shark smoke (--check-events 0, --sync-events no-op,
       --build BUILD PASSED exit 0); final commit
 
 ### Checkpoint: Complete
-- [ ] All acceptance criteria in todo.md met; committed
+- [x] All acceptance criteria in todo.md met; committed
+
+## PLAN COMPLETE (2026-07-15) — all phases, tasks, and checkpoints closed.
 
 ## Risks and Mitigations
 | Risk | Impact | Mitigation |
