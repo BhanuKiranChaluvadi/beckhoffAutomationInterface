@@ -1,0 +1,37 @@
+# Sample .stignore — copy this file to <your --source folder>/.stignore and
+# edit as needed. See "Ignoring source files" in README.md for the full rules.
+#
+# One gitignore-style glob pattern per line. Blank lines and lines starting
+# with "#" are skipped.
+#
+# Matching rules (see Sync/IgnoreRules.cs):
+#   - A pattern with NO "/" matches a file by NAME, at any depth in the tree.
+#   - A pattern WITH a "/" is matched against the whole source-relative path.
+#   - "*"  matches any run of characters EXCEPT "/" (stays within one folder).
+#   - "**" matches any run of characters INCLUDING "/" (crosses folders).
+#   - "?"  matches a single non-"/" character.
+#   - Matching is case-insensitive. There is no negation ("!pattern") and no
+#     directory-only "/" suffix — this is not a full .gitignore implementation.
+
+# --- Ignore one specific file, anywhere in the tree ---
+FB_Scratch.st
+
+# --- Ignore every file matching a name pattern, anywhere in the tree ---
+*_deprecated.st
+*_old.st
+
+# --- Ignore an ENTIRE FOLDER (and everything nested under it) ---
+# The trailing "/**" is required — a bare folder name (e.g. just "Legacy")
+# only matches a FILE named "Legacy", not a folder.
+Lib/Legacy/**
+
+# --- Ignore one folder's direct files but NOT its subfolders ---
+# ("*" does not cross "/", so this leaves Lib/WorkInProgress/Sub/*.st alone)
+Lib/WorkInProgress/*.st
+
+# --- Ignore a folder at any depth in the tree (not just at the root) ---
+# Because there's a "/", this is path-anchored from the source root, so it
+# would NOT match a "Generated" folder that isn't directly under Lib/ —
+# use "**/Generated/**" if you want it to match at any depth instead.
+Lib/Generated/**
+**/Generated/**

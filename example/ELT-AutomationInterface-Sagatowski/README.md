@@ -413,8 +413,8 @@ parallel rather than in series.
   `TCatSysManagerLib`) and are meant to be built with **Visual Studio's
   MSBuild** (or referenced via a manually generated interop DLL), not
   plain `dotnet build` from the CLI — see the parent project's
-  [README](../../beckhoffAutomationInterface/README.md) for the two valid
-  approaches.
+  [REQUIREMENTS.md](../../beckhoffAutomationInterface/REQUIREMENTS.md)
+  (section 5) for the two valid approaches.
 - [`Program.cs`](Program.cs) assembles steps 1-8 from all three parts into
   a single, linear `Main()` for clarity. As the article notes, in real
   production code you'd split this into multiple focused classes (DTE

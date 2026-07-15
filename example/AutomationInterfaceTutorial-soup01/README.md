@@ -288,7 +288,8 @@ under its drive terminal.
   `<COMReference>` or a generated interop DLL) — they are not directly
   runnable from `dotnet build`/CLI unless you use the manual-interop-DLL
   approach documented in the parent project's
-  [README](../../beckhoffAutomationInterface/README.md).
+  [REQUIREMENTS.md](../../beckhoffAutomationInterface/REQUIREMENTS.md)
+  (section 5).
 - The project **must build/run as 32-bit** (`x86`), matching the
   Automation Interface's bitness requirement.
 - Paths such as `C:\Users\chungw\Downloads\Myp`, the `VisualStudio.DTE.16.0`

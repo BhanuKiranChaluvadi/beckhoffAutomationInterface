@@ -43,17 +43,50 @@ dotnet build -c Debug -f net48
 
 The executable ends up at `beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe`.
 
+## Running the executable
+
+This is a standalone `.exe` — no `dotnet run`, no project file needed at
+runtime. Run it directly, from anywhere, pointing `--source`/`--dest` at
+whatever folders you want:
+
+```powershell
+# Full path, from any directory:
+C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+
+# Or cd into the output folder first and use a relative path:
+cd beckhoffAutomationInterface\bin\Debug\net48
+.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+```
+
+**First time trying the tool at all?** Point it at the bundled `ST\sample`
+project instead of a real one — it's a small, self-contained demo
+(`FB_Motor`/`I_Motor`, a couple of DUTs, one GVL) safe to bootstrap and
+throw away, and a good way to confirm your TwinCAT/Visual Studio COM setup
+works before running against anything real:
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\sample" --dest "C:\some\scratch\folder" --init
+```
+
+`--init` is required the first time (creates a new solution/TwinCAT/PLC
+project at `--dest`); every run after that reopens and reconciles the
+existing one — see [Stage flags](#stage-flags-composable-one-shot-modes)
+below for `--init`'s full rationale, and the sections further down for
+every other flag, the manifests (`libraries.xml`/`io-devices.xml`/
+`events.xml`), and the typical day-to-day workflow.
+
 ## Directory layout
 
 ```
-beckhoffAutomationInterface/   # the C# tool (Program.cs, Sync/, etc.)
+beckhoffAutomationInterface/   # the C# tool (Program.cs, SyncPipeline.cs, Sync/, etc.)
 ST/                            # .st source trees, one subfolder per PLC project
-  Shark/
+  Shark/                       # the real production project
     App/                       # PROGRAMs, organized in whatever subfolders you like
     Lib/                       # FUNCTION_BLOCKs, INTERFACEs, DUTs, GVLs
     libraries.xml              # PLC library references to sync (Tc2_Standard, etc.)
     io-devices.xml             # EtherCAT I/O hardware tree + PLC-variable links (optional)
     events.xml                 # Event Classes to sync (see Known limitations below)
+  sample/                      # small self-contained demo — safe first project to try the tool on
 example/                       # reference material from Beckhoff/community samples
 docs/                          # design notes
 ```
@@ -153,8 +186,16 @@ Lib/Legacy/**
 
 A pattern with no `/` matches the file name at any depth; a pattern with `/`
 is matched against the whole source-relative path. `*` matches within a path
-segment, `**` matches across segments. Use `--ignore <glob>` for one-off,
-per-invocation exclusions on top of `.stignore`.
+segment, `**` matches across segments — so **to ignore an entire folder**,
+the pattern needs a trailing `/**` (e.g. `Lib/Legacy/**`); a bare folder name
+with no `/` only matches a *file* by that exact name, not a folder. Use
+`--ignore <glob>` for one-off, per-invocation exclusions on top of
+`.stignore`.
+
+See [`.stignore.example`](.stignore.example) at the repo root for a fuller,
+annotated sample covering each pattern shape (single file, name pattern,
+whole folder, one folder's direct files but not its subfolders, a folder at
+any depth) — copy it to `.stignore` in your `--source` folder and edit.
 
 ### Incremental sync
 
