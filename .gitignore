@@ -9,3 +9,4 @@ githooks/logs/
 .st-known-names
 graphify-out/
 .graphify_python
+.stconfig

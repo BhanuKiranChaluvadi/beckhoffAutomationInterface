@@ -1,0 +1,56 @@
+<!--
+  Sample links.xml — copy this file to the TOP LEVEL of your --source project
+  folder (the same place io-devices.xml/events.xml/.stignore live) and rename
+  it to "links.xml". See "Variable links (links.xml)" in README.md for the
+  full rules.
+
+  This is TwinCAT's OWN native <VarLinks> export/import format — the exact
+  same schema the XAE IDE itself produces via "Export Variable Mapping" and
+  reads back via "Import Variable Mapping". Applied in ONE bulk COM call
+  (ITcSysManager.ConsumeMappingInfo) — the file's raw text is handed straight
+  to TwinCAT, not reinterpreted by this tool.
+
+  THE EASIEST WAY TO GET A REAL, CORRECT links.xml: link your %I/%Q
+  variables to hardware once by hand in the TwinCAT IDE (or against a
+  simulated target), then run:
+      beckhoffAutomationInterface.exe --source <path> --dest <path> --export-links
+  which writes the current mapping here via ITcSysManager.ProduceMappingInfo
+  — the same thing "Export Variable Mapping" does. Hand-authoring entries
+  (as below) is also fine for simple, top-level GVL/PROGRAM variables.
+
+  Schema:
+    <OwnerA Name="..." Prefix="TIPC^<Plc>^<Plc> Instance" Type="1|2">
+      -- one PLC instance + direction. Type="1" = inputs INTO the PLC,
+         Type="2" = outputs FROM the PLC (purely descriptive; TwinCAT infers
+         direction from context either way).
+      <OwnerB Name="TIID^<Device>^<Coupler>^<Terminal>">
+        -- one IO box/device/terminal, addressed as raw TIID^... same as
+           io-devices.xml's <Links> IoChannel (minus the trailing "^Channel N^Input|Output").
+        <Link VarA="<Gvl/Program>.<var>" GrpA="PlcTask Inputs|Outputs"
+              VarB="<Pdo Mapping>^<Entry>" />
+        -- VarA is relative to OwnerA's Prefix; VarB is relative to OwnerB's Name.
+      </OwnerB>
+    </OwnerA>
+
+  A hand-authored file only strictly needs VarA/GrpA/VarB — TypeA/InOutA/
+  ParentTypeA/GuidA (which a real IDE export includes) are extra metadata,
+  not required for ConsumeMappingInfo to apply the link.
+
+  NOTE: an older/alternate shape also works, where OwnerA has only "Name"
+  (used directly as the prefix) and Link has no GrpA at all — the group is
+  folded straight into VarA instead, e.g. VarA="PlcTask Outputs^MAIN.bError"
+  (see Beckhoff's own CodeGenerationDemo sample). This tool's own
+  --check-links normalizes both shapes; TwinCAT itself accepts both too.
+-->
+<VarLinks>
+	<OwnerA Name="InputDst" Prefix="TIPC^Shark^Shark Instance" Type="1">
+		<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)">
+			<Link VarA="GVL_Shark.bMotorRunSensor" GrpA="PlcTask Inputs" VarB="Channel 1^Input" />
+		</OwnerB>
+	</OwnerA>
+	<OwnerA Name="OutputSrc" Prefix="TIPC^Shark^Shark Instance" Type="2">
+		<OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)">
+			<Link VarA="GVL_Shark.bMotorEnableOutput" GrpA="PlcTask Outputs" VarB="Channel 1^Output" />
+		</OwnerB>
+	</OwnerA>
+</VarLinks>

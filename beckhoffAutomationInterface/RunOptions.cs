@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using BeckhoffAutomationInterface.Sync;
 
 namespace BeckhoffAutomationInterface
 {
@@ -56,11 +57,22 @@ namespace BeckhoffAutomationInterface
         /// (--events-only is the deprecated alias.)</summary>
         public bool CheckEvents { get; }
 
+        /// <summary>Read-only declared-vs-linked %I/%Q check (no Visual Studio, see
+        /// Sync.LinkChecker): prints the report and exits — code 1 if any declared GVL/
+        /// PROGRAM %I/%Q variable has no matching &lt;Link&gt; in io-devices.xml, or any .st
+        /// file failed to parse, else 0.</summary>
+        public bool CheckLinks { get; }
+
         /// <summary>True when this run is ONLY the Build stage (--build with no other
         /// stage flags, or the deprecated --build-only alias).</summary>
         public bool BuildOnly => Stages == SyncStages.Build;
 
         public bool ParseOnly { get; }
+
+        /// <summary>True when a `.stconfig` defaults file was actually found (and not
+        /// suppressed by --no-config) — purely informational, so Program.cs can print a
+        /// one-line "loaded defaults from X" note rather than applying it silently.</summary>
+        public bool ConfigFileLoaded { get; }
 
         /// <summary>When set, report (never write) low-risk .st style issues — trailing
         /// whitespace, mixed line endings, EOF newline hygiene — and stop (see
@@ -92,6 +104,12 @@ namespace BeckhoffAutomationInterface
         /// when --export wasn't given.</summary>
         public string ExportObjectName { get; }
 
+        /// <summary>When set, write ALL currently-linked PLC-variable-to-IO-channel
+        /// mappings out to VarLinksManifestPath (via ITcSysManager.ProduceMappingInfo)
+        /// instead of running a sync — the way to capture links made by hand in the
+        /// TwinCAT IDE. Defaultable from .stconfig, same as --export.</summary>
+        public bool ExportLinks { get; }
+
         /// <summary>Extra ignore glob patterns from repeated --ignore &lt;pattern&gt; CLI args,
         /// merged with any ".stignore" file found in SourceFolder (see Sync.IgnoreRules).</summary>
         public IReadOnlyList<string> IgnorePatterns { get; }
@@ -108,6 +126,12 @@ namespace BeckhoffAutomationInterface
         public string LibraryManifestPath => Path.Combine(SourceFolder, "libraries.xml");
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
+
+        /// <summary>TwinCAT-native &lt;VarLinks&gt; format (see Sync/VarLinksFile.cs) — the
+        /// same schema the XAE IDE's own "Export/Import Variable Mapping" produces/reads.
+        /// Applied via ITcSysManager.ConsumeMappingInfo in one bulk call, alongside (not
+        /// instead of) io-devices.xml's own &lt;Links&gt; section.</summary>
+        public string VarLinksManifestPath => Path.Combine(SourceFolder, "links.xml");
 
         /// <summary>Already-computed &lt;DataType&gt;/&lt;PlcDataType&gt; XML per terminal
         /// product, e.g. plc-data-types/EL3174.xml — see Sync/PlcDataTypeTemplate.cs.</summary>
@@ -133,7 +157,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete, bool formatCheck, bool confirmDeleteIo)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, bool configFileLoaded)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -141,13 +165,16 @@ namespace BeckhoffAutomationInterface
             Stages = stages;
             Init = init;
             CheckEvents = checkEvents;
+            CheckLinks = checkLinks;
             ParseOnly = parseOnly;
             IgnorePatterns = ignorePatterns;
             Incremental = incremental;
             ExportObjectName = exportObjectName;
+            ExportLinks = exportLinks;
             ConfirmDelete = confirmDelete;
             FormatCheck = formatCheck;
             ConfirmDeleteIo = confirmDeleteIo;
+            ConfigFileLoaded = configFileLoaded;
         }
 
         /// <summary>
@@ -156,7 +183,10 @@ namespace BeckhoffAutomationInterface
         /// invocation (even just a mode flag like --build-only) resolves --source/--dest
         /// to "." if not given explicitly.
         /// </summary>
-        public static RunOptions Parse(string[] args)
+        /// <summary>cwd overrides the process's current directory for the CWD fallback
+        /// case below (default: the real process CWD) — exists so tests can point it at
+        /// a temp folder instead of touching the actual working directory.</summary>
+        public static RunOptions Parse(string[] args, string cwd = null)
         {
             if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
             {
@@ -164,32 +194,70 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(args.Length == 0 ? 1 : 0);
             }
 
-            string sourceFolder = Path.GetFullPath(GetOption(args, "--source", "--src") ?? ".");
-            string destinationFolder = Path.GetFullPath(GetOption(args, "--dest", "--dst") ?? ".");
-            string projectName = GetOption(args, "--name") ?? new DirectoryInfo(sourceFolder).Name;
+            string cliSource = GetOption(args, "--source", "--src");
+            string configOverride = GetOption(args, "--config");
+            bool noConfig = args.Contains("--no-config");
 
-            SyncStages stages = SyncStages.None;
-            if (args.Contains("--sync-code")) stages |= SyncStages.Code;
-            if (args.Contains("--sync-libs")) stages |= SyncStages.Libraries;
-            if (args.Contains("--sync-io")) stages |= SyncStages.Io;
-            if (args.Contains("--sync-events")) stages |= SyncStages.Events;
-            if (args.Contains("--build")) stages |= SyncStages.Build;
-            if (args.Contains("--build-only")) stages |= SyncStages.Build; // deprecated alias of --build
-            if (stages == SyncStages.None)
-                stages = SyncStages.All; // no stage flag = the original full sync+build run
+            // .stconfig defaults (see Sync/StConfigFile.cs) are discovered at the top
+            // level of the source project by default — same place ".stignore" already
+            // lives (see IgnoreRules.Load) — so it just works once --source points at a
+            // project, no separate launch folder needed. --config <path> looks somewhere
+            // else entirely instead; with neither given, falls back to the process's
+            // current directory. --no-config skips loading entirely for one invocation.
+            // Deliberately never consulted for the three safety-gated flags below.
+            string configSearchDir = Path.GetFullPath(configOverride ?? cliSource ?? cwd ?? Directory.GetCurrentDirectory());
+            IReadOnlyDictionary<string, string> config = noConfig
+                ? new Dictionary<string, string>()
+                : StConfigFile.Load(configSearchDir);
+            bool configFileLoaded = !noConfig && File.Exists(Path.Combine(configSearchDir, ".stconfig"));
+
+            string sourceFolder = Path.GetFullPath(cliSource ?? config.GetString("source") ?? ".");
+            string destinationFolder = Path.GetFullPath(GetOption(args, "--dest", "--dst") ?? config.GetString("dest") ?? ".");
+            string projectName = GetOption(args, "--name") ?? config.GetString("name") ?? new DirectoryInfo(sourceFolder).Name;
+
+            SyncStages cliStages = SyncStages.None;
+            if (args.Contains("--sync-code")) cliStages |= SyncStages.Code;
+            if (args.Contains("--sync-libs")) cliStages |= SyncStages.Libraries;
+            if (args.Contains("--sync-io")) cliStages |= SyncStages.Io;
+            if (args.Contains("--sync-events")) cliStages |= SyncStages.Events;
+            if (args.Contains("--build")) cliStages |= SyncStages.Build;
+            if (args.Contains("--build-only")) cliStages |= SyncStages.Build; // deprecated alias of --build
+
+            SyncStages configStages = SyncStages.None;
+            if (config.GetBool("sync-code")) configStages |= SyncStages.Code;
+            if (config.GetBool("sync-libs")) configStages |= SyncStages.Libraries;
+            if (config.GetBool("sync-io")) configStages |= SyncStages.Io;
+            if (config.GetBool("sync-events")) configStages |= SyncStages.Events;
+            if (config.GetBool("build")) configStages |= SyncStages.Build;
+
+            // Stage flags are a GROUP, not five independent merges: if the CLI names any
+            // stage at all, that exact set is used and .stconfig's stage keys are ignored
+            // entirely for this run — otherwise a config default (e.g. build=true) could
+            // silently run an EXTRA stage on top of a one-off "--sync-code only"
+            // invocation, with no way to say "just this" short of deleting the file.
+            SyncStages stages = cliStages != SyncStages.None ? cliStages
+                : configStages != SyncStages.None ? configStages
+                : SyncStages.All; // neither specifies any stage = the original full sync+build run
 
             return new RunOptions(
                 sourceFolder, destinationFolder, projectName,
                 stages: stages,
+                // Safety-gated: --init/--confirm-delete/--confirm-delete-io are ALWAYS
+                // CLI-only, on purpose — `config` is never consulted here. These flags
+                // exist specifically so their effect can't happen by accident; reading
+                // them from a defaults file would defeat that. Do not "fix" this.
                 init: args.Contains("--init"),
-                checkEvents: args.Contains("--check-events") || args.Contains("--events-only"), // --events-only: deprecated alias
-                parseOnly: args.Contains("--parse-only"),
+                checkEvents: args.Contains("--check-events") || args.Contains("--events-only") || config.GetBool("check-events"), // --events-only: deprecated alias
+                checkLinks: args.Contains("--check-links") || config.GetBool("check-links"),
+                parseOnly: args.Contains("--parse-only") || config.GetBool("parse-only"),
                 ignorePatterns: GetOptions(args, "--ignore"),
-                incremental: args.Contains("--incremental"),
-                exportObjectName: GetOption(args, "--export"),
+                incremental: args.Contains("--incremental") || config.GetBool("incremental"),
+                exportObjectName: GetOption(args, "--export") ?? config.GetString("export"),
+                exportLinks: args.Contains("--export-links") || config.GetBool("export-links"),
                 confirmDelete: args.Contains("--confirm-delete"),
-                formatCheck: args.Contains("--format-check"),
-                confirmDeleteIo: args.Contains("--confirm-delete-io"));
+                formatCheck: args.Contains("--format-check") || config.GetBool("format-check"),
+                confirmDeleteIo: args.Contains("--confirm-delete-io"),
+                configFileLoaded: configFileLoaded);
         }
 
         static string GetOption(string[] args, params string[] flags)
@@ -238,6 +306,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("Checks (read-only, no Visual Studio):");
             Console.WriteLine("  --check-events    Report declared-vs-present Event Classes and exit; code 1 if");
             Console.WriteLine("                    any declared class is missing (alias: --events-only, deprecated)");
+            Console.WriteLine("  --check-links     Report declared-vs-linked %I/%Q GVL/PROGRAM variables and exit;");
+            Console.WriteLine("                    code 1 if any is missing a <Link> in io-devices.xml (also");
+            Console.WriteLine("                    surfaced, non-blocking, by --parse-only)");
             Console.WriteLine("  --parse-only      Parse all .st files without opening Visual Studio");
             Console.WriteLine("  --format-check    Report (never write) .st style issues — trailing whitespace,");
             Console.WriteLine("                    mixed line endings, EOF newline hygiene — without opening VS");
@@ -262,7 +333,31 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("                    items are only WARNED about — never deleted (see IoSyncEngine)");
             Console.WriteLine("  --export <name>   Write the named live PLC object's current text back to its");
             Console.WriteLine("                    mirrored .st file");
+            Console.WriteLine("  --export-links    Write ALL currently-linked PLC-variable-to-IO-channel");
+            Console.WriteLine("                    mappings out to links.xml (see below) — the way to capture");
+            Console.WriteLine("                    links made by hand in the TwinCAT IDE");
+            Console.WriteLine("  --config <path>   Look for '.stconfig' in this folder instead of --source");
+            Console.WriteLine("  --no-config       Ignore any '.stconfig' defaults file for this run only");
             Console.WriteLine("  --help, -h        Show this message");
+            Console.WriteLine();
+            Console.WriteLine("Defaults file (\".stconfig\"):");
+            Console.WriteLine("  A \"key=value\" per line file (# comments/blank lines OK), discovered at the");
+            Console.WriteLine("  top level of --source by default (same place as .stignore) — or --config's");
+            Console.WriteLine("  folder if given, or the current directory if neither is given. Supplies");
+            Console.WriteLine("  defaults for source/dest/name/export/export-links/incremental/parse-only/format-check/");
+            Console.WriteLine("  check-events/check-links and the five stage keys (sync-code, sync-libs,");
+            Console.WriteLine("  sync-io, sync-events, build) — an explicit CLI flag always wins.");
+            Console.WriteLine("  If the CLI names ANY stage flag, the whole group of stage keys in .stconfig");
+            Console.WriteLine("  is ignored for that run (no silent extra stage). --init/--confirm-delete/");
+            Console.WriteLine("  --confirm-delete-io are NEVER read from .stconfig, only ever from the real");
+            Console.WriteLine("  command line. See .stconfig.example for a fully annotated template.");
+            Console.WriteLine();
+            Console.WriteLine("Variable links (\"links.xml\"):");
+            Console.WriteLine("  TwinCAT's own <VarLinks> export/import format (same as the XAE IDE's \"Export/");
+            Console.WriteLine("  Import Variable Mapping\"), applied via ConsumeMappingInfo in one bulk call");
+            Console.WriteLine("  alongside io-devices.xml's own <Links> section (both apply, neither replaces");
+            Console.WriteLine("  the other). Get real data into it with --export-links after linking by hand");
+            Console.WriteLine("  in the IDE. See links.xml.example for a fully annotated template.");
         }
     }
 }

@@ -56,6 +56,12 @@ namespace BeckhoffAutomationInterface
                 ExportObject();
                 return;
             }
+            if (_options.ExportLinks)
+            {
+                _session.EnsureOpen();
+                ExportLinks();
+                return;
+            }
 
             SyncStages stages = _options.Stages;
 
@@ -128,6 +134,18 @@ namespace BeckhoffAutomationInterface
             File.WriteAllText(filePath, text);
 
             Console.WriteLine("{0}: Exported '{1}' -> '{2}'.", Now(), item.Name, filePath);
+        }
+
+        /// <summary>--export-links: write ALL currently-linked PLC-variable-to-IO-channel
+        /// mappings out to links.xml (see Sync/VarLinksFile.cs), via
+        /// ITcSysManager.ProduceMappingInfo — the way to capture links made by hand in the
+        /// TwinCAT IDE. Overwrites any existing links.xml, same convention --export already
+        /// uses for its target .st file.</summary>
+        void ExportLinks()
+        {
+            string xml = ((ITcSysManager3)_session.SysManager).ProduceMappingInfo();
+            File.WriteAllText(_options.VarLinksManifestPath, xml);
+            Console.WriteLine("{0}: Exported current variable links -> '{1}'.", Now(), _options.VarLinksManifestPath);
         }
 
         /// <summary>Code stage: .st files -> PLC POUs (create/update/delete), plus the
@@ -351,16 +369,29 @@ namespace BeckhoffAutomationInterface
         void SyncLinks()
         {
             var desiredLinks = IoManifestParser.ParseLinks(_options.IoManifestPath);
-            if (desiredLinks.Count == 0)
+            bool hasVarLinksFile = File.Exists(_options.VarLinksManifestPath);
+            if (desiredLinks.Count == 0 && !hasVarLinksFile)
                 return;
 
             _session.EnsureOpen(); // lazily reopens after the .tsproj edits closed VS
-            Console.WriteLine("{0}: Syncing {1} variable link(s)...", Now(), desiredLinks.Count);
-            VariableLinkReport linkReport = null;
-            RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(_session.SysManager, _options.ProjectName, desiredLinks), "linking variables");
 
-            PrintLines("+ linked   ", linkReport.Linked);
-            PrintLines("x unlinked ", linkReport.Failed);
+            // links.xml (native <VarLinks>, see Sync/VarLinksFile.cs) applies FIRST, in one
+            // bulk COM call — then io-devices.xml's own <Links> apply on top, unchanged.
+            // Both coexist rather than one replacing the other (see tasks/plan.md).
+            bool varLinksApplied = false;
+            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.VarLinksManifestPath), "applying links.xml");
+            if (varLinksApplied)
+                Console.WriteLine("{0}: Applied links.xml.", Now());
+
+            VariableLinkReport linkReport = new VariableLinkReport();
+            if (desiredLinks.Count > 0)
+            {
+                Console.WriteLine("{0}: Syncing {1} variable link(s) from io-devices.xml...", Now(), desiredLinks.Count);
+                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(_session.SysManager, _options.ProjectName, desiredLinks), "linking variables");
+
+                PrintLines("+ linked   ", linkReport.Linked);
+                PrintLines("x unlinked ", linkReport.Failed);
+            }
 
             if (!linkReport.AllLinked)
             {

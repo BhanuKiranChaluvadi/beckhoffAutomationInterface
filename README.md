@@ -162,15 +162,76 @@ if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 | `--name <name>` | `--source`'s folder name | Project/solution name |
 | `--init` | off | Allow creating the solution/TwinCAT/PLC project when missing. Without it, a missing solution is a hard error (exit 1) in every mode. |
 | `--check-events` (alias `--events-only`, deprecated) | off | Read-only check of `events.xml` against the `.tsproj` (declared vs actual), then exit — code 1 if any declared class is missing, 0 otherwise. No Visual Studio session. Usable as a fast pipeline gate. |
-| `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. |
+| `--check-links` | off | Read-only check of every declared `%I`/`%Q` GVL/PROGRAM variable against `io-devices.xml`'s `<Links>` section, then exit — code 1 if any is unlinked or any `.st` file failed to parse, 0 otherwise. No Visual Studio session (see below). |
+| `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. Also prints the same %I/%Q link report as `--check-links`, non-blocking. |
 | `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
 | `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
 | `--confirm-delete-io` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
 | `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (all supported kinds — see below). |
+| `--export-links` | off | Write ALL currently-linked PLC-variable-to-IO-channel mappings out to `links.xml` (see below) — the way to capture links made by hand in the TwinCAT IDE. |
 | `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
+| `--config <path>` | `--source`'s folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
+| `--no-config` | off | Ignore any `.stconfig` defaults file for this run only. |
 
 The `githooks/` incremental worker is unaffected by `--init`: it always
 targets an already-bootstrapped project (the reopen path).
+
+### Default options (`.stconfig`)
+
+Retyping `--source`/`--dest`/`--name` (and other flags) on every invocation
+gets old fast. Drop a `.stconfig` file at the **top level of your `--source`
+project** — the same place a `.stignore` file already lives — and the tool
+loads it automatically:
+
+```
+# ST\Shark\.stconfig
+dest=C:\path\to\TwinCAT-projects-root
+name=Shark
+incremental=true
+```
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark"
+# resolves dest/name/etc. from ST\Shark\.stconfig — only --source still needed
+```
+
+**Discovery order:** `--config <path>` (look there instead), else the
+resolved `--source` folder, else the process's current directory if neither
+is given. Use `--config` to keep `.stconfig` somewhere other than inside
+`--source` — that file can then set its own `source` key too, since at that
+point `--source` hasn't been resolved from the command line yet.
+
+**Precedence:** an explicit command-line flag always wins; `.stconfig` only
+fills in what you didn't type; anything neither specifies falls back to
+today's hardcoded default (e.g. `.` for `--source`/`--dest`).
+
+**Supported keys:** `source`, `dest`, `name`, `export`, plus the boolean
+flags `export-links`, `incremental`, `parse-only`, `format-check`,
+`check-events`, `check-links` (a value of `true`/`1`/`yes`, case-insensitive,
+is truthy — anything else, including a missing key, is false), and the five
+stage keys `sync-code`, `sync-libs`, `sync-io`, `sync-events`, `build`.
+
+**Stage keys are a group, not five independent defaults:** if the command
+line names *any* `--sync-*`/`--build` flag, `.stconfig`'s stage keys are
+ignored entirely for that run — a config default like `build=true` can
+never silently tack an extra stage onto a one-off `--sync-code`-only
+invocation. If the command line names no stage flag at all, `.stconfig`'s
+stage keys are used instead (if any are set); if neither specifies one, the
+run defaults to `All`, same as always.
+
+**`--init`, `--confirm-delete`, and `--confirm-delete-io` can never come
+from `.stconfig`** — only a real command-line flag counts, full stop. These
+exist specifically so their effect can't happen by accident (see
+`--confirm-delete-io` above and `--init`'s rationale below); letting a
+defaults file set them would defeat the entire point.
+
+Pass `--no-config` to ignore `.stconfig` for one invocation without
+deleting or renaming it. When a `.stconfig` was actually loaded, the tool
+prints a one-line note before the usual `Source=/Dest=/Project=` line, so
+the behavior is never silent.
+
+See [`.stconfig.example`](.stconfig.example) at the repo root for a fully
+annotated template — copy it to `.stconfig` in your launch folder and edit.
 
 ### Ignoring source files
 
@@ -302,6 +363,76 @@ Known false positives (safe to ignore): the default TwinCAT template's own
 `ST_` prefix instead of `T_` (e.g. `ST_MFC_Telemetry : ST_MFCTelemetry`) to
 signal they represent the same struct shape. METHODs and PROPERTIES have no
 naming convention and are never checked.
+
+### Checking %I/%Q ↔ IO links
+
+`io-devices.xml`'s `<Links>` section (see "Manifests" below for the full
+sync mechanism) maps a declared `%I`/`%Q` variable to a physical IO channel;
+nothing enforces that every variable you declare actually has one.
+`--check-links` (or, more lightly, every `--parse-only`) parses all `.st`
+source, finds every
+`AT %I*`/`AT %Q*` declaration in a **GVL or PROGRAM**, and cross-checks it
+against `<Links>`:
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --check-links
+```
+
+```
+2026-07-15 ...: [check-links] 34 declared, 0 linked, 34 unlinked, 0 stale link(s).
+    ! UNLINKED PRG_DIGITAL_INPUT.IO_DoorLT (%I) — App/Shark/Programs/PRG_DIGITAL_INPUT.st
+    ! UNLINKED GVL_Safety.SafetyOk (%I) — App/Shark/GVL_Safety.st
+    ...
+```
+
+It reports two things: declared variables with **no matching `<Link>`**
+(exit code 1 under `--check-links` if any exist — a stale-configuration gate
+usable in CI), and `<Link>` entries whose `PlcVar` matches **no** declared
+variable (a stale/typo'd entry, e.g. left over after a rename) — these are
+always informational only, never affecting the exit code.
+
+**Scope limit:** only `GVL`/`PROGRAM`-level declarations are checked. A
+`FUNCTION_BLOCK`'s own `AT %I*/%Q*` member (or a `STRUCT`/DUT member) is
+resolvable only through wherever that block is actually *instantiated*
+(e.g. `PRG_MAIN.fbMotor.bEnable`), which can't be determined from static
+source alone — those declarations exist and sync normally, they're just not
+covered by this check.
+
+### Variable links (`links.xml`)
+
+`io-devices.xml`'s `<Links>` section (above) is this tool's own simple
+schema, applied one pair at a time. `links.xml`, if present, is TwinCAT's
+**own native** `<VarLinks>` export/import format — the exact schema the XAE
+IDE itself produces via "Export Variable Mapping" and reads back via
+"Import Variable Mapping" — applied in **one bulk COM call**
+(`ITcSysManager.ConsumeMappingInfo`). Both coexist: if present, `links.xml`
+is applied first, then `io-devices.xml`'s `<Links>` on top — neither
+replaces the other.
+
+**The easiest way to get a real, correct `links.xml`:** link your `%I`/`%Q`
+variables to hardware once by hand in the TwinCAT IDE (or against a
+simulated target), then run:
+
+```powershell
+.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export-links
+```
+
+which writes the current mapping to `links.xml` via
+`ITcSysManager.ProduceMappingInfo` — the same thing "Export Variable
+Mapping" does. This is how a file like the real
+`Spectrometer Instance Mappings.xml` (seen in a working reference project)
+comes to exist. `--export-links` overwrites any existing `links.xml`, the
+same convention `--export <name>` already uses for its target `.st` file.
+
+See [`links.xml.example`](links.xml.example) at the repo root for a fully
+annotated template, including the schema shape and a second, older/hand-
+authored variant that also works (seen in Beckhoff's own official
+`CodeGenerationDemo` sample). `--check-links`/`--parse-only` also
+cross-reference `links.xml` entries the same way they do `io-devices.xml`'s
+`<Links>` — a `links.xml` entry whose variable is nested through a
+`FUNCTION_BLOCK` instance (e.g. `MAIN.fbSpec.inLogicSig[1]`, real usage seen
+in that same reference project) can't be statically verified either way, so
+it's reported informationally as "unresolvable," never as unlinked or stale.
 
 ### Style checking
 

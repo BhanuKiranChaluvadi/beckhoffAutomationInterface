@@ -71,5 +71,22 @@ namespace BeckhoffAutomationInterface.Sync
 
             return report;
         }
+
+        /// <summary>Applies "links.xml" (see Sync/VarLinksFile.cs) in ONE bulk COM call via
+        /// ITcSysManager.ConsumeMappingInfo — the same mechanism the XAE IDE's own "Import
+        /// Variable Mapping" uses, confirmed against Beckhoff's own official
+        /// CodeGenerationDemo sample (ConsumeMappings in CodeGenerationScript.cs). Unlike
+        /// Sync(...) above, a failure here is one whole-file COMException, not a per-link
+        /// report — the caller decides how to handle/report it. Returns false (no-op) when
+        /// "links.xml" doesn't exist, same as an empty &lt;Links&gt; section today.</summary>
+        public static bool ApplyFromFile(ITcSysManager sysManager, string linksXmlPath)
+        {
+            string xml = VarLinksFile.LoadRawXml(linksXmlPath);
+            if (xml == null)
+                return false;
+
+            ((ITcSysManager3)sysManager).ConsumeMappingInfo(xml);
+            return true;
+        }
     }
 }

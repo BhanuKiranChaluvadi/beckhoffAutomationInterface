@@ -1,0 +1,44 @@
+# Sample .stconfig — copy this file to the TOP LEVEL of your --source project
+# folder (the same place a .stignore file lives) and rename it to ".stconfig".
+# Prefer a different location instead? Pass --config <path> to look there
+# instead of --source. Neither given? Falls back to the current directory.
+# See "Default options (.stconfig)" in README.md for the full rules.
+#
+# One "key=value" per line. Blank lines and lines starting with "#" are
+# skipped. An explicit command-line flag always overrides the matching key
+# here — this file only fills in what you didn't type.
+
+# --- Paths & project name (mirror --source/--dest/--name) ---
+# "source" only matters if this file is discovered somewhere OTHER than the
+# source folder itself (i.e. via --config <path>) — if it lives at the top
+# level of --source, as recommended, you're already there and can drop it.
+# source=C:\path\to\ST\Shark
+dest=C:\path\to\TwinCAT-projects-root
+name=Shark
+
+# --- Booleans: "true", "1", or "yes" (case-insensitive) are truthy; anything
+# else, including a missing key, is false ---
+incremental=true
+# parse-only=true
+# format-check=true
+# check-events=true
+# check-links=true
+
+# --- Stage flags (sync-code, sync-libs, sync-io, sync-events, build) ---
+# These five are a GROUP: if the command line names ANY --sync-*/--build
+# flag, this whole group is ignored for that run — a config default here
+# can never silently add an extra stage on top of a one-off CLI invocation.
+# Uncomment to make a bare invocation (no stage flags) do a full run:
+# sync-code=true
+# sync-libs=true
+# sync-io=true
+# sync-events=true
+# build=true
+
+# --- Misc ---
+# export=FB_Motor
+
+# --- NEVER read from this file, no matter what ---
+# --init, --confirm-delete, and --confirm-delete-io are safety-gated flags
+# that must stay CLI-only, always — RunOptions.Parse never even attempts to
+# read them from here. Listing them below would do nothing.

@@ -68,5 +68,19 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.True(Parse("--init").Init);
             Assert.False(Parse("--sync-code").Init);
         }
+
+        [Fact]
+        public void CheckLinks_ParsedOnlyWhenGiven()
+        {
+            Assert.True(Parse("--check-links").CheckLinks);
+            Assert.False(Parse("--sync-code").CheckLinks);
+        }
+
+        [Fact]
+        public void ExportLinks_ParsedOnlyWhenGiven()
+        {
+            Assert.True(Parse("--export-links").ExportLinks);
+            Assert.False(Parse("--sync-code").ExportLinks);
+        }
     }
 }
