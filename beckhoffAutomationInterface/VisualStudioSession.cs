@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using static BeckhoffAutomationInterface.Clock;
 
 namespace BeckhoffAutomationInterface
 {
@@ -15,7 +16,6 @@ namespace BeckhoffAutomationInterface
     /// </summary>
     class VisualStudioSession : IDisposable
     {
-        const uint RPC_E_SERVERCALL_RETRYLATER = 0x8001010A;
         const int VS_LOAD_TIMEOUT_MS = 30000; // 30 seconds max wait for VS to load
         const int VS_LOAD_RETRY_INTERVAL_MS = 1000;
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
@@ -130,7 +130,7 @@ namespace BeckhoffAutomationInterface
                     dte.MainWindow.Visible = true;
                     return; // success
                 }
-                catch (COMException ex) when ((uint)ex.HResult == RPC_E_SERVERCALL_RETRYLATER)
+                catch (COMException ex) when ((uint)ex.HResult == ComInterop.ServerCallRetryLater)
                 {
                     Console.WriteLine("{0}: Visual Studio is loading, retrying in 1s... ({1}s elapsed)",
                         Now(), elapsed / 1000);
@@ -143,7 +143,5 @@ namespace BeckhoffAutomationInterface
 
         [DllImport("user32.dll")]
         static extern int GetWindowThreadProcessId(IntPtr hWnd, out int processId);
-
-        static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     }
 }

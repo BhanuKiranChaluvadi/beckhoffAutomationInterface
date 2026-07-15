@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 
@@ -62,9 +61,8 @@ namespace BeckhoffAutomationInterface.Sync
     ///
     /// MUST be called while the project is NOT open in Visual Studio (no DTE session
     /// holding the file) — see Program.RunSync, which closes/reopens the VS session
-    /// around this call. Writes a ".bak" copy of the original file first (matching
-    /// TwinCAT's own convention seen in decomposed-project .xti.bak files) before
-    /// overwriting, so a failed edit is trivially recoverable.
+    /// around this call. See Sync/TsprojDataTypePool.cs for the shared load/backup/save
+    /// envelope (also used by TsprojEventClassEditor and EventClassChecker).
     /// </summary>
     static class TsprojPlcDataTypeEditor
     {
@@ -75,17 +73,8 @@ namespace BeckhoffAutomationInterface.Sync
                 return result;
 
             XDocument doc = XDocument.Load(tsprojPath, LoadOptions.PreserveWhitespace);
-            XElement dataTypesEl = doc.Root.Element("DataTypes");
-            if (dataTypesEl == null)
-            {
-                dataTypesEl = new XElement("DataTypes");
-                doc.Root.AddFirst(dataTypesEl);
-            }
-
-            var existingGuids = new HashSet<string>(
-                dataTypesEl.Elements("DataType")
-                    .Select(dt => (string)dt.Element("Name")?.Attribute("GUID"))
-                    .Where(guid => guid != null));
+            XElement dataTypesEl = TsprojDataTypePool.LoadOrCreate(doc);
+            var existingGuids = TsprojDataTypePool.ExistingGuids(dataTypesEl);
 
             bool changed = false;
             foreach (PlcDataTypeTarget target in targets)
@@ -136,12 +125,7 @@ namespace BeckhoffAutomationInterface.Sync
                 changed = true;
             }
 
-            if (changed)
-            {
-                File.Copy(tsprojPath, tsprojPath + ".bak", overwrite: true);
-                doc.Save(tsprojPath, SaveOptions.DisableFormatting);
-            }
-
+            TsprojDataTypePool.SaveIfChanged(tsprojPath, doc, changed);
             return result;
         }
     }

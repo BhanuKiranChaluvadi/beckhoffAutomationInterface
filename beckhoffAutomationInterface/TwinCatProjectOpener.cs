@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Interop.TCatSysManager;
+using static BeckhoffAutomationInterface.Clock;
 
 namespace BeckhoffAutomationInterface
 {
@@ -91,7 +92,5 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: PLC project '{1}' added.", Now(), options.ProjectName);
             return (project, sysManager);
         }
-
-        static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     }
 }

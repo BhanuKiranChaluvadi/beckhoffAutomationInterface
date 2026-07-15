@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Xml.Linq;
 
 namespace BeckhoffAutomationInterface.Sync
@@ -27,7 +25,9 @@ namespace BeckhoffAutomationInterface.Sync
     /// of this being wrongly written off as a dead end.
     ///
     /// MUST be called while the project is NOT open in Visual Studio, same as
-    /// TsprojPlcDataTypeEditor.
+    /// TsprojPlcDataTypeEditor. See Sync/TsprojDataTypePool.cs for the shared
+    /// load/backup/save envelope (also used by TsprojPlcDataTypeEditor and
+    /// EventClassChecker).
     /// </summary>
     static class TsprojEventClassEditor
     {
@@ -38,15 +38,8 @@ namespace BeckhoffAutomationInterface.Sync
                 return result;
 
             XDocument doc = XDocument.Load(tsprojPath, LoadOptions.PreserveWhitespace);
-            XElement dataTypesEl = doc.Root.Element("DataTypes");
-            if (dataTypesEl == null)
-            {
-                dataTypesEl = new XElement("DataTypes");
-                doc.Root.AddFirst(dataTypesEl);
-            }
-
-            var existingNames = new HashSet<string>(
-                dataTypesEl.Elements("DataType").Select(dt => (string)dt.Element("Name")));
+            XElement dataTypesEl = TsprojDataTypePool.LoadOrCreate(doc);
+            var existingNames = TsprojDataTypePool.ExistingNames(dataTypesEl);
 
             bool changed = false;
             foreach (string name in missingEventClassNames)
@@ -71,12 +64,7 @@ namespace BeckhoffAutomationInterface.Sync
                 changed = true;
             }
 
-            if (changed)
-            {
-                File.Copy(tsprojPath, tsprojPath + ".bak", overwrite: true);
-                doc.Save(tsprojPath, SaveOptions.DisableFormatting);
-            }
-
+            TsprojDataTypePool.SaveIfChanged(tsprojPath, doc, changed);
             return result;
         }
     }

@@ -1,5 +1,6 @@
 using System;
 using Interop.TCatSysManager;
+using static BeckhoffAutomationInterface.Clock;
 
 namespace BeckhoffAutomationInterface
 {
@@ -65,7 +66,5 @@ namespace BeckhoffAutomationInterface
         }
 
         public void Dispose() => EnsureClosed();
-
-        static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
     }
 }
