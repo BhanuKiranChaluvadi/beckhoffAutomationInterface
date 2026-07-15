@@ -1,102 +1,94 @@
-# Implementation Plan: Post-Review Hardening of the ST→TwinCAT Sync/Build Loop
+# Implementation Plan: Composable Stage-Based CLI
 
 ## Overview
-The `beckhoffAutomationInterface` sync/build engine (shipped MVP, see
-`docs/ideas/st-source-twincat-sync.md`) works as a create/update/compile
-pipeline, but a code review surfaced two gaps against its actual purpose —
-a trustworthy edit→sync→compile **feedback loop** — and the repo's own
-`TODO.md`/`TODO.xml` scratch notes independently confirm one of them and log
-two more real bugs found through manual testing against the Shark project.
-This plan closes all four before relying on the tool day-to-day.
+Split the monolithic sync+build pipeline into composable one-shot stages
+selected by CLI flags, so one-time per-project setup (device tree, Create PLC
+Data Type, Event Classes) can run in isolation — create/update, close Visual
+Studio, exit — and CI pipelines get a compile-only mode with a real exit code
+that can never accidentally bootstrap a fresh project.
+
+Full CLI API, phase table, and rationale: see the approved plan copy at the
+bottom of this file's sibling `todo.md` task descriptions; decisions
+(2026-07-15): composable stage flags; `--init` guard on project creation;
+build exits 0/1 and never bootstraps; previous (completed) plan archived to
+`tasks/archive/2026-07-14-post-review-hardening/`.
+
+## Target CLI
+
+```
+beckhoffAutomationInterface [stage flags] [options]
+
+Stage flags (composable; omitting ALL of them = full run: code+libs+io+events+build):
+  --sync-code       ST → PLC POUs only (parse, lint, drift warnings, sync, save). No build.
+  --sync-libs       libraries.xml → PLC library references only.
+  --sync-io         io-devices.xml → device tree + Create-PLC-Data-Type .tsproj
+                    templates + <Links>. Warn-only orphans unless --confirm-delete-io.
+  --sync-events     events.xml + event-classes/*.xml → missing Event Classes written
+                    into the .tsproj. Alone, needs NO Visual Studio session.
+  --build           Open, compile, report errors mapped to .st file:line.
+                    Exit 0 = BUILD PASSED, 1 = failed/timeout. For CI.
+
+Project lifecycle:
+  --init            Allow creating the solution/TwinCAT/PLC project when missing.
+                    Otherwise a missing solution is a hard error (exit 1) in every mode.
+
+Checks (read-only, no VS):
+  --check-events    Declared-vs-present Event Classes; exit 1 if any missing.
+                    (--events-only kept as deprecated alias.)
+
+Aliases: --build-only → --build (deprecated).
+Everything else (--source/--dest/--name/--ignore/--incremental/--confirm-delete/
+--confirm-delete-io/--export/--parse-only/--format-check) unchanged.
+```
+
+**Fixed stage order** for any selected subset:
+Phase A (VS open): code → libs → io-tree. Phase B (VS closed): Create-PLC-Data-Type
+edit (io), Event Class edit (events). Phase C (VS open, only if needed): links (io),
+build. VS launches lazily — `--sync-events` alone never opens it.
 
 ## Architecture Decisions
-- **Test harness first.** `StFileParser`, `StPouSource`, `IgnoreRules`,
-  `StLinter`, `StFormatter` are pure C# with no COM dependency, but the repo
-  has zero automated tests today (single `beckhoffAutomationInterface.csproj`,
-  no test project). Adding a test project before touching parser/sync logic
-  gives a fast regression net for changes that don't need a live TwinCAT
-  instance to verify.
-- **Known bugs before new features.** The two `TODO.md` bugs (duplicate
-  library refs, unknown DUT types) are small, isolated, and already
-  reproduced once — fix those before the larger provenance-mapping work so
-  they don't tangle with it.
-- **Provenance map, not a guess.** The error-location fix (Finding 1) needs
-  ground truth on what TwinCAT actually reports per PLC-object kind before
-  designing the mapping — the DUT case is confirmed (exported `.TcDUT` path,
-  `Line: 1`), but FUNCTION_BLOCK/METHOD/PROPERTY/GVL are not yet confirmed.
-- **Orphan/rename handling needs a policy decision from you, not just an
-  engineering default** — silently deleting PLC objects has real blast
-  radius on a shared project; silently leaving them stale is also wrong.
-  Task 7 exists specifically to make that call explicit before Task 8 builds
-  it.
+- **No new engines** — every stage reuses an existing Sync/* class as-is
+  (PouSyncEngine, LibrarySyncEngine, IoSyncEngine, TsprojPlcDataTypeEditor,
+  TsprojEventClassEditor, VariableLinkEngine, BuildRunner, ErrorLocationResolver).
+  The work is restructuring Program.RunSync + RunOptions only.
+- **Refactor before rewire** — Task 3 extracts stage methods with zero behavior
+  change; only Task 4 changes control flow. Keeps the risky VS-lifecycle diff small.
+- **Explicit bootstrap** — `--init` prevents the wrong-path silent-bootstrap trap
+  (real near-miss 2026-07-14) and makes CI fail loudly on a typo'd path.
 
 ## Task List
 
-### Phase 1: Test harness (foundation)
-- [x] Task 1: Add a unit test project covering existing parser/lint/format logic
+### Phase 1: Foundation
+- [x] Task 0: Archive completed plan, commit current tree
+- [ ] Task 1: SyncStages flags in RunOptions + RunOptionsTests
+- [ ] Task 2: --init guard against silent bootstrap
 
-### Checkpoint: Foundation
-- [x] New test project builds and `dotnet test` passes (25/25)
-- [x] Current parser behavior is now regression-protected before any of the
-      following phases touch it
+### Checkpoint A
+- [ ] All tests green; scratch full run behaves exactly as before (bootstrap via --init)
 
-### Phase 2: Close the two known TODO.md bugs
-- [x] Task 2: Fix duplicate library references (Tc2_Standard/Tc2_System/Tc3_Module)
-      (not reproducible — verified no duplicates across repeated real syncs)
-- [x] Task 3: Investigate and fix "Unknown type" DUT errors for EL3174/EL3214-derived types
-      (root cause: MDP5001 suffix is a config-hash, revision-dependent — see todo.md)
+### Phase 2: Stage execution
+- [ ] Task 3: Extract stage methods from RunSync (pure refactor, no behavior change)
+- [ ] Task 4: Wire stage selection + lazy VS lifecycle (+ --check-events exit code)
+- [ ] Task 5: CI build exit codes (0 pass / 1 fail or timeout)
 
-### Checkpoint: Known bugs closed
-- [x] Full sync+build against the real Shark project shows no duplicate
-      library references and no `C0077 Unknown type` errors —
-      BUILD PASSED 2026-07-14 (aliases now reference `MDP5001_320_5D7E181C`,
-      this machine's actual TwinCAT-generated name)
-- [x] `TODO.md` / `TODO.xml` deleted (superseded by this plan)
+### Checkpoint B
+- [ ] Scratch matrix: each mode alone, --sync-io --sync-events combined, default full
+      run, exit codes verified via $LASTEXITCODE
 
-### Phase 3: Compile-error → source-line mapping (Finding 1)
-- [x] Task 4: Confirm TwinCAT's reported FileName/Line shape per PLC-object kind
-      (all kinds section-relative; see todo.md's findings table)
-- [x] Task 5: Track `.st` file/line provenance through parsing and sync
-      (StPouSource.SourceFileName/DeclarationStartLine/ImplementationStartLine/
-      Get-SetStartLine, computed by StFileParser)
-- [x] Task 6: Translate build errors back to `.st` path/line before printing
-      (Sync/ErrorLocationResolver.cs; unmapped errors labeled, never dropped)
-
-### Checkpoint: Feedback loop is trustworthy
-- [x] Deliberately breaking one method in a multi-method FB file and running
-      the tool prints that file and a line landing on/near the real error —
-      verified 2026-07-14: every probe kind mapped to the EXACT broken line
-      (e.g. a broken METHOD in a multi-method FB → `FB_BrokenMethod.st:16`)
-
-### Phase 4: Drift detection / orphan handling (Finding 2)
-- [x] Task 7: Decide the orphan/rename policy (warn-only vs. prune, and at what scope)
-      (Option (c): warn always at both levels, prune stays opt-in where it
-      already was — matches the repo's --confirm-delete/--confirm-delete-io
-      safety-gate philosophy; full rationale in todo.md)
-- [x] Task 8: Implement the chosen policy
-      (Sync/KnownNamesTracker.cs + .st-known-names state + [drift] warnings
-      in Program.RunSync; verified by scratch VS runs + 6 unit tests)
+### Phase 3: Docs + real-project smoke
+- [ ] Task 6: README/usage; real Shark smoke (--check-events 0, --sync-events no-op,
+      --build BUILD PASSED exit 0); final commit
 
 ### Checkpoint: Complete
-- [x] Renaming or deleting a METHOD/POU inside `.st` source no longer leaves
-      invisible stale code compiling as part of the project
-- [x] All four issues verified against a real TwinCAT/Visual Studio run,
-      not just unit tests
-
-## PLAN COMPLETE (2026-07-15) — all phases, tasks, and checkpoints closed.
+- [ ] All acceptance criteria in todo.md met; committed
 
 ## Risks and Mitigations
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Can't fully unit-test COM-facing code (`PouSyncEngine`, `LibrarySyncEngine`, `BuildRunner`) | Med | Keep pure logic (name diffing, provenance mapping, error translation) extracted into COM-free functions that *are* unit-testable; reserve manual TwinCAT runs for the COM glue only |
-| TODO.md bugs (Tasks 2–3) may have a different root cause than hypothesized once reproduced | Med | Both tasks start with a repro step against the real project before writing a fix |
-| Task 7's policy choice changes Task 8's scope significantly | Med | Task 7 is a standalone decision task with no code, specifically to avoid discovering this mid-implementation |
-| TwinCAT error-location format (Task 4) turns out inconsistent/unreliable across object kinds | High | If so, Finding 1's fix may need to degrade gracefully (best-effort mapping + always show the raw value too) rather than promising exact line numbers everywhere |
+| VS lifecycle regressions when stages are skipped | Med | Pure extraction first (Task 3); lifecycle isolated in Task 4; per-mode scratch runs |
+| --init breaks githooks/run-incremental-sync.ps1 | Low | Hook targets an existing project (reopen path) — unaffected; noted in README |
+| Behavior drift in default mode | Med | Checkpoints compare scratch logs against pre-refactor output |
+| Real Shark project touched during verification | Low | Task 6 smoke only: read-only check, idempotent events no-op, one build |
 
 ## Open Questions
-- Task 7: warn-only-by-default (matching the existing `--confirm-delete`
-  opt-in philosophy) vs. prune-by-default for orphaned METHOD/PROPERTY
-  children — which do you want?
-- Is the real Shark project (referenced in `TODO.md`) available on this
-  machine for the manual verification steps in Tasks 2–4 and the Phase 3/4
-  checkpoints, or does repro need a smaller throwaway TwinCAT project?
+- None blocking — all four design decisions confirmed by the user 2026-07-15.
