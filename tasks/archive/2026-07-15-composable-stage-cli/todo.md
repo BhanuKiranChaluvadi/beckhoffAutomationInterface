@@ -211,3 +211,39 @@ exit 0). Commit.
 - [x] Committed
 
 ## PLAN COMPLETE (2026-07-15) — all tasks and checkpoints closed.
+
+---
+
+## Addendum: Follow-on maintainability pass (2026-07-15)
+
+Immediately after this plan closed, a separate maintainability/readability
+pass (SOLID principles + standard patterns) was requested and completed
+against the code this plan produced. It never got its own `tasks/plan.md`
+(planned and tracked via Claude's own plan-mode file + TaskCreate/TaskUpdate,
+not the repo's `tasks/` convention), so it's recorded here for a single
+unified history:
+
+- `Clock.cs` — deduped 4 copies of the `Now()` timestamp helper.
+- `ComInterop.cs` — deduped the `RPC_E_SERVERCALL_RETRYLATER` constant
+  (deliberately did NOT merge the two different retry-loop bodies).
+- `Sync/TsprojDataTypePool.cs` — extracted the load/find-or-create/hash/
+  backup-save envelope duplicated across `TsprojPlcDataTypeEditor` and
+  `TsprojEventClassEditor`, and `EventClassChecker`'s ad hoc read logic.
+  Also corrected `EventClassChecker`'s stale doc comment.
+- `ConsoleReport.cs` — `PrintLines()` collapsed ~19 repeated report-printing
+  loops into single calls, verified byte-identical output.
+- `SyncPipeline.cs` — extracted `RunSync` + all stage methods out of
+  `Program.cs` into an instance class (constructor-injected session/options/
+  ignore). `Program.cs` dropped from ~600 to 149 lines (CLI bootstrap only).
+
+Explicitly deferred as over-engineering for this scale: an `ILogger`
+abstraction, interfaces over the COM-backed engines, a stage-descriptor
+registry replacing the `SyncStages` enum, splitting `StFileParser`,
+redesigning the `*Report` classes' shapes.
+
+Verified the same way as the rest of this project: 73/73 tests green and
+unmodified at every step, plus a real scratch-project matrix and a real
+Shark project `--check-events` smoke check. Committed as `d9be2dc`
+("Maintainability pass: dedup helpers, extract shared editor envelope,
+split Program.cs by SRP"), pushed to `origin/main` alongside this plan's own
+commits.
