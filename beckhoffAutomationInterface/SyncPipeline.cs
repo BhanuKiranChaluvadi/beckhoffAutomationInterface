@@ -56,6 +56,14 @@ namespace BeckhoffAutomationInterface
                 ExportObject();
                 return;
             }
+            // Reverse export (regenerate --source FROM the existing project) — checked
+            // before the plain --export-links branch below because --export-all sets BOTH
+            // IsReverseExport and ExportLinks, and RunReverseExport handles links itself.
+            if (_options.IsReverseExport)
+            {
+                RunReverseExport();
+                return;
+            }
             if (_options.ExportLinks)
             {
                 _session.EnsureOpen();
@@ -146,6 +154,87 @@ namespace BeckhoffAutomationInterface
             string xml = ((ITcSysManager3)_session.SysManager).ProduceMappingInfo();
             File.WriteAllText(_options.VarLinksManifestPath, xml);
             Console.WriteLine("{0}: Exported current variable links -> '{1}'.", Now(), _options.VarLinksManifestPath);
+        }
+
+        /// <summary>
+        /// Reverse export: regenerate the --source tree FROM the existing project — the
+        /// read-side mirror of the forward pipeline (see ReverseExports). A one-time
+        /// bootstrap so a team can adopt the tool on a project that already exists, then
+        /// manage it as .st source thereafter. Runs the selected artifacts in a fixed
+        /// order — events first because it needs NO Visual Studio (pure .tsproj read), then
+        /// the Automation-Interface reads (code/libs/io) with VS opened lazily, then
+        /// links.xml. The overwrite guard already ran in Program.Main.
+        /// </summary>
+        void RunReverseExport()
+        {
+            ReverseExports exports = _options.ReverseExports;
+            Directory.CreateDirectory(_options.SourceFolder);
+
+            // Events: pure .tsproj read, no VS — do it first, while VS is still closed.
+            if (exports.HasFlag(ReverseExports.Events))
+            {
+                EventExportReport report = EventManifestWriter.Export(_options.TsprojFilePath, _options.EventManifestPath, _options.EventClassesFolder);
+                if (report.EventsXmlWritten)
+                    Console.WriteLine("{0}: Exported {1} event class(es) -> '{2}' (+ {1} template(s) in event-classes/).",
+                        Now(), report.WrittenTemplates.Count, _options.EventManifestPath);
+                else
+                    Console.WriteLine("{0}: No event classes found in the project — events.xml not written.", Now());
+            }
+
+            if (exports.HasFlag(ReverseExports.Code))
+            {
+                _session.EnsureOpen();
+                Console.WriteLine("{0}: Exporting all PLC objects -> '{1}'...", Now(), _options.SourceFolder);
+                ProjectExportReport report = null;
+                RetryOnBusy(() => report = ProjectCodeExporter.ExportAll(
+                    _session.SysManager.LookupTreeItem(_options.ProjectRootPath), _options.ProjectRootPath, _options.SourceFolder), "exporting PLC objects");
+                PrintLines("+ wrote    ", report.Written);
+                if (report.Unsupported.Count > 0)
+                {
+                    Console.WriteLine("{0}: {1} object(s) could not be exported (unsupported shape):", Now(), report.Unsupported.Count);
+                    PrintLines("! skipped  ", report.Unsupported);
+                }
+                Console.WriteLine("{0}: Code export complete ({1} .st file(s) written).", Now(), report.Written.Count);
+            }
+
+            if (exports.HasFlag(ReverseExports.Libraries))
+            {
+                _session.EnsureOpen();
+                List<LibraryReference> refs = null;
+                List<string> unparseable = null;
+                RetryOnBusy(() =>
+                {
+                    ITcPlcLibraryManager libManager = (ITcPlcLibraryManager)_session.SysManager.LookupTreeItem(_options.ReferencesTreePath);
+                    refs = LibrarySyncEngine.ReadReferences(libManager, out unparseable);
+                }, "reading library references");
+                LibraryManifestWriter.Write(_options.LibraryManifestPath, refs, unparseable);
+                Console.WriteLine("{0}: Exported {1} library reference(s) -> '{2}'.", Now(), refs.Count, _options.LibraryManifestPath);
+                if (unparseable.Count > 0)
+                    Console.WriteLine("{0}: {1} reference(s) had an unrecognized display-name format (left as comments for review).", Now(), unparseable.Count);
+            }
+
+            if (exports.HasFlag(ReverseExports.Io))
+            {
+                _session.EnsureOpen();
+                var ioReport = new IoExportReport();
+                RetryOnBusy(() => IoManifestWriter.Build(_session.SysManager.LookupTreeItem("TIID"), ioReport).Save(_options.IoManifestPath),
+                    "reading IO tree");
+                Console.WriteLine("{0}: Exported IO tree ({1} device(s), {2} box/terminal node(s)) -> '{3}'.",
+                    Now(), ioReport.DeviceCount, ioReport.NodeCount, _options.IoManifestPath);
+                if (ioReport.ProductsToVerify.Count > 0)
+                {
+                    Console.WriteLine("{0}: !! VERIFY {1} Product value(s) against the real hardware (derived from ItemSubTypeName; see IoManifestWriter):",
+                        Now(), ioReport.ProductsToVerify.Count);
+                    PrintLines("! verify   ", ioReport.ProductsToVerify);
+                }
+            }
+
+            // links.xml — variable links (turned on by --export-links or --export-all).
+            if (_options.ExportLinks)
+            {
+                _session.EnsureOpen();
+                ExportLinks();
+            }
         }
 
         /// <summary>Code stage: .st files -> PLC POUs (create/update/delete), plus the
@@ -379,7 +468,7 @@ namespace BeckhoffAutomationInterface
             // bulk COM call — then io-devices.xml's own <Links> apply on top, unchanged.
             // Both coexist rather than one replacing the other (see tasks/plan.md).
             bool varLinksApplied = false;
-            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.VarLinksManifestPath), "applying links.xml");
+            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.ProjectName, _options.VarLinksManifestPath), "applying links.xml");
             if (varLinksApplied)
                 Console.WriteLine("{0}: Applied links.xml.", Now());
 

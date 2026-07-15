@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using BeckhoffAutomationInterface.Sync;
 using static BeckhoffAutomationInterface.Clock;
 using static BeckhoffAutomationInterface.ConsoleReport;
@@ -96,6 +97,26 @@ namespace BeckhoffAutomationInterface
             return report;
         }
 
+        /// <summary>Lists the source-relative paths of files a reverse export would
+        /// overwrite: every existing .st file under --source, plus any of the manifests
+        /// (libraries/io-devices/events/links) already present. Empty when --source
+        /// doesn't exist yet or is empty — the normal bootstrap case.</summary>
+        static List<string> FindExistingSourceArtifacts(RunOptions options)
+        {
+            var found = new List<string>();
+            if (!Directory.Exists(options.SourceFolder))
+                return found;
+
+            foreach (string st in Directory.EnumerateFiles(options.SourceFolder, "*.st", SearchOption.AllDirectories))
+                found.Add(st.Substring(options.SourceFolder.Length).TrimStart('\\', '/'));
+
+            foreach (string manifest in new[] { options.LibraryManifestPath, options.IoManifestPath, options.EventManifestPath, options.VarLinksManifestPath })
+                if (File.Exists(manifest))
+                    found.Add(Path.GetFileName(manifest));
+
+            return found;
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -170,6 +191,26 @@ namespace BeckhoffAutomationInterface
                 Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
                 Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
                 Environment.Exit(1);
+            }
+
+            // Reverse-export overwrite guard: regenerating the source tree is destructive
+            // if --source already holds hand-edited files. Refuse unless --overwrite
+            // (CLI-only, like --init/--confirm-delete*) — safe-by-default, so a mistyped
+            // --source can't silently clobber real work. The forward direction is
+            // unaffected. Runs before Visual Studio ever opens.
+            if (options.IsReverseExport && !options.Overwrite)
+            {
+                List<string> existing = FindExistingSourceArtifacts(options);
+                if (existing.Count > 0)
+                {
+                    Console.Error.WriteLine("ERROR: --source already contains {0} file(s) that reverse export would overwrite:", existing.Count);
+                    foreach (string f in existing.Take(10))
+                        Console.Error.WriteLine("  {0}", f);
+                    if (existing.Count > 10)
+                        Console.Error.WriteLine("  ... and {0} more", existing.Count - 10);
+                    Console.Error.WriteLine("Pass --overwrite to proceed, or point --source at an empty folder.");
+                    Environment.Exit(1);
+                }
             }
 
             // Pre-flight checks

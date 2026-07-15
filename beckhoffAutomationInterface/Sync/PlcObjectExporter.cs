@@ -93,6 +93,14 @@ namespace BeckhoffAutomationInterface.Sync
             return string.Join("/", segments, 0, segments.Length - 1);
         }
 
+        /// <summary>True when item is a code-bearing object kind this exporter targets
+        /// (a DUT/GVL, or a FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE) — regardless of
+        /// whether its specific children are all supported. Lets a whole-project walk
+        /// (ProjectCodeExporter) tell "an object I should try to export" apart from a
+        /// plain folder / References / visualization it should just recurse through.</summary>
+        public static bool IsExportableKind(ITcSmTreeItem item) =>
+            DeclarationOnlyKinds.Contains(item.ItemType) || PouTerminators.ContainsKey(item.ItemType);
+
         public static bool IsSupported(ITcSmTreeItem item)
         {
             if (DeclarationOnlyKinds.Contains(item.ItemType))

@@ -26,6 +26,25 @@ namespace BeckhoffAutomationInterface
     }
 
     /// <summary>
+    /// The reverse-export artifacts a run can generate FROM an existing PLC project
+    /// (see tasks/2026-07-15-reverse-export-scaffold/): the read-side mirror of
+    /// SyncStages. Each --export-* CLI flag ORs one in; --export-all selects all four
+    /// (and additionally turns on the existing ExportLinks -> links.xml). This is a
+    /// one-time bootstrap/adoption direction, NOT the ongoing flow — .st stays the
+    /// human-edited source of truth once the tree exists.
+    /// </summary>
+    [Flags]
+    enum ReverseExports
+    {
+        None = 0,
+        Code = 1,
+        Libraries = 2,
+        Io = 4,
+        Events = 8,
+        All = Code | Libraries | Io | Events,
+    }
+
+    /// <summary>
     /// Resolved configuration for one run, built once from command-line arguments by
     /// <see cref="Parse"/>. Replaces the previously-hardcoded "Shark" paths and the
     /// _buildOnly/_eventsOnly static fields that used to live directly on Program.
@@ -68,6 +87,21 @@ namespace BeckhoffAutomationInterface
         public bool BuildOnly => Stages == SyncStages.Build;
 
         public bool ParseOnly { get; }
+
+        /// <summary>Which reverse-export artifacts this run generates from the existing
+        /// project (see ReverseExports). None when no --export-* flag was given — the
+        /// run then behaves as a normal forward sync/build.</summary>
+        public ReverseExports ReverseExports { get; }
+
+        /// <summary>True when this run is a reverse export (any --export-* flag), so the
+        /// pipeline generates source artifacts instead of syncing them into the project.</summary>
+        public bool IsReverseExport => ReverseExports != ReverseExports.None;
+
+        /// <summary>Safety gate for reverse export: without it, refusing to overwrite an
+        /// already-populated --source (existing .st files or manifests). CLI-only, never
+        /// read from .stconfig — same philosophy as --init/--confirm-delete*, so a
+        /// destructive regenerate can't happen by accident.</summary>
+        public bool Overwrite { get; }
 
         /// <summary>True when a `.stconfig` defaults file was actually found (and not
         /// suppressed by --no-config) — purely informational, so Program.cs can print a
@@ -157,7 +191,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, bool configFileLoaded)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, bool configFileLoaded)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -174,6 +208,8 @@ namespace BeckhoffAutomationInterface
             ConfirmDelete = confirmDelete;
             FormatCheck = formatCheck;
             ConfirmDeleteIo = confirmDeleteIo;
+            ReverseExports = reverseExports;
+            Overwrite = overwrite;
             ConfigFileLoaded = configFileLoaded;
         }
 
@@ -239,6 +275,17 @@ namespace BeckhoffAutomationInterface
                 : configStages != SyncStages.None ? configStages
                 : SyncStages.All; // neither specifies any stage = the original full sync+build run
 
+            // Reverse export (see ReverseExports) — the read-side mirror of the stage
+            // flags. CLI-only, deliberately NOT defaultable from .stconfig: it regenerates
+            // source files and is a one-time bootstrap, not a routine default. --export-all
+            // selects every artifact AND turns on the existing --export-links (links.xml).
+            ReverseExports reverseExports = ReverseExports.None;
+            if (args.Contains("--export-code")) reverseExports |= ReverseExports.Code;
+            if (args.Contains("--export-libs")) reverseExports |= ReverseExports.Libraries;
+            if (args.Contains("--export-io")) reverseExports |= ReverseExports.Io;
+            if (args.Contains("--export-events")) reverseExports |= ReverseExports.Events;
+            if (args.Contains("--export-all")) reverseExports |= ReverseExports.All;
+
             return new RunOptions(
                 sourceFolder, destinationFolder, projectName,
                 stages: stages,
@@ -253,10 +300,14 @@ namespace BeckhoffAutomationInterface
                 ignorePatterns: GetOptions(args, "--ignore"),
                 incremental: args.Contains("--incremental") || config.GetBool("incremental"),
                 exportObjectName: GetOption(args, "--export") ?? config.GetString("export"),
-                exportLinks: args.Contains("--export-links") || config.GetBool("export-links"),
+                // --export-all implies links.xml too (the variable-links artifact).
+                exportLinks: args.Contains("--export-links") || args.Contains("--export-all") || config.GetBool("export-links"),
                 confirmDelete: args.Contains("--confirm-delete"),
                 formatCheck: args.Contains("--format-check") || config.GetBool("format-check"),
                 confirmDeleteIo: args.Contains("--confirm-delete-io"),
+                reverseExports: reverseExports,
+                // Safety-gated, CLI-only (like --init/--confirm-delete*): never from config.
+                overwrite: args.Contains("--overwrite"),
                 configFileLoaded: configFileLoaded);
         }
 
@@ -336,6 +387,16 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --export-links    Write ALL currently-linked PLC-variable-to-IO-channel");
             Console.WriteLine("                    mappings out to links.xml (see below) — the way to capture");
             Console.WriteLine("                    links made by hand in the TwinCAT IDE");
+            Console.WriteLine();
+            Console.WriteLine("Reverse export (regenerate --source FROM an existing --dest/--name project;");
+            Console.WriteLine("one-time bootstrap for adopting the tool on a project that already exists):");
+            Console.WriteLine("  --export-code     ALL POUs/DUTs/GVLs -> mirrored .st files under --source");
+            Console.WriteLine("  --export-libs     library references -> libraries.xml");
+            Console.WriteLine("  --export-io       TIID device/box/terminal tree -> io-devices.xml");
+            Console.WriteLine("  --export-events   .tsproj event classes -> events.xml + event-classes/*.xml");
+            Console.WriteLine("  --export-all      all of the above + --export-links (links.xml)");
+            Console.WriteLine("  --overwrite       allow reverse export to overwrite existing files in --source");
+            Console.WriteLine("                    (required when --source already has .st files or manifests)");
             Console.WriteLine("  --config <path>   Look for '.stconfig' in this folder instead of --source");
             Console.WriteLine("  --no-config       Ignore any '.stconfig' defaults file for this run only");
             Console.WriteLine("  --help, -h        Show this message");

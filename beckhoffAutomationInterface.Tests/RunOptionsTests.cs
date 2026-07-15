@@ -82,5 +82,53 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.True(Parse("--export-links").ExportLinks);
             Assert.False(Parse("--sync-code").ExportLinks);
         }
+
+        [Fact]
+        public void NoReverseFlags_MeansNotAReverseExport()
+        {
+            RunOptions options = Parse("--source", ".");
+
+            Assert.Equal(ReverseExports.None, options.ReverseExports);
+            Assert.False(options.IsReverseExport);
+        }
+
+        [Fact]
+        public void SingleReverseFlag_SelectsExactlyThatArtifact()
+        {
+            Assert.Equal(ReverseExports.Code, Parse("--export-code").ReverseExports);
+            Assert.Equal(ReverseExports.Libraries, Parse("--export-libs").ReverseExports);
+            Assert.Equal(ReverseExports.Io, Parse("--export-io").ReverseExports);
+            Assert.Equal(ReverseExports.Events, Parse("--export-events").ReverseExports);
+        }
+
+        [Fact]
+        public void ReverseFlags_Compose()
+        {
+            RunOptions options = Parse("--export-code", "--export-libs");
+
+            Assert.Equal(ReverseExports.Code | ReverseExports.Libraries, options.ReverseExports);
+            Assert.True(options.IsReverseExport);
+        }
+
+        [Fact]
+        public void ExportAll_SelectsEveryArtifact_AndTurnsOnLinks()
+        {
+            RunOptions options = Parse("--export-all");
+
+            Assert.Equal(ReverseExports.All, options.ReverseExports);
+            Assert.True(options.ReverseExports.HasFlag(ReverseExports.Code));
+            Assert.True(options.ReverseExports.HasFlag(ReverseExports.Libraries));
+            Assert.True(options.ReverseExports.HasFlag(ReverseExports.Io));
+            Assert.True(options.ReverseExports.HasFlag(ReverseExports.Events));
+            // --export-all also generates links.xml (the variable-links artifact).
+            Assert.True(options.ExportLinks);
+        }
+
+        [Fact]
+        public void Overwrite_ParsedOnlyWhenGiven()
+        {
+            Assert.True(Parse("--export-all", "--overwrite").Overwrite);
+            Assert.False(Parse("--export-all").Overwrite);
+        }
     }
 }

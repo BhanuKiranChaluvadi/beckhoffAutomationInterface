@@ -169,6 +169,9 @@ if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 | `--confirm-delete-io` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
 | `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (all supported kinds — see below). |
 | `--export-links` | off | Write ALL currently-linked PLC-variable-to-IO-channel mappings out to `links.xml` (see below) — the way to capture links made by hand in the TwinCAT IDE. |
+| `--export-code` / `--export-libs` / `--export-io` / `--export-events` | off | **Reverse export** — regenerate the corresponding source artifact FROM the existing project (`.st` tree / `libraries.xml` / `io-devices.xml` / `events.xml` + templates). See [Reverse export](#reverse-export-adopting-an-existing-project). |
+| `--export-all` | off | **Reverse export everything**: all `.st` + `libraries.xml` + `io-devices.xml` + `events.xml` (+ `event-classes/*.xml`) + `links.xml`. |
+| `--overwrite` | off | Allow reverse export to overwrite existing files in `--source`. Required when `--source` already contains `.st` files or manifests (safe-by-default, CLI-only — never from `.stconfig`). |
 | `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
 | `--config <path>` | `--source`'s folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
 | `--no-config` | off | Ignore any `.stconfig` defaults file for this run only. |
@@ -340,6 +343,47 @@ Phase 1 spike findings in `docs/ideas/st-plc-bidirectional-sync.md`) —
 TwinCAT appears to store POU text internally in a legacy codepage, so rare
 special characters in comments/strings may not survive an export exactly.
 
+### Reverse export (adopting an existing project)
+
+`--export <name>` above writes **one** object back to `.st`. The `--export-*`
+family is the whole-project version: point them at an **existing** TwinCAT
+project (`--dest`/`--name`) and they regenerate the entire `--source` tree, so
+you can start managing a project you already have as git-tracked `.st` source.
+This is the reverse of the normal sync — a **one-time bootstrap**, not the
+ongoing flow (once the tree exists, edit `.st` and sync forward as usual).
+
+| Flag | Generates |
+|---|---|
+| `--export-code` | every POU/DUT/GVL → mirrored `.st` files under `--source` |
+| `--export-libs` | library references → `libraries.xml` |
+| `--export-io` | the `TIID` device/box/terminal tree → `io-devices.xml` |
+| `--export-events` | `.tsproj` Event Classes → `events.xml` + `event-classes/*.xml` (no Visual Studio needed) |
+| `--export-all` | all of the above **plus** `--export-links` (`links.xml`) |
+
+```powershell
+# One-time: bootstrap a fresh source tree from an existing project, then commit it.
+.\beckhoffAutomationInterface.exe --dest "C:\...\TwinCAT" --name Shark --source "C:\...\ST\Shark-new" --export-all
+cd "C:\...\ST\Shark-new"; git init; git add -A; git commit -m "Import Shark from TwinCAT"
+# From here on, edit .st and sync FORWARD as normal (see "Typical workflow").
+```
+
+**Safety — `--overwrite`:** to avoid clobbering hand-edited source, reverse
+export **refuses** (exit 1) if `--source` already contains any `.st` files or
+manifests. Pass `--overwrite` to regenerate in place, or point `--source` at an
+empty folder. Like `--init`/`--confirm-delete*`, `--overwrite` is CLI-only and
+never read from `.stconfig`. Reverse export also requires the project to already
+exist (it never bootstraps — a missing solution is a hard error, since there is
+nothing to export from).
+
+**Caveats:**
+- The non-ASCII round-trip caveat above applies to `--export-code` too (it reuses
+  the same per-object exporter).
+- `--export-io` recovers each terminal's `Product` from its `ItemSubTypeName`
+  description (there is no exact read-back API — see `Sync/IoManifestWriter.cs`).
+  Any value it can't map cleanly to a Beckhoff product code is listed as
+  `! verify` in the output — **review `io-devices.xml`'s `Product` attributes
+  against the real hardware before relying on the manifest for a forward sync.**
+
 ### Naming-convention linting
 
 Every parse (`--parse-only` or a full sync) runs a naming-convention linter
@@ -424,15 +468,37 @@ Mapping" does. This is how a file like the real
 comes to exist. `--export-links` overwrites any existing `links.xml`, the
 same convention `--export <name>` already uses for its target `.st` file.
 
+**Prefer `--export-links` over hand-authoring.** Live testing (2026-07-15,
+TwinCAT 3.1) found `ConsumeMappingInfo` is picky about the exact shape:
+```xml
+<VarLinks>
+  <OwnerA Name="TIPC^Shark^Shark Instance">
+    <OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)">
+      <Link VarA="PlcTask Inputs^GVL_Shark.bMotorRunSensor" VarB="Channel 1^Input" />
+    </OwnerB>
+  </OwnerA>
+</VarLinks>
+```
+— one `OwnerA` per PLC instance (both directions together, no `Type`
+attribute), and the `PlcTask Inputs`/`PlcTask Outputs` group folded directly
+into `VarA` (no separate `GrpA`) — confirmed round-trip-verified end to end
+(linked, built cleanly, `BUILD PASSED`). A richer variant also exists in the
+wild (`OwnerA` with separate `Prefix`/`Type`, `Link` with a separate `GrpA`
+plus `TypeA`/`InOutA`/`GuidA` metadata — the real
+`Spectrometer Instance Mappings.xml`'s own shape, and Beckhoff's official
+`CodeGenerationDemo` sample's alternate shape) — `--check-links` parses
+both, but only the shape above was confirmed to actually apply via
+`ConsumeMappingInfo` in this environment; the richer one was tried first and
+silently applied nothing (no COM exception, but an `--export-links`
+round-trip came back empty). If in doubt, always prefer `--export-links`.
+
 See [`links.xml.example`](links.xml.example) at the repo root for a fully
-annotated template, including the schema shape and a second, older/hand-
-authored variant that also works (seen in Beckhoff's own official
-`CodeGenerationDemo` sample). `--check-links`/`--parse-only` also
-cross-reference `links.xml` entries the same way they do `io-devices.xml`'s
-`<Links>` — a `links.xml` entry whose variable is nested through a
-`FUNCTION_BLOCK` instance (e.g. `MAIN.fbSpec.inLogicSig[1]`, real usage seen
-in that same reference project) can't be statically verified either way, so
-it's reported informationally as "unresolvable," never as unlinked or stale.
+annotated template. `--check-links`/`--parse-only` also cross-reference
+`links.xml` entries the same way they do `io-devices.xml`'s `<Links>` — a
+`links.xml` entry whose variable is nested through a `FUNCTION_BLOCK`
+instance (e.g. `MAIN.fbSpec.inLogicSig[1]`, real usage seen in that same
+reference project) can't be statically verified either way, so it's
+reported informationally as "unresolvable," never as unlinked or stale.
 
 ### Style checking
 

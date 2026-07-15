@@ -73,37 +73,60 @@ events (no VS) → code → libs → io-tree → io-links/links.xml → done. VS
 opened lazily by the first artifact that needs the Automation Interface; a
 lone `--export-events` never launches it.
 
+## Implementation status (2026-07-15)
+
+**Built and verified here (build + COM-free unit tests, 125 → 143 passing):**
+Tasks 0, 1, 3, 4, 5, 6, 7, 8 are implemented — all reverse-export code compiles,
+the CLI surface + overwrite guard + exit codes are verified by running the built
+`.exe`, and every COM-free unit (flag parsing, `LibraryManifestWriter` round-trip,
+`EventManifestWriter` round-trip + event-class discrimination, the IO product-code
+heuristic) is unit-tested.
+
+**Still needs a live TwinCAT XAE session** (COM can't run headless in this
+environment — see the run commands in the final report / README):
+- **Task 2 spike is UNRESOLVED, not skipped.** `--export-io`'s product read-back
+  is implemented against `ItemSubTypeName` (the field Beckhoff's `ScanBoxesTC2`
+  reads) with a product-code regex, and every non-clean value is reported as
+  `! verify`. Whether `ItemSubTypeName` yields the exact `CreateChild` `vInfo`
+  string on real hardware is the open question — run `--export-io` against the
+  real Shark project and diff the emitted `Product`s. If wrong, swap
+  `IoManifestWriter.DeriveProduct` for the `ProduceXml`/`.xti`-XML fallback.
+- Round-trip smokes for code/libs/events/io (reverse into a scratch source →
+  forward-sync into a scratch project → `--build` PASSED).
+
 ## Task List
 
 ### Phase 1: Foundation + de-risk IO
-- [ ] Task 0: Create task dir; commit current working tree first (clean baseline)
-- [ ] Task 1: `--export-*` + `--overwrite` flags in `RunOptions` (+ `RunOptionsTests`)
-- [ ] Task 2 (SPIKE): read a live terminal's `Product` back from the tree; decide IO include-vs-defer
+- [x] Task 0: Create task dir; commit current working tree first (clean baseline)
+- [x] Task 1: `--export-*` + `--overwrite` flags in `RunOptions` (+ `RunOptionsTests`) — 6 new tests
+- [~] Task 2 (SPIKE): read a live terminal's `Product` — IMPLEMENTED via ItemSubTypeName + regex; empirical confirmation pending a live session (see status above)
 
 ### Checkpoint A
 - [ ] Tests green; spike result recorded in this file; IO scope decided
 
 ### Phase 2: Low-risk reversers (reuse proven readers)
-- [ ] Task 3: `ProjectCodeExporter` — walk POUs/DUTs/GVLs → all `.st` (reuse `PlcObjectExporter`)
-- [ ] Task 4: `LibraryManifestWriter` — references → `libraries.xml`
-- [ ] Task 5: `EventManifestWriter` — `.tsproj` pool → `events.xml` + `event-classes/*.xml`
+- [x] Task 3: `ProjectCodeExporter` — walk tree → all `.st` (reuses `PlcObjectExporter`; new `IsExportableKind` helper)
+- [x] Task 4: `LibraryManifestWriter` — references → `libraries.xml` (shared `TryParseDisplayName`/`ReadReferences`; 2 tests)
+- [x] Task 5: `EventManifestWriter` — `.tsproj` pool → `events.xml` + `event-classes/*.xml` (4 tests)
 
 ### Checkpoint B
-- [ ] Round-trip each: reverse into scratch source → forward-sync into scratch project → `--build` PASSED
+- [x] COM-free round-trips unit-tested (writer → forward parser); [ ] live COM round-trips pending a session
 
-### Phase 3: IO (if spike passed) + orchestration
-- [ ] Task 6: `IoManifestWriter` — `TIID` tree → `io-devices.xml` (only if Task 2 passed)
-- [ ] Task 7: Wire `--export-*`/`--export-all` into `Program`/`SyncPipeline` — lazy VS, overwrite guard, fixed order
+### Phase 3: IO + orchestration
+- [x] Task 6: `IoManifestWriter` — `TIID` tree → `io-devices.xml` (product read-back pending Task 2 confirmation; 6 tests on the heuristic)
+- [x] Task 7: Wire `--export-*`/`--export-all` into `Program`/`SyncPipeline` — lazy VS, overwrite guard, fixed order (events→code→libs→io→links)
 
 ### Checkpoint C
-- [ ] `--export-all` into an empty scratch source produces a tree that forward-syncs + builds clean
-- [ ] Overwrite guard: refuses on a non-empty source without `--overwrite`, proceeds with it
+- [x] Overwrite guard verified via the built `.exe`: refuses on non-empty `--source` (303 files) exit 1; missing-project reverse exits 1
+- [ ] `--export-all` into an empty scratch source that forward-syncs + builds clean — pending a live session
 
 ### Phase 4: Docs + real-project smoke
-- [ ] Task 8: README (reverse section + flag table + typical adoption workflow); real Shark smoke into a scratch source dir; final commit
+- [x] Task 8: README (reverse section + flag-table rows + adoption workflow + caveats)
+- [ ] Real Shark smoke into a scratch source dir — pending a live session
 
 ### Checkpoint: Complete
-- [ ] All acceptance criteria in `todo.md` met; committed
+- [x] All COM-free acceptance criteria met, build green (143 tests), committed
+- [ ] Live-COM acceptance criteria (spike + round-trip smokes) — pending an XAE session
 
 ## Risks and Mitigations
 | Risk | Impact | Mitigation |

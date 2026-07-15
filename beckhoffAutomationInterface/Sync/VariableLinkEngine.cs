@@ -78,12 +78,29 @@ namespace BeckhoffAutomationInterface.Sync
         /// CodeGenerationDemo sample (ConsumeMappings in CodeGenerationScript.cs). Unlike
         /// Sync(...) above, a failure here is one whole-file COMException, not a per-link
         /// report — the caller decides how to handle/report it. Returns false (no-op) when
-        /// "links.xml" doesn't exist, same as an empty &lt;Links&gt; section today.</summary>
-        public static bool ApplyFromFile(ITcSysManager sysManager, string linksXmlPath)
+        /// "links.xml" doesn't exist, same as an empty &lt;Links&gt; section today.
+        ///
+        /// Compiles the PLC project first, same as Sync(...) above and for the same reason:
+        /// the PLC instance's task I/O image doesn't exist (so PlcVar paths don't resolve)
+        /// until after a compile — confirmed necessary here too, not just for LinkVariables
+        /// (a first attempt without this compile applied with no COM exception, but the
+        /// master then hung the build on TwinCAT's modal "needs sync master" dialog because
+        /// nothing had actually resolved).</summary>
+        public static bool ApplyFromFile(ITcSysManager sysManager, string plcName, string linksXmlPath)
         {
             string xml = VarLinksFile.LoadRawXml(linksXmlPath);
             if (xml == null)
                 return false;
+
+            try
+            {
+                var plcProject = (ITcPlcProject)sysManager.LookupTreeItem("TIPC^" + plcName);
+                plcProject.CompileProject();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("    (CompileProject before applying links.xml failed: {0})", ex.Message);
+            }
 
             ((ITcSysManager3)sysManager).ConsumeMappingInfo(xml);
             return true;

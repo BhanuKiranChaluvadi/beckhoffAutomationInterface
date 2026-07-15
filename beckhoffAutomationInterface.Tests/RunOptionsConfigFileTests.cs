@@ -127,13 +127,25 @@ name=FromConfig
         [Fact]
         public void SafetyFlags_NeverReadFromConfig_EvenWhenPresent()
         {
-            WriteConfig(_dir, "init=true\nconfirm-delete=true\nconfirm-delete-io=true");
+            WriteConfig(_dir, "init=true\nconfirm-delete=true\nconfirm-delete-io=true\noverwrite=true");
 
             RunOptions options = RunOptions.Parse(new[] { "--parse-only" }, cwd: _dir);
 
             Assert.False(options.Init);
             Assert.False(options.ConfirmDelete);
             Assert.False(options.ConfirmDeleteIo);
+            Assert.False(options.Overwrite);
+        }
+
+        [Fact]
+        public void ReverseExports_NeverComeFromConfig_OnlyCli()
+        {
+            WriteConfig(_dir, "export-code=true\nexport-all=true");
+
+            RunOptions options = RunOptions.Parse(new[] { "--parse-only" }, cwd: _dir);
+
+            Assert.Equal(ReverseExports.None, options.ReverseExports);
+            Assert.False(options.IsReverseExport);
         }
 
         [Fact]

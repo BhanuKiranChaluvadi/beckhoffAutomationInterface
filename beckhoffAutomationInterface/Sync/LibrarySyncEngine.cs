@@ -27,6 +27,52 @@ namespace BeckhoffAutomationInterface.Sync
     {
         static readonly Regex DisplayNamePattern = new Regex(@"^(?<name>.+?),\s*(?<version>.+?)\s*\((?<company>.+)\)$");
 
+        /// <summary>Parses an ITcPlcLibRef combined display name ("Tc2_Standard, *
+        /// (Beckhoff Automation GmbH)") into Name/Version/Company. Returns false and sets
+        /// name = the whole display name (version/company null) when it doesn't match —
+        /// callers then leave such a reference untouched rather than risk a wrong removal.</summary>
+        public static bool TryParseDisplayName(string displayName, out string name, out string version, out string company)
+        {
+            Match m = DisplayNamePattern.Match(displayName);
+            if (m.Success)
+            {
+                name = m.Groups["name"].Value;
+                version = m.Groups["version"].Value;
+                company = m.Groups["company"].Value;
+                return true;
+            }
+            name = displayName;
+            version = null;
+            company = null;
+            return false;
+        }
+
+        /// <summary>Reads every existing library reference as a LibraryReference, for the
+        /// reverse (libraries.xml export) direction — see Sync/LibraryManifestWriter.cs.
+        /// Enumerates 0-based (ITcPlcReferences is 0-based, unlike ITcSmTreeItem.Child).
+        /// Unparseable display names are still returned (Name = full display name, null
+        /// Version/Company) and also collected into `unparseable` for the caller to warn.</summary>
+        public static List<LibraryReference> ReadReferences(ITcPlcLibraryManager libManager, out List<string> unparseable)
+        {
+            var result = new List<LibraryReference>();
+            unparseable = new List<string>();
+            ITcPlcReferences references = libManager.References;
+            for (int i = 0; i < references.Count; i++)
+            {
+                string displayName = references[i].Name;
+                if (TryParseDisplayName(displayName, out string name, out string version, out string company))
+                {
+                    result.Add(new LibraryReference(name, version, company));
+                }
+                else
+                {
+                    result.Add(new LibraryReference(displayName, null, null));
+                    unparseable.Add(displayName);
+                }
+            }
+            return result;
+        }
+
         public static LibrarySyncReport Sync(ITcPlcLibraryManager libManager, IReadOnlyList<LibraryReference> desired)
         {
             var report = new LibrarySyncReport();
@@ -38,9 +84,8 @@ namespace BeckhoffAutomationInterface.Sync
             {
                 ITcPlcLibRef libRef = references[i];
                 string displayName = libRef.Name;
-                Match m = DisplayNamePattern.Match(displayName);
-                existing.Add(m.Success
-                    ? (displayName, m.Groups["name"].Value, m.Groups["version"].Value, m.Groups["company"].Value)
+                existing.Add(TryParseDisplayName(displayName, out string name, out string version, out string company)
+                    ? (displayName, name, version, company)
                     : (displayName, displayName, (string)null, (string)null));
             }
 
