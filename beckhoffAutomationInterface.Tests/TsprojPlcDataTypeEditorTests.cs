@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using BeckhoffAutomationInterface.Sync;
 using Xunit;
 
@@ -7,12 +7,14 @@ namespace BeckhoffAutomationInterface.Tests
     public class TsprojPlcDataTypeEditorTests : System.IDisposable
     {
         readonly string _dir;
+        readonly string _templatesFolder;
         readonly string _tsprojPath;
 
         public TsprojPlcDataTypeEditorTests()
         {
             _dir = Path.Combine(Path.GetTempPath(), "TsprojPlcDataTypeEditorTests_" + Guid.NewGuid());
-            Directory.CreateDirectory(Path.Combine(_dir, "plc-data-types"));
+            _templatesFolder = Path.Combine(_dir, "plc-data-types");
+            Directory.CreateDirectory(_templatesFolder);
             _tsprojPath = Path.Combine(_dir, "Test.tsproj");
         }
 
@@ -54,7 +56,7 @@ namespace BeckhoffAutomationInterface.Tests
         void WriteFixture()
         {
             File.WriteAllText(_tsprojPath, MinimalTsproj);
-            File.WriteAllText(Path.Combine(_dir, "plc-data-types", "EL3174.xml"), Template);
+            File.WriteAllText(Path.Combine(_templatesFolder, "EL3174.xml"), Template);
         }
 
         [Fact]
@@ -63,7 +65,7 @@ namespace BeckhoffAutomationInterface.Tests
             WriteFixture();
             string before = File.ReadAllText(_tsprojPath);
 
-            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, new List<PlcDataTypeTarget>(), _dir);
+            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, new List<PlcDataTypeTarget>(), _templatesFolder);
 
             Assert.Empty(result.Applied);
             Assert.Empty(result.Warnings);
@@ -77,7 +79,7 @@ namespace BeckhoffAutomationInterface.Tests
             WriteFixture();
             var targets = new List<PlcDataTypeTarget> { new PlcDataTypeTarget("EL3174_2.1", "EL3174", "Channel") };
 
-            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _dir);
+            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _templatesFolder);
 
             Assert.Equal("EL3174_2.1", Assert.Single(result.Applied));
             Assert.Empty(result.Warnings);
@@ -103,10 +105,10 @@ namespace BeckhoffAutomationInterface.Tests
         {
             WriteFixture();
             var targets = new List<PlcDataTypeTarget> { new PlcDataTypeTarget("EL3174_2.1", "EL3174", "Channel") };
-            TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _dir);
+            TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _templatesFolder);
             string afterFirstRun = File.ReadAllText(_tsprojPath);
 
-            PlcDataTypeEditResult second = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _dir);
+            PlcDataTypeEditResult second = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _templatesFolder);
 
             Assert.Equal("EL3174_2.1 (already set)", Assert.Single(second.Applied));
             Assert.Equal(afterFirstRun, File.ReadAllText(_tsprojPath));
@@ -123,7 +125,7 @@ namespace BeckhoffAutomationInterface.Tests
             WriteFixture();
             var targets = new List<PlcDataTypeTarget> { new PlcDataTypeTarget("EL3174_9.9", "EL3174", "Channel") };
 
-            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _dir);
+            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _templatesFolder);
 
             Assert.Empty(result.Applied);
             string warning = Assert.Single(result.Warnings);
@@ -138,7 +140,7 @@ namespace BeckhoffAutomationInterface.Tests
             // Deliberately not writing a template file for this product.
             var targets = new List<PlcDataTypeTarget> { new PlcDataTypeTarget("EL3174_2.1", "EL9999", "Channel") };
 
-            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _dir);
+            PlcDataTypeEditResult result = TsprojPlcDataTypeEditor.Apply(_tsprojPath, targets, _templatesFolder);
 
             Assert.Empty(result.Applied);
             Assert.Contains("no plc-data-types/EL9999.xml template found", Assert.Single(result.Warnings));

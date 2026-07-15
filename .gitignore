@@ -5,3 +5,5 @@ run*.txt
 parseOnly.txt
 helper/
 githooks/logs/
+.st-sync-state
+.st-known-names

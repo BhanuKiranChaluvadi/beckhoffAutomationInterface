@@ -1,7 +1,28 @@
 <!--
   EtherCAT I/O hardware tree for the Shark project (see Sync/IoManifestParser.cs).
-  Transcribed from images/devices.jpg (Solution Explorer capture of the live
-  PLC_NFL_SHARK project's I/O tree).
+  Originally transcribed from images/devices.jpg (Solution Explorer capture of
+  the live PLC_NFL_SHARK project's I/O tree) — but that screenshot's visual
+  nesting (Box(CU2508) -> Box(EK1100) -> Terminals) does NOT match how the
+  real Shark.tsproj actually stores the tree, confirmed by reading the real
+  file's raw XML nesting depth directly (2026-07-14):
+
+  BH1: "Box 1 (CU2508)" and "EK1100_1.1" are SIBLINGS (both direct children of
+  BH1) — EK1100_1.1 is the one that actually carries the 8 terminal children.
+  BH2: "Box 44 (CU2508)" and "EK1100_2.1" are ALSO siblings of each other, and
+  EK1100_2.1 itself has NO children at all — every one of BH2's 19 remaining
+  terminals is nested under the FIRST terminal, "EL3174_2.1", not under
+  EK1100_2.1 (apparently TwinCAT's own on-disk chain/bus-order representation
+  for this coupler, not a real ownership relationship).
+
+  This matters because Sync/IoSyncEngine.cs's DeleteOrphans prunes any real
+  direct child not declared here. The previous (wrong) nesting caused
+  EK1100_1.1/EK1100_2.1/EL3174_2.1 to look like undeclared orphans and
+  triggered DeleteChild on them — which would have deleted almost all of
+  BH1/BH2's real hardware (an in-flight COM RPC failure happened to prevent
+  the delete from completing; see tasks/todo.md). Keep this manifest's
+  nesting in exact sync with the real project's structure, not the
+  screenshot's visual grouping — verify against the real .tsproj's raw XML
+  indentation before changing this file again.
 
   Scope: BH1 and BH2 only. BH3/BH4/BH5 (in the same screenshot) are deliberately
   omitted for now:
@@ -21,44 +42,42 @@
 -->
 <IoTree>
   <Device Name="BH1" Disabled="true">
-    <Box Name="Box 1 (CU2508)" Product="CU2508">
-      <Box Name="EK1100_1.1" Product="EK1100">
-        <Terminal Name="EL2008_1.1" Product="EL2008" />
-        <Terminal Name="EL2008_1.2" Product="EL2008" />
-        <Terminal Name="EL2008_1.3" Product="EL2008" />
-        <Terminal Name="EL2008_1.4" Product="EL2008" />
-        <Terminal Name="EL2008_1.5" Product="EL2008" />
-        <Terminal Name="EL2008_1.6" Product="EL2008" />
-        <Terminal Name="EL9505_1.1" Product="EL9505" />
-        <Terminal Name="EL9011_1.1" Product="EL9011" />
-      </Box>
+    <Box Name="Box 1 (CU2508)" Product="CU2508" />
+    <Box Name="EK1100_1.1" Product="EK1100">
+      <Terminal Name="EL2008_1.1" Product="EL2008" />
+      <Terminal Name="EL2008_1.2" Product="EL2008" />
+      <Terminal Name="EL2008_1.3" Product="EL2008" />
+      <Terminal Name="EL2008_1.4" Product="EL2008" />
+      <Terminal Name="EL2008_1.5" Product="EL2008" />
+      <Terminal Name="EL2008_1.6" Product="EL2008" />
+      <Terminal Name="EL9505_1.1" Product="EL9505" />
+      <Terminal Name="EL9011_1.1" Product="EL9011" />
     </Box>
   </Device>
 
   <Device Name="BH2" Disabled="true">
-    <Box Name="Box 44 (CU2508)" Product="CU2508">
-      <Box Name="EK1100_2.1" Product="EK1100">
-        <Terminal Name="EL3174_2.1" Product="EL3174" CreatePlcType="Channel" />
-        <Terminal Name="EL3174_2.2" Product="EL3174" CreatePlcType="Channel" />
-        <Terminal Name="EL3174_2.3" Product="EL3174" CreatePlcType="Channel" />
-        <Terminal Name="EL1008_2.1" Product="EL1008" />
-        <Terminal Name="EL1008_2.2" Product="EL1008" />
-        <Terminal Name="EL9410_2.1" Product="EL9410" />
-        <Terminal Name="EL3214_2.1" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.2" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.3" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.4" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.5" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.6" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.7" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.8" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.9" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.10" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3214_2.11" Product="EL3214" CreatePlcType="Channel" />
-        <Terminal Name="EL3443_2.1" Product="EL3443" />
-        <Terminal Name="EL6022_2.1" Product="EL6022" />
-        <Terminal Name="EL9011_2.1" Product="EL9011" />
-      </Box>
-    </Box>
+    <Box Name="Box 44 (CU2508)" Product="CU2508" />
+    <Box Name="EK1100_2.1" Product="EK1100" />
+    <Terminal Name="EL3174_2.1" Product="EL3174" CreatePlcType="Channel">
+      <Terminal Name="EL3174_2.2" Product="EL3174" CreatePlcType="Channel" />
+      <Terminal Name="EL3174_2.3" Product="EL3174" CreatePlcType="Channel" />
+      <Terminal Name="EL1008_2.1" Product="EL1008" />
+      <Terminal Name="EL1008_2.2" Product="EL1008" />
+      <Terminal Name="EL9410_2.1" Product="EL9410" />
+      <Terminal Name="EL3214_2.1" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.2" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.3" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.4" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.5" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.6" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.7" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.8" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.9" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.10" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3214_2.11" Product="EL3214" CreatePlcType="Channel" />
+      <Terminal Name="EL3443_2.1" Product="EL3443" />
+      <Terminal Name="EL6022_2.1" Product="EL6022" />
+      <Terminal Name="EL9011_2.1" Product="EL9011" />
+    </Terminal>
   </Device>
 </IoTree>

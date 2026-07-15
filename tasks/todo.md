@@ -289,12 +289,148 @@ confirmed — before the POU sync/build, so a missing prerequisite is
 caught before spending ~5+ minutes syncing 1261 POUs. Not implemented
 yet; flagging for a decision on priority.
 
+**Event Class creation is NOT a dead end after all — implemented and
+confirmed working (2026-07-14).** Added `Sync/TsprojEventClassEditor.cs`,
+which edits the .tsproj on disk exactly like `TsprojPlcDataTypeEditor`
+(same top-level `<DataTypes>` pool, same close-VS/edit/reopen-VS
+sequence in `Program.RunSync`). The content comes from
+`ST/Shark/event-classes/BeckhoffLibEvents.xml`, copied verbatim from
+`PLC_NFL_SHARK.tsproj`'s real `BeckhoffLibEvents` `<DataType>` (real
+GUID `{70AB1C3F-...}`, not a freshly generated one — the earlier 4
+dead-end attempts used both the wrong parent element AND an invented
+GUID).
+
+Ran against a disposable scratch project (never the real Shark project)
+to verify end-to-end, since the doc above records VS silently stripping
+hand-inserted `<DataType>` blocks on its own next save as a real risk for
+the 4 earlier (wrong-location) attempts:
+1. First run crashed with an unhandled `XmlException` (`An XML comment
+   cannot contain '--'`) — `BeckhoffLibEvents.xml`'s doc comment had a
+   flattened em-dash (literal `--`), illegal inside an XML comment.
+   `PlcDataTypeTemplate.Load` doesn't catch parse errors, so this killed
+   the whole process right after Visual Studio was closed, before the
+   Event Class was ever written or the build ever ran. This — not a
+   silent VS strip — was the actual cause of "compilation failed because
+   events are not created." Fixed the two `--` occurrences; swept the
+   other shipped XML (`plc-data-types/*.xml`, `events.xml`,
+   `io-devices.xml`, `libraries.xml`) for the same mistake — none found.
+2. Re-ran clean: `~ added BeckhoffLibEvents`, VS reopened, solution
+   opened, **BUILD PASSED**. Confirmed via direct `.tsproj` inspection
+   afterward that the `BeckhoffLibEvents` `<DataType>` survived VS
+   reopening + the solution reload + the build — it was NOT silently
+   stripped this time (top-level `<DataTypes>` pool, matching how VS
+   itself would place it, unlike the earlier wrong-location attempts).
+3. Third run confirmed idempotency: `Event class check: 1 declared, 1
+   present, 0 missing` — no re-edit, no VS close/reopen, clean build.
+
+Also fixed an unrelated regression surfaced while verifying this:
+`PlcDataTypeTemplateTests.cs` still called `PlcDataTypeTemplate.Load`
+with its pre-refactor signature (folder without the `plc-data-types`
+subfolder appended) and was failing 2 tests; both production call sites
+(`TsprojPlcDataTypeEditor`, `TsprojEventClassEditor`) already passed the
+correct folder, so this wasn't the events bug — just stale tests. All 46
+tests pass now.
+
+**Not yet re-verified against the real Shark project** — the scratch
+test proves the mechanism works, but the real project's io-devices.xml
+may exercise the `<Links>`/library-sync `project.Save()` calls this
+scratch test didn't (0 links, 0 libraries declared), so a real run is
+still the final confirmation.
+
+**Near-miss (2026-07-14): a real run against the actual Shark project was
+attempted (dest corrected to `A3D`, not `A3D\Shark` — an earlier attempt
+with the wrong `--dest` bootstrapped a separate duplicate project inside
+the real one's own folder tree; cleaned up, real project unaffected,
+confirmed via untouched file mtimes). It reached IO device sync and
+crashed: `System.Runtime.InteropServices.COMException: The remote
+procedure call failed (0x800706BE)` in `IoSyncEngine.DeleteOrphans` ->
+`ITcSmTreeItem.DeleteChild`.**
+
+Root cause: `io-devices.xml` declared `EK1100_1.1`/`EK1100_2.1` nested
+inside `Box 1 (CU2508)`/`Box 44 (CU2508)` (matching the images/devices.jpg
+screenshot's visual grouping), but the real `Shark.tsproj`'s actual XML
+nesting (confirmed by reading raw tab-depth in the file directly, not
+guessing) has them as SIBLINGS — direct children of the Device — with
+EK1100 itself carrying the real terminal children. Worse for BH2:
+`EK1100_2.1` there has NO children at all; all 19 remaining terminals are
+nested under the FIRST terminal, `EL3174_2.1` (apparently TwinCAT's own
+bus-order chain encoding, not a real ownership relationship). Because the
+manifest didn't match reality, `DeleteOrphans` saw `EK1100_1.1`/
+`EK1100_2.1`/`EL3174_2.1` as undeclared and tried to delete them — which
+would have deleted almost ALL of both device's real hardware (~28
+terminals). The RPC failure happened to prevent this; confirmed via
+direct `.tsproj` inspection that nothing was actually lost.
+
+Fixed `io-devices.xml` to mirror the real nesting exactly. Verified on a
+scratch project: first run created all 34 items cleanly (0 deleted).
+**Second run surfaced a SEPARATE bug**: not idempotent for the BH2 chained
+shape — `TreeItemFactory.GetOrCreate`'s `LookupTreeItem` throws for
+`EL3174_2.1` even though it exists (probably because forcing terminals to
+be "children" of another terminal, rather than a coupler, doesn't produce
+a stably re-lookupable path), so it's treated as missing, recreated, and
+the OLD subtree then looks like a fresh orphan — 20 created + 20 deleted
+every run. BH1's plain single-level coupler nesting had zero such issue
+(fully idempotent).
+
+**Fixed properly, not just patched around:** rather than trust the
+manifest is now perfectly accurate (or that no other topology surprise
+exists), added an opt-in safety gate matching the existing
+`--incremental`/`--confirm-delete` pattern: `IoSyncEngine.DeleteOrphans`
+now takes a `confirmDelete` flag (new `--confirm-delete-io` CLI flag, off
+by default). Without it, undeclared IO items are reported via the new
+`IoSyncReport.Warnings` list and never deleted. Verified on a scratch
+project: same non-idempotent lookup-miss still creates a duplicate
+`EL3174_2.1` subtree each run, but the second run now shows `0 deleted,
+20 warning(s)` instead of `20 deleted` — confirmed no data loss is
+possible even with the underlying lookup bug still present and
+unexplained. All 46 unit tests still pass.
+
+**Still open:** the `GetOrCreate`/`LookupTreeItem` lookup-miss for
+terminal-parents-terminal topologies is not root-caused, only made safe.
+A real run against Shark shows ~19 created + 19 warned for BH2 every
+run (messy but not destructive) until that's actually fixed or the
+manifest is restructured to avoid the shape entirely.
+
+**RESOLVED — Task 3 CLOSED (2026-07-14): full sync+build against the real
+Shark project now BUILDS CLEAN (0 errors).** The sequence that got there:
+1. Re-ran with the safety gate on: Event Class `BeckhoffLibEvents` was
+   written to the real .tsproj, survived VS reopen, and all 19
+   `TC_EVENTS.BeckhoffLibEvents` errors disappeared. Errors dropped from
+   23 to 2 — both `Unknown type: 'MDP5001_320_A369A904'` (EL3214); the
+   EL3174 errors (`MDP5001_300_7E2119CA`) were already resolved by the
+   injected template.
+2. Root-caused the EL3214 leftover: **the MDP5001_<suffix> is a
+   config-hash TwinCAT computes from the terminal's actual PDO/revision
+   configuration, so it is NOT portable across ESI revisions.** The
+   reference project's real-scanned EL3214s (RevisionNo #x00110000,
+   CoeType 3) hash to A369A904; this machine's ESI catalog instantiates
+   EL3214 at #x00120000 (CoeType 15, different Pdo flags) which hashes to
+   **MDP5001_320_5D7E181C**. EL3174 worked purely because both projects'
+   EL3174s are the same revision (#x00110000 → same hash 7E2119CA).
+   Confirmed empirically: a --build-only run let TwinCAT load + save, and
+   it silently rewrote every injected A369A904 occurrence in the .tsproj
+   to 5D7E181C (45 refs) — TwinCAT's own regeneration is authoritative.
+3. Fix: updated the two .st aliases (T_Beckhoff_TempSensor_Chuck/_General)
+   from A369A904 → 5D7E181C, and rebuilt plc-data-types/EL3214.xml from
+   the TwinCAT-generated defs (Status_803D15A4_Plc + I_5D7E181C +
+   5D7E181C; the 182C60D3 device-level pair is revision-independent and
+   unchanged). Re-ran full sync+build: **BUILD PASSED**, event check
+   `1 declared, 1 present, 0 missing`, libraries `0 added, 0 removed` (no
+   duplicates — Task 2's checkpoint met in the same run).
+
+Portability caveat recorded in the template/alias comments: on a machine
+whose ESI revision differs, TwinCAT will regenerate a different suffix
+and the aliases must be updated to what TwinCAT actually generates
+(empirically: run --build-only once, then read the MDP5001_* names out of
+the saved .tsproj).
+
 ---
 
 ## Checkpoint: Known bugs closed
-- [ ] Full sync+build against the real Shark project shows no duplicate
+- [x] Full sync+build against the real Shark project shows no duplicate
       library references and no `C0077` errors for either type above
-- [ ] `TODO.md` / `TODO.xml` deleted (superseded by Tasks 2-3 above)
+      (2026-07-14: BUILD PASSED, 0 errors — see Task 3's RESOLVED note)
+- [x] `TODO.md` / `TODO.xml` deleted (superseded by Tasks 2-3 above)
 
 ---
 
@@ -309,13 +445,32 @@ undeclared variable) in a throwaway `.st` file, run a sync, and record the
 raw `BuildError.FileName`/`Line` the tool prints today for each.
 
 **Acceptance criteria:**
-- [ ] Written note (append to this task or to `docs/ideas/`) listing, per
+- [x] Written note (append to this task or to `docs/ideas/`) listing, per
       `PouKind`, the exact `FileName` pattern observed and whether `Line`
       is ever meaningful (not always `1`)
 
 **Verification:**
 - [x] Manual: reproduced against a real TwinCAT/Visual Studio run for DUT
-- [ ] Still need: FUNCTION_BLOCK, METHOD, PROPERTY, GVL cases
+- [x] FUNCTION_BLOCK, METHOD, PROPERTY, GVL cases (scratch project with one
+      deliberately broken object of each kind, 2026-07-14)
+
+**Status: DONE (2026-07-14). Findings** (TwinCAT 3.1.4026 / VS2022; every
+`Line` IS meaningful — 1-based within the named SECTION, not the file):
+
+| Kind      | FileName pattern                          | Line is relative to        |
+|-----------|-------------------------------------------|----------------------------|
+| FB body   | `...\FB_X.TcPOU (Impl):N`                 | the FB's implementation    |
+| METHOD    | `...\FB_X.TcPOU@Method (Impl):N`          | that method's impl         |
+| PROPERTY  | `...\FB_X.TcPOU@Prop.Get (Impl):N`        | that accessor's body       |
+| GVL       | `...\GVL_X.TcGVL:N` (no section marker)   | declaration (= file line)  |
+| DUT       | `...\T_X.TcDUT:N` (no section marker)     | declaration (= file line)  |
+| project   | empty FileName, `Line 0`                  | unmappable (labeled raw)   |
+
+In every observed case `real .st line = section start line + (N - 1)` —
+exactly the data Task 5's provenance records. IMPORTANT probe gotcha: a
+broken POU that nothing references builds CLEAN — TwinCAT only compiles
+objects reachable from a task, so error-shape probes must reference the
+broken objects from MAIN.
 
 **Dependencies:** None (can run in parallel with Phase 2)
 
@@ -349,15 +504,21 @@ through `PouSyncEngine.Sync` so each synced tree item's identity can be
 traced back to a specific file+line.
 
 **Acceptance criteria:**
-- [ ] `StPouSource` (or an accompanying type) exposes source file + starting
+- [x] `StPouSource` (or an accompanying type) exposes source file + starting
       line for its declaration and (if present) implementation sections
-- [ ] All Task 1 tests still pass unmodified
-- [ ] New tests confirm correct provenance for: a multi-method FB file
-      (each method's line matches where its `METHOD` keyword actually is),
-      and a standalone `<Owner>.<Method>.st` file
+      (SourceFileName / DeclarationStartLine / ImplementationStartLine /
+      SourceRelativePath — computed by StFileParser for every kind)
+- [x] All Task 1 tests still pass unmodified
+- [x] New tests confirm correct provenance for: a multi-method FB file
+      (each method's line matches where its `METHOD` keyword actually is,
+      including one preceded by an attribute pragma), and a standalone
+      `<Owner>.<Method>.st` file
 
 **Verification:**
-- [ ] `dotnet test` passes, including new provenance-specific tests
+- [x] `dotnet test` passes, including new provenance-specific tests
+      (57/57, 2026-07-14 — see StPouProvenanceTests.cs)
+
+**Status: DONE (2026-07-14).**
 
 **Dependencies:** Task 1 (test harness), Task 4 (confirms what shape is worth mapping to)
 
@@ -380,18 +541,28 @@ the raw TwinCAT-reported value, clearly labeled so it's never confused with
 a mapped one.
 
 **Acceptance criteria:**
-- [ ] For each kind exercised in Task 4, the tool prints the real `.st`
+- [x] For each kind exercised in Task 4, the tool prints the real `.st`
       relative path and a line landing on/near the actual broken line —
       not an internal export path with `Line: 1`
-- [ ] Unmapped errors still print (raw + labeled), never silently dropped
+- [x] Unmapped errors still print (raw + labeled), never silently dropped
 
 **Verification:**
-- [ ] Manual: deliberately break one method in a multi-method FB file, run
+- [x] Manual: deliberately break one method in a multi-method FB file, run
       the tool, confirm the printed error names that file and a plausible
-      line
-- [ ] Unit tests on the pure translation function: given a fake provenance
+      line (2026-07-14, scratch project: every kind mapped to the EXACT
+      broken line — FB_BrokenBody.st:6, FB_BrokenMethod.st:16 [a broken
+      METHOD in a multi-method FB], FB_BrokenProp.st:9 [GET accessor],
+      GVL_Broken.st:3; the project-level summary error printed raw with
+      "[unmapped — raw TwinCAT location]")
+- [x] Unit tests on the pure translation function: given a fake provenance
       map + a fake `BuildError` list, assert the remapped output (including
-      the unmapped fallback case)
+      the unmapped fallback case) — ErrorLocationResolverTests.cs, 9 tests
+
+**Status: DONE (2026-07-14).** `Sync/ErrorLocationResolver.cs` (pure,
+COM-free) + `Program.RunSync` printing. The provenance index is built from
+a fresh full parse at print time (independent of the sync's own possibly
+incremental/partial parse), so errors in unchanged files still map; a
+parse failure just falls back to raw locations.
 
 **Dependencies:** Task 5
 
@@ -429,9 +600,24 @@ Pick one:
 - **(c) Both** — warn always, prune only when explicitly requested.
 
 **Acceptance criteria:**
-- [ ] One paragraph decision recorded (in this file or `tasks/plan.md`)
+- [x] One paragraph decision recorded (in this file or `tasks/plan.md`)
       covering: which option, at what scope (methods/properties only? full
       top-level orphans too? both incremental and full sync, or just one?)
+
+**DECISION (2026-07-14): Option (c) — warn always, prune opt-in.** Scope:
+warn on EVERY run (full and incremental) for any disappeared name at both
+levels — top-level POU/DUT/GVL objects AND METHOD/PROPERTY members —
+tracked via a recorded known-names state file next to `.st-sync-state`.
+Pruning stays exactly where it already is (whole top-level objects under
+`--incremental --confirm-delete`, exact-match only) — NOT extended in this
+pass. Rationale: this matches the user's consistently-demonstrated
+preference for warn-by-default/delete-by-explicit-flag, chosen explicitly
+twice in this repo (`--confirm-delete` for .st deletions, and
+`--confirm-delete-io` after IO orphan deletion nearly destroyed real
+hardware config on 2026-07-14 — see the near-miss writeup above). Deleting
+PLC objects has real blast radius on a shared project; a warning that names
+the stale object achieves the plan's actual goal (never SILENT staleness)
+at zero risk.
 
 **Verification:** N/A (decision task)
 
@@ -456,18 +642,32 @@ extend full-sync to compute and delete top-level orphans the same way
 explicit flag.
 
 **Acceptance criteria:**
-- [ ] Renaming a METHOD inside an FB `.st` file and re-running the tool
+- [x] Renaming a METHOD inside an FB `.st` file and re-running the tool
       produces the behavior Task 7 decided (a clear warning naming the
       stale method, and/or its removal) — never silent staleness
-- [ ] Same for a deleted top-level POU/DUT/GVL outside `--incremental`
+- [x] Same for a deleted top-level POU/DUT/GVL outside `--incremental`
       (if Task 7's decision covers full sync)
 
 **Verification:**
-- [ ] Manual: rename then delete a method, and separately a top-level POU,
-      in a throwaway `.st` tree; run the tool twice; confirm the reported
-      behavior matches Task 7's decision
-- [ ] Unit tests on the pure name-diffing logic (given "before" and "after"
-      name sets, assert the correct warn/prune list)
+- [x] Manual (2026-07-14/15, throwaway scratch project + real VS runs):
+      renamed METHOD HealthyFirst→HealthyRenamed → `[drift] ... ! stale
+      FB_BrokenMethod.HealthyFirst`, state file updated (old name dropped,
+      new recorded). Deleted top-level FB_BrokenProp.st on a FULL sync →
+      `! stale FB_BrokenProp` + `! stale FB_BrokenProp.Setpoint`, both
+      dropped from state. No deletions performed in either case.
+- [x] Unit tests on the pure name-diffing logic (given "before" and "after"
+      name sets, assert the correct warn/prune list) —
+      KnownNamesTrackerTests.cs, 6 tests
+
+**Status: DONE (2026-07-14/15).** `Sync/KnownNamesTracker.cs` (pure logic:
+CollectNames/DiffFull/DiffWithinOwners/Merge + Read/Write of
+`.st-known-names` next to `.st-sync-state`) wired into `Program.RunSync`:
+warns on every run; full sync diffs everything, incremental diffs only
+members of re-parsed owners (top-level deletions on incremental remain
+git's job via IncrementalDeleter). Recorded state: full sync records the
+parse verbatim; incremental folds the partial parse into the previous
+record minus proven-stale names. No pruning added anywhere — per Task 7's
+decision, deletion stays exactly where it already was.
 
 **Dependencies:** Task 1 (test harness); Task 7 (the spec to build)
 
@@ -482,10 +682,12 @@ explicit flag.
 ---
 
 ## Checkpoint: Complete
-- [ ] All four issues (2 from TODO.md + 2 from the code review) verified
+- [x] All four issues (2 from TODO.md + 2 from the code review) verified
       against a real TwinCAT/Visual Studio run, not just unit tests
-- [ ] `TODO.md`/`TODO.xml` removed
-- [ ] Renaming/deleting `.st` content no longer leaves invisible stale code
+      (duplicate libs + C0077: real Shark project BUILD PASSED 2026-07-14;
+      error mapping + drift warnings: scratch-project VS runs 2026-07-14/15)
+- [x] `TODO.md`/`TODO.xml` removed
+- [x] Renaming/deleting `.st` content no longer leaves invisible stale code
       compiling silently
-- [ ] A build error reliably points back at the `.st` file/line that
+- [x] A build error reliably points back at the `.st` file/line that
       actually caused it

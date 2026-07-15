@@ -43,6 +43,13 @@ namespace BeckhoffAutomationInterface
         /// PLC object(s), conservatively (exact unambiguous name match only).</summary>
         public bool ConfirmDelete { get; }
 
+        /// <summary>Opt-in gate for IO device orphan deletion (see Sync.IoSyncEngine):
+        /// without this flag, IO tree items not declared in io-devices.xml are only
+        /// warned about, never deleted. Confirmed necessary (2026-07-14) — a manifest/
+        /// reality mismatch or a TreeItemFactory lookup miss can otherwise delete real,
+        /// hand-configured EtherCAT hardware with no warning.</summary>
+        public bool ConfirmDeleteIo { get; }
+
         /// <summary>When set, export the named live PLC object's current text back to its
         /// mirrored .st file instead of running a sync (see Sync.PlcObjectExporter). Null
         /// when --export wasn't given.</summary>
@@ -65,9 +72,22 @@ namespace BeckhoffAutomationInterface
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
 
+        /// <summary>Already-computed &lt;DataType&gt;/&lt;PlcDataType&gt; XML per terminal
+        /// product, e.g. plc-data-types/EL3174.xml — see Sync/PlcDataTypeTemplate.cs.</summary>
+        public string PlcDataTypesFolder => Path.Combine(SourceFolder, "plc-data-types");
+
+        /// <summary>Already-computed Event Class &lt;DataType&gt; XML per class name, e.g.
+        /// event-classes/BeckhoffLibEvents.xml — see Sync/PlcDataTypeTemplate.cs.</summary>
+        public string EventClassesFolder => Path.Combine(SourceFolder, "event-classes");
+
         /// <summary>Records the last-synced commit SHA (see Sync.SyncState); consulted/updated
         /// by --incremental and updated after every successful full sync too.</summary>
         public string SyncStatePath => Path.Combine(SourceFolder, ".st-sync-state");
+
+        /// <summary>Records every synced object/member's full name (see
+        /// Sync.KnownNamesTracker) so renames/deletions in .st source are warned about
+        /// on the next run instead of leaving stale PLC code compiling silently.</summary>
+        public string KnownNamesPath => Path.Combine(SourceFolder, ".st-known-names");
 
         public string PousTreePath => TreePath("POUs");
         public string ReferencesTreePath => TreePath("References");
@@ -76,7 +96,7 @@ namespace BeckhoffAutomationInterface
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete, bool formatCheck)
+            bool buildOnly, bool eventsOnly, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool confirmDelete, bool formatCheck, bool confirmDeleteIo)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -89,6 +109,7 @@ namespace BeckhoffAutomationInterface
             ExportObjectName = exportObjectName;
             ConfirmDelete = confirmDelete;
             FormatCheck = formatCheck;
+            ConfirmDeleteIo = confirmDeleteIo;
         }
 
         /// <summary>
@@ -118,7 +139,8 @@ namespace BeckhoffAutomationInterface
                 incremental: args.Contains("--incremental"),
                 exportObjectName: GetOption(args, "--export"),
                 confirmDelete: args.Contains("--confirm-delete"),
-                formatCheck: args.Contains("--format-check"));
+                formatCheck: args.Contains("--format-check"),
+                confirmDeleteIo: args.Contains("--confirm-delete-io"));
         }
 
         static string GetOption(string[] args, params string[] flags)
@@ -163,6 +185,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --confirm-delete  Combined with --incremental: actually delete PLC object(s)");
             Console.WriteLine("                    for .st files git reports as deleted (conservative: exact,");
             Console.WriteLine("                    unambiguous name matches only — anything else is skipped/reported)");
+            Console.WriteLine("  --confirm-delete-io  Actually delete IO tree items (Device/Box/Terminal) not");
+            Console.WriteLine("                    declared in io-devices.xml. Without this flag, undeclared");
+            Console.WriteLine("                    items are only WARNED about — never deleted (see IoSyncEngine)");
             Console.WriteLine("  --export <name>   Write the named live PLC object's current text back to its");
             Console.WriteLine("                    mirrored .st file");
             Console.WriteLine("  --format-check    Report (never write) .st style issues — trailing whitespace,");

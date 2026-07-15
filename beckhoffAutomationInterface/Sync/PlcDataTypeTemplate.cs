@@ -6,14 +6,16 @@ using System.Xml.Linq;
 namespace BeckhoffAutomationInterface.Sync
 {
     /// <summary>
-    /// The already-computed "Create PLC Data Type" state for one terminal product
-    /// (e.g. EL3174), loaded from a hand-authored XML file under
-    /// SourceFolder/plc-data-types/&lt;Product&gt;.xml. Setting the
-    /// CreateDeviceDataType/DeviceDataTypePerChannel attributes alone does not make
-    /// TwinCAT compute the derived types (confirmed against a real project — see
-    /// tasks/todo.md Task 3), so this supplies the DataType/PlcDataType XML a
-    /// working reference project already generated, instead of asking TwinCAT to
-    /// derive it via ConsumeXml. See IoSyncEngine.ApplyPlcDataTypesForDevice.
+    /// Already-computed &lt;DataType&gt;/&lt;PlcDataType&gt; XML for one named template
+    /// (e.g. a terminal product like "EL3174", or an Event Class like
+    /// "BeckhoffLibEvents"), loaded from &lt;templatesFolder&gt;/&lt;name&gt;.xml. Two real
+    /// project settings turned out not to be settable via ProduceXml/ConsumeXml at all
+    /// (confirmed against a real project — see tasks/todo.md Task 3): a terminal's
+    /// "Create PLC Data Type" and an Event Class's existence. Both instead need the
+    /// exact already-computed XML a working reference project produced, written
+    /// directly into the .tsproj file (see TsprojPlcDataTypeEditor,
+    /// TsprojEventClassEditor) rather than asking TwinCAT to derive/create it.
+    /// PlcDataTypes is simply empty for an Event Class template (no such element).
     /// </summary>
     class PlcDataTypeTemplate
     {
@@ -26,11 +28,11 @@ namespace BeckhoffAutomationInterface.Sync
             PlcDataTypes = plcDataTypes;
         }
 
-        /// <summary>Returns null if no template file exists for this product (the caller
-        /// should treat that as "can't fulfil CreatePlcType for this product yet").</summary>
-        public static PlcDataTypeTemplate Load(string sourceFolder, string product)
+        /// <summary>Returns null if no template file exists for this name (the caller
+        /// should treat that as "can't fulfil this request yet").</summary>
+        public static PlcDataTypeTemplate Load(string templatesFolder, string name)
         {
-            string path = Path.Combine(sourceFolder, "plc-data-types", product + ".xml");
+            string path = Path.Combine(templatesFolder, name + ".xml");
             if (!File.Exists(path))
                 return null;
 

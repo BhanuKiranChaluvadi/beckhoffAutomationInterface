@@ -1,9 +1,21 @@
 <!--
   Exact DataType/PlcDataType definitions for an EL3214 (4Ch. Ana. Input PT100
-  (RTD)) with "Create PLC Data Type" + "Channel/Slot" enabled, copied verbatim
-  from a working reference project
-  (C:\Users\BhanuKiranChaluvadi\workspace\A3D\PLC\PLC_NFL_SHARK_V2, BH2.xti).
-  See Sync/PlcDataTypeTemplate.cs and Sync/IoSyncEngine.ApplyPlcDataTypesForDevice.
+  (RTD)) with "Create PLC Data Type" + "Channel/Slot" enabled.
+
+  IMPORTANT: the MDP5001_320_<suffix> name is a config-hash TwinCAT computes
+  from the terminal's actual PDO/revision configuration, so it is NOT portable
+  across projects whose terminals instantiate at different ESI revisions. The
+  reference project (PLC_NFL_SHARK_V2, BH2.xti — real-scanned hardware at
+  RevisionNo #x00110000) generated MDP5001_320_A369A904; THIS machine's ESI
+  catalog instantiates EL3214 at RevisionNo #x00120000, and TwinCAT computes
+  MDP5001_320_5D7E181C for it — confirmed empirically 2026-07-14: injected
+  A369A904 defs were silently replaced by 5D7E181C throughout the .tsproj the
+  moment TwinCAT loaded and re-saved the project. The definitions below are
+  copied verbatim from THAT TwinCAT-generated output (the live Shark.tsproj
+  after a load+save), not from the reference project. The 182C60D3 device-level
+  type (WcState/InfoData) is revision-independent and matches both projects.
+
+  See Sync/PlcDataTypeTemplate.cs and Sync/TsprojPlcDataTypeEditor.cs.
 -->
 <PlcDataTypeTemplate>
   <DataTypes>
@@ -26,7 +38,7 @@
       </ArrayInfo>
     </DataType>
     <DataType>
-      <Name GUID="{1795D3C2-2709-7B8D-B946-7F78B0392E4B}" AutoDeleteType="true" ForceIecDecl="true">Status_5F498BC1_Plc</Name>
+      <Name GUID="{AD7BA1FD-806B-0463-38E1-E4C30BD5C1EA}" AutoDeleteType="true" ForceIecDecl="true">Status_803D15A4_Plc</Name>
       <BitSize>16</BitSize>
       <SubItem>
         <Name>Underrange</Name>
@@ -60,11 +72,11 @@
       </SubItem>
     </DataType>
     <DataType>
-      <Name GUID="{F27EBF53-2CC3-ABEF-490A-6714DC309FEE}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_I_A369A904</Name>
+      <Name GUID="{45996A0F-C7E3-EAFF-C3FA-7AAA324F6258}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_I_5D7E181C</Name>
       <BitSize>32</BitSize>
       <SubItem>
         <Name>MDP5001_320_Status</Name>
-        <Type GUID="{1795D3C2-2709-7B8D-B946-7F78B0392E4B}">Status_5F498BC1_Plc</Type>
+        <Type GUID="{AD7BA1FD-806B-0463-38E1-E4C30BD5C1EA}">Status_803D15A4_Plc</Type>
         <BitSize>16</BitSize>
         <BitOffs>0</BitOffs>
       </SubItem>
@@ -76,11 +88,11 @@
       </SubItem>
     </DataType>
     <DataType>
-      <Name GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_A369A904</Name>
+      <Name GUID="{45996A0E-C7E3-EAFF-C3FA-7AAA324F6258}" AutoDeleteType="true" ForceIecDecl="true">MDP5001_320_5D7E181C</Name>
       <BitSize>32</BitSize>
       <SubItem>
         <Name>MDP5001_320_Input</Name>
-        <Type GUID="{F27EBF53-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_I_A369A904</Type>
+        <Type GUID="{45996A0F-C7E3-EAFF-C3FA-7AAA324F6258}">MDP5001_320_I_5D7E181C</Type>
         <BitSize>32</BitSize>
         <BitOffs>0</BitOffs>
         <Properties>
@@ -137,10 +149,10 @@
     </DataType>
   </DataTypes>
   <PlcDataTypes>
-    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
-    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
-    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
-    <PlcDataType GUID="{F27EBF52-2CC3-ABEF-490A-6714DC309FEE}">MDP5001_320_A369A904</PlcDataType>
+    <PlcDataType GUID="{45996A0E-C7E3-EAFF-C3FA-7AAA324F6258}">MDP5001_320_5D7E181C</PlcDataType>
+    <PlcDataType GUID="{45996A0E-C7E3-EAFF-C3FA-7AAA324F6258}">MDP5001_320_5D7E181C</PlcDataType>
+    <PlcDataType GUID="{45996A0E-C7E3-EAFF-C3FA-7AAA324F6258}">MDP5001_320_5D7E181C</PlcDataType>
+    <PlcDataType GUID="{45996A0E-C7E3-EAFF-C3FA-7AAA324F6258}">MDP5001_320_5D7E181C</PlcDataType>
     <PlcDataType GUID="{92884CAA-5364-9B01-8223-06F29F5CA3E3}">MDP5001_320_182C60D3</PlcDataType>
   </PlcDataTypes>
 </PlcDataTypeTemplate>

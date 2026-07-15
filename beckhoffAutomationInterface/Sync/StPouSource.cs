@@ -36,6 +36,35 @@
         /// </summary>
         public string RelativeFolder { get; set; } = "";
 
+        /// <summary>Bare file name of the originating .st file (e.g. "FB_Motor.st").
+        /// Set by StFileParser.ParseFile on every source it emits — provenance for
+        /// mapping build errors back to .st source (tasks/todo.md Tasks 5-6).</summary>
+        public string SourceFileName { get; set; } = "";
+
+        /// <summary>1-based line in the source file where this object's section header
+        /// keyword (FUNCTION_BLOCK/METHOD/PROPERTY/PROGRAM/...) sits. 1 for whole-file
+        /// kinds (DUT/GVL). Set by StFileParser.</summary>
+        public int DeclarationStartLine { get; set; } = 1;
+
+        /// <summary>1-based line in the source file where this object's implementation
+        /// text begins (the first line after the declaration/END_VAR split). Null when
+        /// the object has no implementation section (DUTs, GVLs, interfaces,
+        /// properties, or an empty body). Set by StFileParser.</summary>
+        public int? ImplementationStartLine { get; set; }
+
+        /// <summary>For Kind == Property: 1-based line where the GET accessor's body
+        /// begins (the line after the GET keyword). Null when there is no getter.</summary>
+        public int? GetStartLine { get; set; }
+
+        /// <summary>For Kind == Property: 1-based line where the SET accessor's body
+        /// begins. Null when there is no setter.</summary>
+        public int? SetStartLine { get; set; }
+
+        /// <summary>Source-root-relative path of the originating file, forward-slash
+        /// separated (e.g. "App/Shark/FunctionBlocks/FB_Motor.st").</summary>
+        public string SourceRelativePath =>
+            string.IsNullOrEmpty(RelativeFolder) ? SourceFileName : RelativeFolder + "/" + SourceFileName;
+
         /// <summary>For Kind == Property: the GET accessor body (null if the property has no
         /// getter). Terminators (GET/END_GET) are already stripped by the parser.</summary>
         public string GetText { get; }

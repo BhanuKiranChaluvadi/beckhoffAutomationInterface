@@ -1,0 +1,55 @@
+<!--
+  Exact Event Class DataType definition for "BeckhoffLibEvents", copied verbatim
+  from a working reference project
+  (C:\Users\BhanuKiranChaluvadi\workspace\A3D\PLC\PLC_NFL_SHARK_V2\PLC_NFL_SHARK.tsproj,
+  top-level <DataTypes> pool). See Sync/TsprojEventClassEditor.cs.
+
+  Event Class creation was previously documented as a confirmed Automation
+  Interface dead end (docs/ideas/st-plc-bidirectional-sync.md), four attempts to
+  hand-author this all placed it under <Project>/<System> and used freshly
+  generated GUIDs. Neither is correct: Event Classes are ordinary <DataType>
+  entries in the project's TOP-LEVEL <DataTypes> pool (confirmed by inspecting
+  this reference project directly), and the GUID must be the real one TwinCAT
+  actually assigned, not an invented one (see tasks/todo.md Task 3).
+
+  Reuses the same file schema as plc-data-types/*.xml (PlcDataTypeTemplate);
+  only <DataTypes> is populated here; <PlcDataTypes> isn't relevant to Event
+  Classes and is simply absent.
+-->
+<PlcDataTypeTemplate>
+  <DataTypes>
+    <DataType>
+      <Name GUID="{70AB1C3F-056A-429D-8212-5E248E2724AB}" PersistentType="true">BeckhoffLibEvents</Name>
+      <DisplayName TxtId=""><![CDATA[Beckhoff Library Events]]></DisplayName>
+      <EventId>
+        <Name Id="1">Verbose</Name>
+        <DisplayName TxtId=""><![CDATA[{0} - {1}]]></DisplayName>
+        <Severity>Verbose</Severity>
+      </EventId>
+      <EventId>
+        <Name Id="2">Info</Name>
+        <DisplayName TxtId=""><![CDATA[{0} - {1}]]></DisplayName>
+        <Severity>Info</Severity>
+      </EventId>
+      <EventId>
+        <Name Id="3">Warning</Name>
+        <DisplayName TxtId=""><![CDATA[{0} - {1}]]></DisplayName>
+        <Severity>Warning</Severity>
+      </EventId>
+      <EventId>
+        <Name Id="4">Error</Name>
+        <DisplayName TxtId=""><![CDATA[{0} - {1}]]></DisplayName>
+        <Severity>Error</Severity>
+      </EventId>
+      <EventId>
+        <Name Id="5">Critical</Name>
+        <DisplayName TxtId=""><![CDATA[{0} - {1}]]></DisplayName>
+        <Severity>Critical</Severity>
+      </EventId>
+      <Hides>
+        <Hide GUID="{696CF496-CB58-4488-B235-C6BFECA57842}"/>
+        <Hide GUID="{362FAB99-599A-46AB-985E-1DF68F6C61F9}"/>
+      </Hides>
+    </DataType>
+  </DataTypes>
+</PlcDataTypeTemplate>

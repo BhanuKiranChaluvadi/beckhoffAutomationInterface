@@ -18,7 +18,7 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void MissingTemplate_ReturnsNull()
         {
-            Assert.Null(PlcDataTypeTemplate.Load(_dir, "EL9999"));
+            Assert.Null(PlcDataTypeTemplate.Load(Path.Combine(_dir, "plc-data-types"), "EL9999"));
         }
 
         [Fact]
@@ -38,7 +38,7 @@ namespace BeckhoffAutomationInterface.Tests
   </PlcDataTypes>
 </PlcDataTypeTemplate>");
 
-            PlcDataTypeTemplate template = PlcDataTypeTemplate.Load(_dir, "EL3174");
+            PlcDataTypeTemplate template = PlcDataTypeTemplate.Load(Path.Combine(_dir, "plc-data-types"), "EL3174");
 
             Assert.NotNull(template);
             Assert.Single(template.DataTypes);
@@ -52,7 +52,7 @@ namespace BeckhoffAutomationInterface.Tests
             // The templates actually shipped for ST/Shark (see io-devices.xml Task 3) --
             // a lightweight regression check that hand-edits keep them well-formed.
             string repoRoot = FindRepoRoot();
-            string plcDataTypesDir = Path.Combine(repoRoot, "ST", "Shark");
+            string plcDataTypesDir = Path.Combine(repoRoot, "ST", "Shark", "plc-data-types");
 
             foreach (string product in new[] { "EL3174", "EL3214" })
             {

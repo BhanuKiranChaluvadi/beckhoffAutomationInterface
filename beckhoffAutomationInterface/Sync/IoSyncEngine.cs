@@ -11,6 +11,10 @@ namespace BeckhoffAutomationInterface.Sync
         public List<string> Created { get; } = new List<string>();
         public List<string> Deleted { get; } = new List<string>();
         public List<string> StateChanged { get; } = new List<string>();
+
+        /// <summary>Orphans found but NOT deleted because confirmDelete was false — see
+        /// IoSyncEngine.Sync's confirmDelete parameter.</summary>
+        public List<string> Warnings { get; } = new List<string>();
     }
 
     /// <summary>
@@ -32,19 +36,32 @@ namespace BeckhoffAutomationInterface.Sync
     /// channels to the PLC %I*/%Q* variables so the validation is satisfied); if
     /// links can't be resolved, IoSyncEngine.DisableAllMasters disables the master
     /// as a fallback so unattended builds still pass.
+    ///
+    /// ORPHAN DELETION IS OPT-IN (confirmDelete) — confirmed dangerous by default
+    /// (2026-07-14). A manifest/reality mismatch, OR a TreeItemFactory.GetOrCreate
+    /// lookup miss for a legitimately-existing item (confirmed against a scratch
+    /// project: chaining terminals as children of another terminal, e.g. 19
+    /// terminals nested under "EL3174_2.1" rather than under a proper coupler,
+    /// makes LookupTreeItem throw for that item even though it already exists —
+    /// TreeItemFactory then treats it as missing, recreating it, which makes the
+    /// OLD one look like a fresh orphan on the very next run), can make this
+    /// delete real, hand-configured EtherCAT hardware with no warning. Without
+    /// --confirm-delete-io, orphans are reported via IoSyncReport.Warnings only —
+    /// never deleted — matching the existing --incremental/--confirm-delete
+    /// safer-default pattern for .st sync.
     /// </summary>
     static class IoSyncEngine
     {
         const int TSM_DEV_TYPE_ETHERCAT = 94;
         const int TREEITEMTYPE_TERM = 6;
 
-        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices)
+        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices, bool confirmDelete = false)
         {
             var report = new IoSyncReport();
             ITcSmTreeItem ioRoot = sysManager.LookupTreeItem("TIID");
 
             var desiredDeviceNames = new HashSet<string>(desiredDevices.Select(d => d.Name));
-            DeleteOrphans(ioRoot, desiredDeviceNames, report);
+            DeleteOrphans(ioRoot, desiredDeviceNames, report, confirmDelete);
 
             foreach (IoDeviceSpec deviceSpec in desiredDevices)
             {
@@ -62,7 +79,7 @@ namespace BeckhoffAutomationInterface.Sync
                     report.StateChanged.Add($"{deviceSpec.Name} -> {(deviceSpec.Disabled ? "disabled" : "enabled")}");
                 }
 
-                SyncChildren(sysManager, device, deviceSpec.Children, report);
+                SyncChildren(sysManager, device, deviceSpec.Children, report, confirmDelete);
             }
 
             return report;
@@ -71,15 +88,15 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Recursively reconciles a Box/Terminal node's children against parent,
         /// to match arbitrarily deep real topologies (e.g. Device -> CU2508 -> EK1100 ->
         /// EL2008). Box and Terminal are the same underlying node kind — see IoNodeSpec.</summary>
-        static void SyncChildren(ITcSysManager sysManager, ITcSmTreeItem parent, IReadOnlyList<IoNodeSpec> desiredChildren, IoSyncReport report)
+        static void SyncChildren(ITcSysManager sysManager, ITcSmTreeItem parent, IReadOnlyList<IoNodeSpec> desiredChildren, IoSyncReport report, bool confirmDelete)
         {
             var desiredNames = new HashSet<string>(desiredChildren.Select(c => c.Name));
-            DeleteOrphans(parent, desiredNames, report);
+            DeleteOrphans(parent, desiredNames, report, confirmDelete);
 
             foreach (IoNodeSpec nodeSpec in desiredChildren)
             {
                 ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
-                SyncChildren(sysManager, node, nodeSpec.Children, report);
+                SyncChildren(sysManager, node, nodeSpec.Children, report, confirmDelete);
             }
         }
 
@@ -121,7 +138,7 @@ namespace BeckhoffAutomationInterface.Sync
             return item;
         }
 
-        static void DeleteOrphans(ITcSmTreeItem parent, HashSet<string> desiredNames, IoSyncReport report)
+        static void DeleteOrphans(ITcSmTreeItem parent, HashSet<string> desiredNames, IoSyncReport report, bool confirmDelete)
         {
             // NOTE: TwinCAT enumerates EtherCAT terminals BOTH under their coupler AND
             // flat under the device (with the same coupler-nested PathName). So when
@@ -142,8 +159,15 @@ namespace BeckhoffAutomationInterface.Sync
 
             foreach (string name in directOrphans)
             {
-                parent.DeleteChild(name);
-                report.Deleted.Add(name);
+                if (confirmDelete)
+                {
+                    parent.DeleteChild(name);
+                    report.Deleted.Add(name);
+                }
+                else
+                {
+                    report.Warnings.Add($"{name} (not in manifest — re-run with --confirm-delete-io to remove)");
+                }
             }
         }
     }

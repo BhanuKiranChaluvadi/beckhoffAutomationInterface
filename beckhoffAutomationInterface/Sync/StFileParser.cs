@@ -54,6 +54,15 @@ namespace BeckhoffAutomationInterface.Sync
 
         public static List<StPouSource> ParseFile(string stFilePath)
         {
+            List<StPouSource> sources = ParseFileCore(stFilePath);
+            string sourceFileName = Path.GetFileName(stFilePath);
+            foreach (StPouSource src in sources)
+                src.SourceFileName = sourceFileName;
+            return sources;
+        }
+
+        static List<StPouSource> ParseFileCore(string stFilePath)
+        {
             string fileName = Path.GetFileNameWithoutExtension(stFilePath);
             string source = File.ReadAllText(stFilePath);
 
@@ -88,8 +97,17 @@ namespace BeckhoffAutomationInterface.Sync
                 return new List<StPouSource> { new StPouSource(name, kind, null, source.Trim(), null, aliasMatch.Groups[1].Value) };
             }
 
-            (string declaration, string implementation) = SplitAtLastEndVar(source, stFilePath, name);
-            return new List<StPouSource> { new StPouSource(name, kind, ownerName, declaration, implementation) };
+            (string declaration, string implementation, int implLineOffset) = SplitAtLastEndVar(source, stFilePath, name);
+            string[] wholeFileLines = source.Replace("\r\n", "\n").Split('\n');
+            Regex headerRegex = kind == PouKind.Method ? MethodHeaderRegex : null;
+            return new List<StPouSource>
+            {
+                new StPouSource(name, kind, ownerName, declaration, implementation)
+                {
+                    DeclarationStartLine = FirstLineMatching(wholeFileLines, headerRegex, 0, wholeFileLines.Length) + 1,
+                    ImplementationStartLine = implLineOffset >= 0 ? implLineOffset + 1 : (int?)null,
+                },
+            };
         }
 
         public static List<StPouSource> ParseFolder(string sourceFolder, IgnoreRules ignore)
@@ -164,8 +182,12 @@ namespace BeckhoffAutomationInterface.Sync
             string fbExtends = fbExtendsMatch.Success ? fbExtendsMatch.Groups[1].Value : null;
 
             var results = new List<StPouSource>();
-            (string fbDeclaration, string fbImplementation) = SplitAtLastEndVar(fbSegment, filePath, fbName);
-            results.Add(new StPouSource(fbName, PouKind.FunctionBlock, null, fbDeclaration, fbImplementation, fbExtends));
+            (string fbDeclaration, string fbImplementation, int fbImplLineOffset) = SplitAtLastEndVar(fbSegment, filePath, fbName);
+            results.Add(new StPouSource(fbName, PouKind.FunctionBlock, null, fbDeclaration, fbImplementation, fbExtends)
+            {
+                DeclarationStartLine = FirstLineMatching(lines, FunctionBlockHeaderRegex, 0, fbSegmentEnd) + 1,
+                ImplementationStartLine = fbImplLineOffset >= 0 ? fbImplLineOffset + 1 : (int?)null,
+            });
             results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, fbName));
             return results;
         }
@@ -195,8 +217,12 @@ namespace BeckhoffAutomationInterface.Sync
             string prgName = prgNameMatch.Groups[1].Value;
 
             var results = new List<StPouSource>();
-            (string prgDeclaration, string prgImplementation) = SplitAtLastEndVar(prgSegment, filePath, prgName);
-            results.Add(new StPouSource(prgName, PouKind.Program, null, prgDeclaration, prgImplementation));
+            (string prgDeclaration, string prgImplementation, int prgImplLineOffset) = SplitAtLastEndVar(prgSegment, filePath, prgName);
+            results.Add(new StPouSource(prgName, PouKind.Program, null, prgDeclaration, prgImplementation)
+            {
+                DeclarationStartLine = FirstLineMatching(lines, ProgramHeaderRegex, 0, prgSegmentEnd) + 1,
+                ImplementationStartLine = prgImplLineOffset >= 0 ? prgImplLineOffset + 1 : (int?)null,
+            });
             results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, prgName));
             return results;
         }
@@ -223,7 +249,10 @@ namespace BeckhoffAutomationInterface.Sync
             string interfaceExtends = interfaceExtendsMatch.Success ? interfaceExtendsMatch.Groups[1].Value : null;
 
             var results = new List<StPouSource>();
-            results.Add(new StPouSource(interfaceName, PouKind.Interface, null, headerSegment, null, interfaceExtends));
+            results.Add(new StPouSource(interfaceName, PouKind.Interface, null, headerSegment, null, interfaceExtends)
+            {
+                DeclarationStartLine = FirstLineMatching(lines, InterfaceHeaderRegex, 0, headerEnd) + 1,
+            });
             results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, interfaceName));
             return results;
         }
@@ -265,6 +294,10 @@ namespace BeckhoffAutomationInterface.Sync
                 int segEnd = (m + 1 < memberStarts.Count) ? memberStarts[m + 1] : lines.Length;
                 string segment = string.Join("\n", lines, segStart, segEnd - segStart);
 
+                // The section's keyword line for provenance — segStart itself may point at
+                // absorbed pragma/blank lines above the actual METHOD/PROPERTY keyword.
+                int headerLine = FirstLineMatching(lines, MemberHeaderRegex, segStart, segEnd) + 1;
+
                 var propMatch = PropertyHeaderRegex.Match(segment);
                 var methodMatch = MethodHeaderRegex.Match(segment);
                 // Whichever keyword appears first in the segment wins (a segment is one member).
@@ -273,15 +306,21 @@ namespace BeckhoffAutomationInterface.Sync
 
                 if (isProperty)
                 {
-                    yield return ParseProperty(filePath, segment, propMatch.Groups[1].Value, ownerName);
+                    StPouSource property = ParseProperty(filePath, segment, propMatch.Groups[1].Value, ownerName, segStart);
+                    property.DeclarationStartLine = headerLine;
+                    yield return property;
                 }
                 else
                 {
                     if (!methodMatch.Success)
                         throw new FormatException($"Could not find 'METHOD/PROPERTY <Name>' header in a section of '{filePath}'.");
                     string methodName = methodMatch.Groups[1].Value;
-                    (string decl, string impl) = SplitAtLastEndVar(segment, filePath, methodName);
-                    yield return new StPouSource(methodName, PouKind.Method, ownerName, decl, impl);
+                    (string decl, string impl, int implLineOffset) = SplitAtLastEndVar(segment, filePath, methodName);
+                    yield return new StPouSource(methodName, PouKind.Method, ownerName, decl, impl)
+                    {
+                        DeclarationStartLine = headerLine,
+                        ImplementationStartLine = implLineOffset >= 0 ? segStart + implLineOffset + 1 : (int?)null,
+                    };
                 }
             }
         }
@@ -296,7 +335,7 @@ namespace BeckhoffAutomationInterface.Sync
         /// The declaration is everything before the first GET/SET; GET/SET bodies exclude the
         /// GET/END_GET/SET/END_SET keywords.
         /// </summary>
-        static StPouSource ParseProperty(string filePath, string segment, string propName, string ownerName)
+        static StPouSource ParseProperty(string filePath, string segment, string propName, string ownerName, int segmentStartLine = 0)
         {
             string[] lines = segment.Replace("\r\n", "\n").Split('\n');
 
@@ -332,10 +371,20 @@ namespace BeckhoffAutomationInterface.Sync
             var typeMatch = PropertyReturnTypeRegex.Match(declaration);
             string returnType = typeMatch.Success ? typeMatch.Groups[1].Value.Trim() : "BOOL";
 
-            return new StPouSource(propName, PouKind.Property, ownerName, declaration, null, returnType, getText, setText);
+            return new StPouSource(propName, PouKind.Property, ownerName, declaration, null, returnType, getText, setText)
+            {
+                // Accessor bodies start on the line after their GET/SET keyword — TwinCAT
+                // reports property errors relative to that body (e.g. "@Prop.Get (Impl):1").
+                GetStartLine = getStart >= 0 ? segmentStartLine + getStart + 2 : (int?)null,
+                SetStartLine = setStart >= 0 ? segmentStartLine + setStart + 2 : (int?)null,
+            };
         }
 
-        static (string declaration, string implementation) SplitAtLastEndVar(string source, string filePath, string sectionName)
+        /// <summary>Also returns implLineOffset: the 0-based line index WITHIN source where
+        /// the (trimmed) implementation text begins, or -1 when there is none — provenance
+        /// for mapping build errors back to .st lines (tasks/todo.md Tasks 5-6). Callers
+        /// working on a sub-segment add their segment's starting line to it.</summary>
+        static (string declaration, string implementation, int implLineOffset) SplitAtLastEndVar(string source, string filePath, string sectionName)
         {
             int endVarIndex = source.LastIndexOf(EndVarMarker, StringComparison.OrdinalIgnoreCase);
             if (endVarIndex < 0)
@@ -346,7 +395,16 @@ namespace BeckhoffAutomationInterface.Sync
             int declarationEnd = endVarIndex + EndVarMarker.Length;
             string declaration = source.Substring(0, declarationEnd).Trim();
             string implementation = source.Substring(declarationEnd).Trim();
-            return (declaration, implementation);
+
+            int implLineOffset = -1;
+            if (implementation.Length > 0)
+            {
+                int firstImplChar = declarationEnd;
+                while (firstImplChar < source.Length && char.IsWhiteSpace(source[firstImplChar]))
+                    firstImplChar++;
+                implLineOffset = CountNewlines(source, firstImplChar);
+            }
+            return (declaration, implementation, implLineOffset);
         }
 
         /// <summary>
@@ -354,7 +412,7 @@ namespace BeckhoffAutomationInterface.Sync
         /// declaration is everything up to and including the first POU/METHOD header line
         /// (e.g. "METHOD IsInitialized : BOOL"), the implementation is the rest.
         /// </summary>
-        static (string declaration, string implementation) SplitAfterHeaderLine(string source)
+        static (string declaration, string implementation, int implLineOffset) SplitAfterHeaderLine(string source)
         {
             string[] lines = source.Replace("\r\n", "\n").Split('\n');
             int headerIdx = -1;
@@ -369,13 +427,42 @@ namespace BeckhoffAutomationInterface.Sync
                 }
             }
             if (headerIdx < 0)
-                return (source.Trim(), "");
+                return (source.Trim(), "", -1);
 
             string declaration = string.Join("\n", lines, 0, headerIdx + 1).Trim();
             string implementation = headerIdx + 1 < lines.Length
                 ? string.Join("\n", lines, headerIdx + 1, lines.Length - headerIdx - 1).Trim()
                 : "";
-            return (declaration, implementation);
+
+            int implLineOffset = -1;
+            if (implementation.Length > 0)
+            {
+                for (int i = headerIdx + 1; i < lines.Length; i++)
+                {
+                    if (lines[i].Trim().Length > 0) { implLineOffset = i; break; }
+                }
+            }
+            return (declaration, implementation, implLineOffset);
+        }
+
+        /// <summary>Number of newline characters in source before index end (i.e. the
+        /// 0-based line index of the character at end).</summary>
+        static int CountNewlines(string source, int end)
+        {
+            int count = 0;
+            for (int i = 0; i < end && i < source.Length; i++)
+                if (source[i] == '\n') count++;
+            return count;
+        }
+
+        /// <summary>0-based index of the first line in [from, to) matching regex; when
+        /// regex is null (whole-file kinds) or nothing matches, returns from.</summary>
+        static int FirstLineMatching(string[] lines, Regex regex, int from, int to)
+        {
+            if (regex == null) return from;
+            for (int i = from; i < to && i < lines.Length; i++)
+                if (regex.IsMatch(lines[i])) return i;
+            return from;
         }
 
         static PouKind ClassifyKind(string source, string filePath)

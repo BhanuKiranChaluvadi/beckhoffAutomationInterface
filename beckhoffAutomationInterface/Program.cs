@@ -276,6 +276,27 @@ namespace BeckhoffAutomationInterface
                 desiredPous = StFileParser.ParseFolder(options.SourceFolder, ignore);
             }
 
+            // Warn-only drift detection (tasks/todo.md Tasks 7-8 decision: warn always,
+            // prune opt-in): a previously-synced name missing from the current parse means
+            // its .st source was renamed/deleted, but the PLC object still compiles
+            // silently. Report it — never delete (deletion stays behind --incremental
+            // --confirm-delete for whole top-level objects only).
+            List<string> currentNames = KnownNamesTracker.CollectNames(desiredPous);
+            List<string> previousNames = KnownNamesTracker.Read(options.KnownNamesPath);
+            var staleNames = new List<string>();
+            if (previousNames != null)
+            {
+                staleNames = options.Incremental
+                    ? KnownNamesTracker.DiffWithinOwners(previousNames, currentNames)
+                    : KnownNamesTracker.DiffFull(previousNames, currentNames);
+                if (staleNames.Count > 0)
+                {
+                    Console.WriteLine("{0}: [drift] {1} previously-synced name(s) no longer in .st source (renamed or deleted?) — still compiling in the PLC project:", Now(), staleNames.Count);
+                    foreach (string name in staleNames)
+                        Console.WriteLine("    ! stale    {0}", name);
+                }
+            }
+
             List<string> lintIssues = StLinter.Lint(desiredPous);
             if (lintIssues.Count > 0)
             {
@@ -304,6 +325,13 @@ namespace BeckhoffAutomationInterface
                 SyncState.Write(options.SyncStatePath, headSha);
                 Console.WriteLine("{0}: Recorded sync baseline {1} in '{2}'.", Now(), headSha, options.SyncStatePath);
             }
+
+            // Record the known-names drift baseline (see the [drift] warning block above).
+            // Full sync: the parse covered everything, so record it verbatim. Incremental:
+            // fold the partial parse into the previous record, dropping proven-stale names.
+            KnownNamesTracker.Write(options.KnownNamesPath, options.Incremental
+                ? KnownNamesTracker.Merge(previousNames ?? new List<string>(), currentNames, staleNames)
+                : currentNames);
 
             // Sync library references from libraries.xml (config data, not .st source)
             Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), options.LibraryManifestPath);
@@ -339,38 +367,57 @@ namespace BeckhoffAutomationInterface
 
             Console.WriteLine("{0}: Syncing {1} IO device(s)...", Now(), desiredIoDevices.Count);
             IoSyncReport ioReport = null;
-            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices), "syncing IO tree");
+            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(sysManager, desiredIoDevices, options.ConfirmDeleteIo), "syncing IO tree");
 
             foreach (string name in ioReport.Created) Console.WriteLine("    + created  {0}", name);
             foreach (string name in ioReport.Deleted) Console.WriteLine("    - deleted  {0}", name);
             foreach (string change in ioReport.StateChanged) Console.WriteLine("    ~ state    {0}", change);
+            foreach (string warning in ioReport.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
 
             project.Save();
-            Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s)).",
-                Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count);
+            Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s), {4} warning(s)).",
+                Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count, ioReport.Warnings.Count);
 
             // ---------------------------------------------------------------
             // Turn on "Create PLC Data Type" for terminals that declare it (e.g.
             // EL3174/EL3214 analog channels, so they resolve as a named PLC type such
-            // as MDP5001_300_7E2119CA -- see tasks/todo.md Task 3). Confirmed that
-            // ITcSmTreeItem.ProduceXml/ConsumeXml use a different XML schema entirely
-            // than the .tsproj project file and cannot express this setting, so
-            // TsprojPlcDataTypeEditor edits the same file Visual Studio itself saves,
+            // as MDP5001_300_7E2119CA), and add any missing Event Classes -- see
+            // tasks/todo.md Task 3. Confirmed that ITcSmTreeItem.ProduceXml/ConsumeXml
+            // use a different XML schema entirely than the .tsproj project file and
+            // cannot express either setting, so TsprojPlcDataTypeEditor/
+            // TsprojEventClassEditor edit the same file Visual Studio itself saves,
             // directly on disk. That MUST happen while the project is closed (no DTE
             // holding the file), hence closing and reopening the VS session around it.
             // ---------------------------------------------------------------
             List<PlcDataTypeTarget> plcDataTypeTargets = PlcDataTypeTarget.CollectFrom(desiredIoDevices);
-            if (plcDataTypeTargets.Count > 0)
+            var desiredEventClasses = EventManifestParser.Parse(options.EventManifestPath);
+            List<string> missingEventClasses = desiredEventClasses.Count > 0
+                ? EventClassChecker.Check(options.TsprojFilePath, desiredEventClasses).Missing
+                : new List<string>();
+
+            if (plcDataTypeTargets.Count > 0 || missingEventClasses.Count > 0)
             {
-                Console.WriteLine("{0}: Closing Visual Studio to edit the project file for Create PLC Data Type ({1} terminal(s))...",
-                    Now(), plcDataTypeTargets.Count);
+                Console.WriteLine("{0}: Closing Visual Studio to edit the project file directly ({1} terminal(s), {2} event class(es))...",
+                    Now(), plcDataTypeTargets.Count, missingEventClasses.Count);
                 vs.Dispose();
 
-                PlcDataTypeEditResult editResult = TsprojPlcDataTypeEditor.Apply(options.TsprojFilePath, plcDataTypeTargets, options.SourceFolder);
-                foreach (string name in editResult.Applied) Console.WriteLine("    ~ set       {0}", name);
-                foreach (string warning in editResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
-                Console.WriteLine("{0}: Create PLC Data Type complete ({1} applied, {2} warning(s)).",
-                    Now(), editResult.Applied.Count, editResult.Warnings.Count);
+                if (plcDataTypeTargets.Count > 0)
+                {
+                    PlcDataTypeEditResult editResult = TsprojPlcDataTypeEditor.Apply(options.TsprojFilePath, plcDataTypeTargets, options.PlcDataTypesFolder);
+                    foreach (string name in editResult.Applied) Console.WriteLine("    ~ set       {0}", name);
+                    foreach (string warning in editResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
+                    Console.WriteLine("{0}: Create PLC Data Type complete ({1} applied, {2} warning(s)).",
+                        Now(), editResult.Applied.Count, editResult.Warnings.Count);
+                }
+
+                if (missingEventClasses.Count > 0)
+                {
+                    EventClassEditResult eventEditResult = TsprojEventClassEditor.Apply(options.TsprojFilePath, missingEventClasses, options.EventClassesFolder);
+                    foreach (string name in eventEditResult.Applied) Console.WriteLine("    ~ added     {0}", name);
+                    foreach (string warning in eventEditResult.Warnings) Console.WriteLine("    !! WARNING {0}", warning);
+                    Console.WriteLine("{0}: Event Class sync complete ({1} applied, {2} warning(s)).",
+                        Now(), eventEditResult.Applied.Count, eventEditResult.Warnings.Count);
+                }
 
                 Console.WriteLine("{0}: Reopening Visual Studio...", Now());
                 vs = VisualStudioSession.Start();
@@ -430,17 +477,53 @@ namespace BeckhoffAutomationInterface
             }
             else
             {
+                // Translate TwinCAT's exported-file locations (FB_X.TcPOU@Method (Impl):2)
+                // back to the original .st path/line (see Sync/ErrorLocationResolver.cs).
+                // Unmapped locations print raw, clearly labeled \u2014 never silently dropped.
+                Dictionary<string, StPouSource> provenance = TryBuildProvenanceIndex(options, ignore);
                 Console.WriteLine("{0}: BUILD FAILED \u2014 {1} error(s):", Now(), buildReport.Errors.Count);
                 foreach (BuildError error in buildReport.Errors)
-                    Console.WriteLine("    [ERROR] {0} ({1}:{2})", error.Description, error.FileName, error.Line);
+                    Console.WriteLine("    [ERROR] {0} {1}", error.Description, FormatErrorLocation(error, provenance));
+
+                if (buildReport.Warnings.Count > 0)
+                {
+                    Console.WriteLine("{0}: {1} warning(s):", Now(), buildReport.Warnings.Count);
+                    foreach (BuildError warning in buildReport.Warnings)
+                        Console.WriteLine("    [WARN] {0} {1}", warning.Description, FormatErrorLocation(warning, provenance));
+                }
+                return;
             }
 
             if (buildReport.Warnings.Count > 0)
             {
+                Dictionary<string, StPouSource> provenance = TryBuildProvenanceIndex(options, ignore);
                 Console.WriteLine("{0}: {1} warning(s):", Now(), buildReport.Warnings.Count);
                 foreach (BuildError warning in buildReport.Warnings)
-                    Console.WriteLine("    [WARN] {0} ({1}:{2})", warning.Description, warning.FileName, warning.Line);
+                    Console.WriteLine("    [WARN] {0} {1}", warning.Description, FormatErrorLocation(warning, provenance));
             }
+        }
+
+        /// <summary>Fresh full parse of the source folder for error mapping \u2014 independent
+        /// of the sync's own (possibly incremental/partial) parse so errors in unchanged
+        /// files still map. Best-effort: a parse failure just means raw locations.</summary>
+        static Dictionary<string, StPouSource> TryBuildProvenanceIndex(RunOptions options, IgnoreRules ignore)
+        {
+            try
+            {
+                return ErrorLocationResolver.BuildIndex(StFileParser.ParseFolder(options.SourceFolder, ignore));
+            }
+            catch (Exception)
+            {
+                return new Dictionary<string, StPouSource>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        static string FormatErrorLocation(BuildError error, Dictionary<string, StPouSource> provenance)
+        {
+            ResolvedErrorLocation loc = ErrorLocationResolver.Resolve(error.FileName, error.Line, provenance);
+            return loc.Mapped
+                ? string.Format("({0}:{1})", loc.Path, loc.Line)
+                : string.Format("({0}:{1}) [unmapped \u2014 raw TwinCAT location]", error.FileName, error.Line);
         }
     }
 }

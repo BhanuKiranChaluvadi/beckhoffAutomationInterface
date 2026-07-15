@@ -41,34 +41,49 @@ This plan closes all four before relying on the tool day-to-day.
       following phases touch it
 
 ### Phase 2: Close the two known TODO.md bugs
-- [ ] Task 2: Fix duplicate library references (Tc2_Standard/Tc2_System/Tc3_Module)
-- [ ] Task 3: Investigate and fix "Unknown type" DUT errors for EL3174/EL3214-derived types
+- [x] Task 2: Fix duplicate library references (Tc2_Standard/Tc2_System/Tc3_Module)
+      (not reproducible — verified no duplicates across repeated real syncs)
+- [x] Task 3: Investigate and fix "Unknown type" DUT errors for EL3174/EL3214-derived types
+      (root cause: MDP5001 suffix is a config-hash, revision-dependent — see todo.md)
 
 ### Checkpoint: Known bugs closed
-- [ ] Full sync+build against the real Shark project shows no duplicate
-      library references and no `C0077 Unknown type` errors for
-      `MDP5001_300_7E2119CA` / `MDP5001_320_A369A904`
-- [ ] `TODO.md` / `TODO.xml` can be deleted (superseded by this plan)
+- [x] Full sync+build against the real Shark project shows no duplicate
+      library references and no `C0077 Unknown type` errors —
+      BUILD PASSED 2026-07-14 (aliases now reference `MDP5001_320_5D7E181C`,
+      this machine's actual TwinCAT-generated name)
+- [x] `TODO.md` / `TODO.xml` deleted (superseded by this plan)
 
 ### Phase 3: Compile-error → source-line mapping (Finding 1)
-- [ ] Task 4: Confirm TwinCAT's reported FileName/Line shape per PLC-object kind
-- [ ] Task 5: Track `.st` file/line provenance through parsing and sync
-- [ ] Task 6: Translate build errors back to `.st` path/line before printing
+- [x] Task 4: Confirm TwinCAT's reported FileName/Line shape per PLC-object kind
+      (all kinds section-relative; see todo.md's findings table)
+- [x] Task 5: Track `.st` file/line provenance through parsing and sync
+      (StPouSource.SourceFileName/DeclarationStartLine/ImplementationStartLine/
+      Get-SetStartLine, computed by StFileParser)
+- [x] Task 6: Translate build errors back to `.st` path/line before printing
+      (Sync/ErrorLocationResolver.cs; unmapped errors labeled, never dropped)
 
 ### Checkpoint: Feedback loop is trustworthy
-- [ ] Deliberately breaking one method in a multi-method FB file and running
+- [x] Deliberately breaking one method in a multi-method FB file and running
       the tool prints that file and a line landing on/near the real error —
-      not an internal export path with `Line: 1`
+      verified 2026-07-14: every probe kind mapped to the EXACT broken line
+      (e.g. a broken METHOD in a multi-method FB → `FB_BrokenMethod.st:16`)
 
 ### Phase 4: Drift detection / orphan handling (Finding 2)
-- [ ] Task 7: Decide the orphan/rename policy (warn-only vs. prune, and at what scope)
-- [ ] Task 8: Implement the chosen policy
+- [x] Task 7: Decide the orphan/rename policy (warn-only vs. prune, and at what scope)
+      (Option (c): warn always at both levels, prune stays opt-in where it
+      already was — matches the repo's --confirm-delete/--confirm-delete-io
+      safety-gate philosophy; full rationale in todo.md)
+- [x] Task 8: Implement the chosen policy
+      (Sync/KnownNamesTracker.cs + .st-known-names state + [drift] warnings
+      in Program.RunSync; verified by scratch VS runs + 6 unit tests)
 
 ### Checkpoint: Complete
-- [ ] Renaming or deleting a METHOD/POU inside `.st` source no longer leaves
+- [x] Renaming or deleting a METHOD/POU inside `.st` source no longer leaves
       invisible stale code compiling as part of the project
-- [ ] All four issues verified against a real TwinCAT/Visual Studio run,
+- [x] All four issues verified against a real TwinCAT/Visual Studio run,
       not just unit tests
+
+## PLAN COMPLETE (2026-07-15) — all phases, tasks, and checkpoints closed.
 
 ## Risks and Mitigations
 | Risk | Impact | Mitigation |
