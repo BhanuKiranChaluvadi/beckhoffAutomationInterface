@@ -157,5 +157,19 @@ namespace BeckhoffAutomationInterface.Tests
 
             Assert.Equal(@"C:\Real\Project.tsproj", options.TsprojFilePath);
         }
+
+        [Fact]
+        public void PlcProjectDiskFolder_SitsAlongsideTsproj_NamedAfterPlcProjectName()
+        {
+            // Real shape confirmed live 2026-07-16 against PLC_NFL_SHARK_V2: the .tsproj
+            // sits in "...\PLC_NFL_SHARK\", the PLC project's own folder is
+            // "...\PLC_NFL_SHARK\PLC_NFL_prj\" (named after PlcProjectName, NOT the
+            // .tsproj's own file name).
+            RunOptions options = Parse("--export-all",
+                "--tsproj", @"C:\Real\PLC_NFL_SHARK\PLC_NFL_SHARK.tsproj",
+                "--plc-name", "PLC_NFL_prj");
+
+            Assert.Equal(@"C:\Real\PLC_NFL_SHARK\PLC_NFL_prj", options.PlcProjectDiskFolder);
+        }
     }
 }

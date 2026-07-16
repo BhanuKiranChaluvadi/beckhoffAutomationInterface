@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Xml.Linq;
 using Interop.TCatSysManager;
 
 namespace BeckhoffAutomationInterface.Sync
@@ -38,12 +40,26 @@ namespace BeckhoffAutomationInterface.Sync
         // PouSyncEngine.SyncProperties creates them, so their raw type ints aren't needed here.
         const int PLCPROP = 611, PLCITFPROP = 612;
 
+        // TREEITEMTYPE_PLCTEXTLISTENUMERATION (.TcTLEO file, "Enumeration Text List" in the
+        // XAE UI) also has no named TREEITEMTYPES member in this interop assembly. Found
+        // live (2026-07-16, reverse-export round-trip test against PLC_NFL_SHARK_V2):
+        // functionally a plain ENUM (its DeclarationText is a normal "TYPE X : (...) END_TYPE"
+        // — confirmed by reading the raw .TcTLEO XML directly), just with extra multi-
+        // language "text list" metadata layered on top for HMI localization, which
+        // DeclarationText doesn't expose and .st source doesn't need anyway. Before this fix,
+        // ProjectCodeExporter's walk silently skipped these (recursed past them, finding
+        // nothing, since ChildCount is always 0) — real .st content was being lost with no
+        // warning at all. A build against the round-tripped source caught this: "Identifier
+        // 'E_TemperatureMonitorZone' not defined" / "Unknown type".
+        const int PLCTEXTLISTENUMERATION = 658;
+
         static readonly HashSet<int> DeclarationOnlyKinds = new HashSet<int>
         {
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTENUM,
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTSTRUCT,
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCDUTALIAS,
             (int)TREEITEMTYPES.TREEITEMTYPE_PLCGVL,
+            PLCTEXTLISTENUMERATION,
         };
 
         /// <summary>POU kinds with a separate Declaration+Implementation (unlike DUTs/
@@ -121,9 +137,15 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>Returns the exact text to write to the .st file. Throws
         /// NotSupportedException if item's kind isn't a currently-supported one — check
-        /// IsSupported first.</summary>
-        public static string Export(ITcSmTreeItem item)
+        /// IsSupported first. projectRootPath/plcProjectDiskFolder are only actually used
+        /// for TREEITEMTYPE_PLCTEXTLISTENUMERATION items (see ReadTextListDeclaration) —
+        /// pass null for both if the caller is certain no such item will be encountered
+        /// (e.g. a caller that already filtered them out).</summary>
+        public static string Export(ITcSmTreeItem item, string projectRootPath = null, string plcProjectDiskFolder = null)
         {
+            if (item.ItemType == PLCTEXTLISTENUMERATION)
+                return ReadTextListDeclaration(item, projectRootPath, plcProjectDiskFolder);
+
             if (DeclarationOnlyKinds.Contains(item.ItemType))
                 return ((ITcPlcDeclaration)item).DeclarationText;
 
@@ -212,6 +234,38 @@ namespace BeckhoffAutomationInterface.Sync
         {
             try { return ((ITcPlcImplementation)item).ImplementationText; }
             catch (InvalidCastException) { return null; }
+        }
+
+        /// <summary>Reads a TREEITEMTYPE_PLCTEXTLISTENUMERATION (.TcTLEO) object's
+        /// declaration text directly from its file on disk. Confirmed live (2026-07-16)
+        /// that this kind does NOT expose ITcPlcDeclaration via COM at all — casting
+        /// throws InvalidCastException/E_NOINTERFACE, unlike every other DUT/GVL kind —
+        /// so unlike the rest of this class, this one path reads the project's own file
+        /// directly (the same "direct file access for what COM can't do" precedent
+        /// already established by TsprojEventClassEditor/TsprojPlcDataTypeEditor). The
+        /// file mirrors the tree location exactly (same convention as every other synced
+        /// object), so its path is derived from GetRelativeFolder plus a ".TcTLEO"
+        /// extension, rooted at the live project's own on-disk folder — NOT the .st
+        /// source folder, a different thing entirely.</summary>
+        static string ReadTextListDeclaration(ITcSmTreeItem item, string projectRootPath, string plcProjectDiskFolder)
+        {
+            if (projectRootPath == null || plcProjectDiskFolder == null)
+                throw new NotSupportedException(
+                    $"Export of '{item.Name}' (Enumeration Text List) needs projectRootPath/plcProjectDiskFolder, but neither was given.");
+
+            string relativeFolder = GetRelativeFolder(item, projectRootPath);
+            string folderPath = string.IsNullOrEmpty(relativeFolder)
+                ? plcProjectDiskFolder
+                : Path.Combine(plcProjectDiskFolder, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
+            string filePath = Path.Combine(folderPath, item.Name + ".TcTLEO");
+
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException($"Expected .TcTLEO file not found for Enumeration Text List '{item.Name}': {filePath}", filePath);
+
+            XElement declarationEl = XDocument.Load(filePath).Root.Element("EnumerationTextList")?.Element("Declaration");
+            if (declarationEl == null)
+                throw new InvalidOperationException($"'{filePath}' has no <EnumerationTextList><Declaration> element.");
+            return declarationEl.Value;
         }
     }
 }

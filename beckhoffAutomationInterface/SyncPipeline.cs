@@ -134,7 +134,7 @@ namespace BeckhoffAutomationInterface
                 return;
             }
 
-            string text = PlcObjectExporter.Export(item);
+            string text = PlcObjectExporter.Export(item, _options.ProjectRootPath, _options.PlcProjectDiskFolder);
             string relativeFolder = PlcObjectExporter.GetRelativeFolder(item, _options.ProjectRootPath);
             string folderPath = Path.Combine(_options.SourceFolder, relativeFolder.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(folderPath);
@@ -187,7 +187,7 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: Exporting all PLC objects -> '{1}'...", Now(), _options.SourceFolder);
                 ProjectExportReport report = null;
                 RetryOnBusy(() => report = ProjectCodeExporter.ExportAll(
-                    _session.SysManager.LookupTreeItem(_options.ProjectRootPath), _options.ProjectRootPath, _options.SourceFolder), "exporting PLC objects");
+                    _session.SysManager.LookupTreeItem(_options.ProjectRootPath), _options.ProjectRootPath, _options.PlcProjectDiskFolder, _options.SourceFolder), "exporting PLC objects");
                 PrintLines("+ wrote    ", report.Written);
                 if (report.Unsupported.Count > 0)
                 {

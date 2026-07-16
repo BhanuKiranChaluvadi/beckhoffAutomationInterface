@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using Interop.TCatSysManager;
@@ -34,14 +33,19 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     static class ProjectCodeExporter
     {
-        public static ProjectExportReport ExportAll(ITcSmTreeItem projectRoot, string projectRootPath, string sourceFolder)
+        /// <summary>plcProjectDiskFolder is the LIVE project's own on-disk folder (see
+        /// RunOptions.PlcProjectDiskFolder) — needed only for TREEITEMTYPE_
+        /// PLCTEXTLISTENUMERATION (.TcTLEO) objects, which don't expose their declaration
+        /// text via COM at all (see PlcObjectExporter.ReadTextListDeclaration). Distinct
+        /// from sourceFolder, which is where the resulting .st files are WRITTEN.</summary>
+        public static ProjectExportReport ExportAll(ITcSmTreeItem projectRoot, string projectRootPath, string plcProjectDiskFolder, string sourceFolder)
         {
             var report = new ProjectExportReport();
-            Walk(projectRoot, projectRootPath, sourceFolder, report);
+            Walk(projectRoot, projectRootPath, plcProjectDiskFolder, sourceFolder, report);
             return report;
         }
 
-        static void Walk(ITcSmTreeItem parent, string projectRootPath, string sourceFolder, ProjectExportReport report)
+        static void Walk(ITcSmTreeItem parent, string projectRootPath, string plcProjectDiskFolder, string sourceFolder, ProjectExportReport report)
         {
             for (int i = 1; i <= parent.ChildCount; i++)
             {
@@ -53,20 +57,20 @@ namespace BeckhoffAutomationInterface.Sync
                     // members already stitched into this file). If its specific shape isn't
                     // supported yet, report it rather than descending or crashing.
                     if (PlcObjectExporter.IsSupported(child))
-                        WriteObject(child, projectRootPath, sourceFolder, report);
+                        WriteObject(child, projectRootPath, plcProjectDiskFolder, sourceFolder, report);
                     else
                         report.Unsupported.Add($"{child.Name} ({child.ItemSubTypeName})");
                     continue;
                 }
 
                 // A folder / References / visualization container: recurse through it.
-                Walk(child, projectRootPath, sourceFolder, report);
+                Walk(child, projectRootPath, plcProjectDiskFolder, sourceFolder, report);
             }
         }
 
-        static void WriteObject(ITcSmTreeItem item, string projectRootPath, string sourceFolder, ProjectExportReport report)
+        static void WriteObject(ITcSmTreeItem item, string projectRootPath, string plcProjectDiskFolder, string sourceFolder, ProjectExportReport report)
         {
-            string text = PlcObjectExporter.Export(item);
+            string text = PlcObjectExporter.Export(item, projectRootPath, plcProjectDiskFolder);
             string relativeFolder = PlcObjectExporter.GetRelativeFolder(item, projectRootPath);
             string folderPath = string.IsNullOrEmpty(relativeFolder)
                 ? sourceFolder

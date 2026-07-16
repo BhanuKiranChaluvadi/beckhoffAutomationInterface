@@ -164,6 +164,15 @@ namespace BeckhoffAutomationInterface
         /// unchanged: the conventional nested path this tool's own --init creates.</summary>
         public string TsprojFilePath => ExistingTsprojPath ?? Path.Combine(SolutionDirectory, ProjectName, ProjectName + ".tsproj");
 
+        /// <summary>The live PLC project's own on-disk folder (e.g. ".../PLC_NFL_SHARK/
+        /// PLC_NFL_prj"), matching TwinCAT's convention of the PLC project folder sitting
+        /// alongside its .tsproj, named after PlcProjectName. Needed ONLY for reverse
+        /// export of TREEITEMTYPE_PLCTEXTLISTENUMERATION (.TcTLEO) objects — confirmed
+        /// live (2026-07-16) to NOT expose ITcPlcDeclaration via COM at all (E_NOINTERFACE),
+        /// unlike every other DUT/GVL kind — so their DeclarationText must be read directly
+        /// from their .TcTLEO file on disk instead (see PlcObjectExporter.Export).</summary>
+        public string PlcProjectDiskFolder => Path.Combine(Path.GetDirectoryName(TsprojFilePath), PlcProjectName);
+
         public string LibraryManifestPath => Path.Combine(SourceFolder, "libraries.xml");
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
