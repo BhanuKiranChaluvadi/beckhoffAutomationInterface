@@ -24,21 +24,42 @@
   screenshot's visual grouping — verify against the real .tsproj's raw XML
   indentation before changing this file again.
 
-  Scope: BH1 and BH2 only. BH3/BH4/BH5 (in the same screenshot) are deliberately
-  omitted for now:
-    - BH3's "Term 33 (EK1100)" coupler's own terminals aren't expanded in the
-      screenshot, so its contents are unknown.
-    - BH4's boxes (EX260-SEC1, "Mass Flow / Pressure Controller - RJ45" x3) and
-      BH5's box (MARPOSS P3XF STANDARD) aren't standard Beckhoff EL/EK catalog
-      codes — the exact Product string CreateChild needs to instantiate them
-      correctly isn't derivable from the display name alone.
-  Add these once confirmed; guessing here risks creating the wrong hardware in
-  the live project.
+  BH3 added 2026-07-16, this time by reading the real reference project's
+  on-disk config directly (PLC_NFL_SHARK\_Config\IO\BH3\), not a screenshot
+  — its main .tsproj only references three EtherCAT devices (BH1/BH2/BH3; a
+  fourth, "Device 1 (RT-Ethernet Adapter)", isn't an EL/EK terminal device).
+  BH4/BH5 from the earlier screenshot don't exist anywhere in this reference
+  project snapshot — they must belong to a different revision/machine, so
+  they're deliberately NOT added here; don't guess them back in.
 
-  All devices are Disabled="true" for now: an enabled EtherCAT master with no
+  BH3's own nesting (unlike BH1/BH2) is flat and unambiguous, confirmed from
+  "Term 33 (EK1100).xti" directly: "Box 32 (CU2508)" and "Term 33 (EK1100)"
+  are siblings (same pattern as BH1/BH2's own CU2508/EK1100 siblings), and
+  Term 33's five terminals are all its own direct children — no chain-quirk
+  nesting to worry about here. BH3 is a TwinSAFE safety hookup (EL1918 =
+  TwinSAFE Logic terminal, EL2904 = TwinSAFE safe digital outputs) — its own
+  .xti has an internal <Mappings> section, but those are terminal-to-terminal
+  FSOE safety-bus routing (EL1918 <-> EL2904), NOT PLC-variable links.
+  GVL_Safety.st's own AT %I*/%Q* variables (SafetyOk/SafetyRunning/etc.)
+  route through the Safety-project's own instance mapping in the main
+  .tsproj (a <Safety><Instance><Mappings><MappingInfo GUID-based> block) — a
+  separate, more specialized mechanism than io-devices.xml's <Links>/
+  links.xml, out of scope for this manifest.
+
+  No real digital-IO-to-variable wiring (which channel each %I/%Q variable in
+  PRG_DIGITAL_INPUT.st/PRG_DIGITAL_OUTPUT.st/etc. is actually wired to) exists
+  anywhere on disk in the reference project for BH1/BH2/BH3 — confirmed by
+  directly reading every .xti file, not just BH3's. Populating real <Links>/
+  links.xml entries for those is still blocked on the actual physical wiring,
+  which only a human with the panel/schematic can supply.
+
+  All devices stay Disabled="true": an enabled EtherCAT master with no
   variable linked to a task blocks the build with a modal "needs sync master"
-  dialog (see IoManifestParser's doc comment), and no <Links> section exists
-  yet for these devices.
+  dialog (see IoManifestParser's doc comment) — confirmed live (2026-07-15,
+  see tasks/plan.md) when a links.xml applied via ConsumeMappingInfo silently
+  didn't actually resolve anything and the build hung until force-killed.
+  Only flip a device to Disabled="false" once its <Links>/links.xml entries
+  are confirmed real and applied successfully.
 -->
 <IoTree>
   <Device Name="BH1" Disabled="true">
@@ -79,5 +100,16 @@
       <Terminal Name="EL6022_2.1" Product="EL6022" />
       <Terminal Name="EL9011_2.1" Product="EL9011" />
     </Terminal>
+  </Device>
+
+  <Device Name="BH3" Disabled="true">
+    <Box Name="Box 32 (CU2508)" Product="CU2508" />
+    <Box Name="Term 33 (EK1100)" Product="EK1100">
+      <Terminal Name="Term 34 (EL1918)" Product="EL1918" />
+      <Terminal Name="Term 35 (EL1918)" Product="EL1918" />
+      <Terminal Name="Term 36 (EL2904)" Product="EL2904" />
+      <Terminal Name="Term 37 (EL2904)" Product="EL2904" />
+      <Terminal Name="Term 7 (EL9011)" Product="EL9011" />
+    </Box>
   </Device>
 </IoTree>
