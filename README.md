@@ -367,22 +367,61 @@ cd "C:\...\ST\Shark-new"; git init; git add -A; git commit -m "Import Shark from
 # From here on, edit .st and sync FORWARD as normal (see "Typical workflow").
 ```
 
+**Adopting an ARBITRARY pre-existing project** (one this tool didn't bootstrap
+itself) often needs two extra overrides, since a real project's PLC-project
+name (inside `TIPC`) commonly differs from its `.tsproj`/solution file name,
+and it may not even have a `.sln` at all:
+
+| Flag | Purpose |
+|---|---|
+| `--tsproj <path>` | Adopt this exact `.tsproj` file directly (read-only, never saved) — bypasses `--dest`/`--name`/`.sln` resolution entirely. Use when the project has **no `.sln`** ("loose" tsproj). |
+| `--plc-name <name>` | The real PLC-project name inside `TIPC`, if it differs from `--name`/the `.tsproj` file name — check the project's own `.plcproj` file name if unsure. |
+
+```powershell
+# A project with NO .sln at all (check its own .plcproj file name for --plc-name):
+.\beckhoffAutomationInterface.exe --tsproj "C:\...\SomeProject\SomeProject.tsproj" --plc-name RealPlcProjectName --source "C:\...\ST\new" --export-all
+
+# A project that DOES have a matching .sln, but a differently-named PLC project inside:
+.\beckhoffAutomationInterface.exe --dest "C:\...\Projects" --name SomeProject --plc-name RealPlcProjectName --source "C:\...\ST\new" --export-all
+```
+
+Both forms attach to the project **read-only** — no `Project.Save()`/
+`Solution.SaveAs()` is ever called on this path, regardless of whether a
+`.sln` already exists (confirmed live: hashing the `.tsproj`/`.sln` before and
+after showed byte-identical content in both cases). One caveat found during
+live validation: merely *opening* a project this way can still cause TwinCAT
+itself to silently bump one auto-generated version-stamp field (e.g. a
+`ProductVersion`/`ProgramVersion` attribute reflecting your installed TwinCAT
+build) — confirmed cosmetic via `git diff` (no logic/content change) both
+times it was observed. If the project is git-tracked, a quick `git status`/
+`git diff` after a reverse-export run will show this clearly if it occurs, and
+it's safe to `git checkout --` away.
+
 **Safety — `--overwrite`:** to avoid clobbering hand-edited source, reverse
 export **refuses** (exit 1) if `--source` already contains any `.st` files or
 manifests. Pass `--overwrite` to regenerate in place, or point `--source` at an
-empty folder. Like `--init`/`--confirm-delete*`, `--overwrite` is CLI-only and
-never read from `.stconfig`. Reverse export also requires the project to already
-exist (it never bootstraps — a missing solution is a hard error, since there is
-nothing to export from).
+empty folder. Like `--init`/`--confirm-delete*`, `--overwrite`, `--tsproj`, and
+`--plc-name` are all CLI-only and never read from `.stconfig`. Reverse export
+also requires the project to already exist (it never bootstraps — a missing
+project is a hard error, since there is nothing to export from).
 
 **Caveats:**
 - The non-ASCII round-trip caveat above applies to `--export-code` too (it reuses
   the same per-object exporter).
-- `--export-io` recovers each terminal's `Product` from its `ItemSubTypeName`
-  description (there is no exact read-back API — see `Sync/IoManifestWriter.cs`).
-  Any value it can't map cleanly to a Beckhoff product code is listed as
-  `! verify` in the output — **review `io-devices.xml`'s `Product` attributes
-  against the real hardware before relying on the manifest for a forward sync.**
+- `--export-io` recovers each terminal's `Product` primarily from the trailing
+  `"(Product)"` in its **Name** — TwinCAT's own default naming convention when
+  a device is dragged from the ESI catalog (confirmed live against 30 real
+  terminals, including non-Beckhoff/hyphenated catalog strings like a Festo
+  `EX260-SEC1`, which a bare product-code pattern would truncate wrongly).
+  Falls back to a pattern embedded in Name (TwinCAT's other auto-naming style,
+  e.g. `EK1100_1.1`), then to `ItemSubTypeName` — see `Sync/IoManifestWriter.cs`.
+  Anything not lifted from the Name parenthetical is listed as `! verify` in
+  the output — **review those `io-devices.xml` `Product` attributes against
+  the real hardware before relying on the manifest for a forward sync.**
+- A library reference whose name isn't in Beckhoff's own `Tc<N>_*` namespace
+  (e.g. a custom/third-party library) is left as an XML comment in
+  `libraries.xml` for manual review rather than guessed, since its real
+  Company/Version can't be recovered from what TwinCAT exposes.
 
 ### Naming-convention linting
 
@@ -444,32 +483,43 @@ covered by this check.
 
 ### Variable links (`links.xml`)
 
-`io-devices.xml`'s `<Links>` section (above) is this tool's own simple
-schema, applied one pair at a time. `links.xml`, if present, is TwinCAT's
-**own native** `<VarLinks>` export/import format — the exact schema the XAE
-IDE itself produces via "Export Variable Mapping" and reads back via
-"Import Variable Mapping" — applied in **one bulk COM call**
-(`ITcSysManager.ConsumeMappingInfo`). Both coexist: if present, `links.xml`
-is applied first, then `io-devices.xml`'s `<Links>` on top — neither
-replaces the other.
+**`io-devices.xml`'s `<Links>` section is the recommended, permanent way to
+declare links** — it's the whole reason `.st`/manifest source exists in this
+project at all: plain text, hand-readable, git-diffable, easy to review in a
+PR. `links.xml`, covered below, is a **discovery aid** for finding out a
+real channel path you don't already know — not a second permanent source of
+truth to maintain alongside it. Once you know the real `IoChannel`, write it
+into `io-devices.xml` as a normal `<Link>` entry (see above) and treat
+`links.xml` as disposable (it's `.gitignore`d by default).
 
-**The easiest way to get a real, correct `links.xml`:** link your `%I`/`%Q`
-variables to hardware once by hand in the TwinCAT IDE (or against a
-simulated target), then run:
+**Recommended workflow when you don't yet know the real wiring:**
+1. Link the variable to hardware once by hand in the TwinCAT IDE (drag the
+   channel onto the variable in Solution Explorer, or right-click the
+   variable → "Link To...") — this is where your knowledge of the actual
+   panel wiring comes in; nothing here can be derived automatically.
+2. Save, then run:
+   ```powershell
+   .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export-links
+   ```
+   which writes the current mapping to `links.xml` via
+   `ITcSysManager.ProduceMappingInfo` — the same thing "Export Variable
+   Mapping" does.
+3. Read the `IoChannel`-equivalent path back out of `links.xml` (each
+   `<Link>`'s `OwnerB`/`VarB`) and transcribe it into a proper `<Link
+   PlcVar="..." IoChannel="..."/>` entry in `io-devices.xml` — now it's
+   readable, reviewable, and lives with the rest of the project's manifests.
+4. Delete (or just leave — it's gitignored) `links.xml`.
 
-```powershell
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export-links
-```
+If you have a whole batch of variables to link at once, skip step 3's
+transcription and just keep `links.xml` as-is for that run — both
+mechanisms coexist (`links.xml` applies first, then `io-devices.xml`'s
+`<Links>` on top, neither replaces the other) — but transcribing back to
+`io-devices.xml` is still worth doing before committing, for the same
+readability reason.
 
-which writes the current mapping to `links.xml` via
-`ITcSysManager.ProduceMappingInfo` — the same thing "Export Variable
-Mapping" does. This is how a file like the real
-`Spectrometer Instance Mappings.xml` (seen in a working reference project)
-comes to exist. `--export-links` overwrites any existing `links.xml`, the
-same convention `--export <name>` already uses for its target `.st` file.
-
-**Prefer `--export-links` over hand-authoring.** Live testing (2026-07-15,
-TwinCAT 3.1) found `ConsumeMappingInfo` is picky about the exact shape:
+**Schema, if you ever need to hand-author or read `links.xml` directly.**
+Live testing (2026-07-15, TwinCAT 3.1) found `ConsumeMappingInfo` is picky
+about the exact shape:
 ```xml
 <VarLinks>
   <OwnerA Name="TIPC^Shark^Shark Instance">
@@ -490,7 +540,8 @@ plus `TypeA`/`InOutA`/`GuidA` metadata — the real
 both, but only the shape above was confirmed to actually apply via
 `ConsumeMappingInfo` in this environment; the richer one was tried first and
 silently applied nothing (no COM exception, but an `--export-links`
-round-trip came back empty). If in doubt, always prefer `--export-links`.
+round-trip came back empty). If in doubt, always prefer `--export-links`
+over hand-authoring this file.
 
 See [`links.xml.example`](links.xml.example) at the repo root for a fully
 annotated template. `--check-links`/`--parse-only` also cross-reference

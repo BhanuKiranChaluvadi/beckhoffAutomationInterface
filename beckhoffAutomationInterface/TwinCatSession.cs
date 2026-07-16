@@ -33,13 +33,31 @@ namespace BeckhoffAutomationInterface
 
         /// <summary>Starts Visual Studio and opens (or, with --init, bootstraps) the
         /// project, if not already open. The first open of a run also saves the
-        /// solution to its canonical path (same behavior the monolithic pipeline had).</summary>
+        /// solution to its canonical path (same behavior the monolithic pipeline had) —
+        /// EXCEPT for reverse export (see RunOptions.IsReverseExport), which ALWAYS
+        /// attaches read-only via OpenExistingReadOnly and NEVER saves/creates a solution
+        /// file, regardless of whether a .sln already happens to exist for that project.
+        /// Reverse export is a read-only operation against a real project by design (it
+        /// may be someone's live production PLC project) — this must hold even when the
+        /// conventional dest/name/.sln path resolves to a project that DOES already have
+        /// a matching solution, not only the explicit --tsproj override case.</summary>
         public void EnsureOpen()
         {
             if (IsOpen)
                 return;
 
             Vs = VisualStudioSession.Start();
+
+            if (_options.IsReverseExport)
+            {
+                // TsprojFilePath already resolves to ExistingTsprojPath (--tsproj) when
+                // given, else the conventional dest/name-derived path — either way, this
+                // is the ONE read-only, no-Save/SaveAs attach path for reverse export.
+                (Project, SysManager) = TwinCatProjectOpener.OpenExistingReadOnly(Vs.Dte, _options.TsprojFilePath);
+                _solutionSavedAs = true; // never save — this project is read-only, adopted as-is
+                return;
+            }
+
             (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(Vs.Dte, _options);
             Project = project;
             SysManager = sysManager;

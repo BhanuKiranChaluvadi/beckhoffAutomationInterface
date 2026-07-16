@@ -52,6 +52,37 @@ namespace BeckhoffAutomationInterface
             return (project, sysManager);
         }
 
+        /// <summary>
+        /// Attaches to an ARBITRARY, already-existing .tsproj file directly — read-only,
+        /// never saved — bypassing the DestinationFolder/ProjectName/.sln resolution
+        /// entirely (see RunOptions.ExistingTsprojPath / --tsproj). This is the reverse-
+        /// export "adopt a pre-existing project" path: such a project's on-disk layout
+        /// can't be assumed, and it may have NO .sln at all — confirmed live against
+        /// PLC_NFL_SHARK_V2 (tasks/2026-07-15-reverse-export-scaffold/), whose .tsproj sits
+        /// loose with no wrapping solution.
+        ///
+        /// Mirrors BootstrapNew's own dte.Solution.Create() call (an unsaved, in-memory
+        /// solution container) but calls AddFromFile to ATTACH the existing project
+        /// instead of AddFromTemplate to create a new one — the project's own file is
+        /// never written to. CALLERS MUST NEVER call Project.Save()/dte.Solution.SaveAs()
+        /// anywhere on this path; TwinCatSession.EnsureOpen enforces this by skipping its
+        /// usual save-as step whenever ExistingTsprojPath is set.
+        /// </summary>
+        public static (EnvDTE.Project Project, ITcSysManager SysManager) OpenExistingReadOnly(EnvDTE80.DTE2 dte, string tsprojPath)
+        {
+            if (!File.Exists(tsprojPath))
+                throw new FileNotFoundException($"tsproj not found: {tsprojPath}", tsprojPath);
+
+            string tempSolutionDir = Path.Combine(Path.GetTempPath(), "bai_reverse_export_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempSolutionDir);
+
+            Console.WriteLine("{0}: Attaching existing project (read-only) '{1}'...", Now(), tsprojPath);
+            dte.Solution.Create(tempSolutionDir, "ReverseExportSession");
+            EnvDTE.Project project = dte.Solution.AddFromFile(tsprojPath, true);
+            var sysManager = (ITcSysManager)project.Object;
+            return (project, sysManager);
+        }
+
         static (EnvDTE.Project, ITcSysManager) BootstrapNew(EnvDTE80.DTE2 dte, RunOptions options)
         {
             Console.WriteLine("{0}: No existing solution found; bootstrapping a new one at '{1}'...", Now(), options.SolutionDirectory);

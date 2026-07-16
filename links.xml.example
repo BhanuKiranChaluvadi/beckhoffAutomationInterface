@@ -1,8 +1,10 @@
 <!--
-  Sample links.xml — copy this file to the TOP LEVEL of your --source project
-  folder (the same place io-devices.xml/events.xml/.stignore live) and rename
-  it to "links.xml". See "Variable links (links.xml)" in README.md for the
-  full rules.
+  Sample links.xml. IMPORTANT: this file is a DISCOVERY AID, not the
+  recommended permanent home for your links — io-devices.xml's <Link
+  PlcVar="..." IoChannel="..."/> entries are (plain text, hand-readable,
+  git-diffable). Use links.xml only to find out a real channel path you
+  don't already know, then transcribe it into io-devices.xml and delete
+  this file (it's .gitignore'd by default for exactly this reason).
 
   This is TwinCAT's OWN native <VarLinks> export/import format — the exact
   same schema the XAE IDE itself produces via "Export Variable Mapping" and
@@ -10,13 +12,15 @@
   (ITcSysManager.ConsumeMappingInfo) — the file's raw text is handed straight
   to TwinCAT, not reinterpreted by this tool.
 
-  THE EASIEST WAY TO GET A REAL, CORRECT links.xml: link your %I/%Q
-  variables to hardware once by hand in the TwinCAT IDE (or against a
-  simulated target), then run:
+  RECOMMENDED WORKFLOW: link your %I/%Q variables to hardware once by hand
+  in the TwinCAT IDE (or against a simulated target) — this is where your
+  actual panel-wiring knowledge comes in, nothing here can derive it for
+  you — then run:
       beckhoffAutomationInterface.exe --source <path> --dest <path> --export-links
   which writes the current mapping here via ITcSysManager.ProduceMappingInfo
-  — the same thing "Export Variable Mapping" does. Hand-authoring entries
-  (as below) is also fine for simple, top-level GVL/PROGRAM variables.
+  — the same thing "Export Variable Mapping" does. Then copy each Link's
+  OwnerB/VarB (the "channel" side) into a proper io-devices.xml <Link> entry.
+  See "Variable links (links.xml)" in README.md for the full walkthrough.
 
   Schema — CONFIRMED against a live TwinCAT 3.1 install (2026-07-15): this is
   exactly what ProduceMappingInfo/ConsumeMappingInfo produce and accept here,

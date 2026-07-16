@@ -130,5 +130,32 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.True(Parse("--export-all", "--overwrite").Overwrite);
             Assert.False(Parse("--export-all").Overwrite);
         }
+
+        [Fact]
+        public void ExistingTsprojPath_NullByDefault_SetWhenGiven()
+        {
+            Assert.Null(Parse("--export-all").ExistingTsprojPath);
+            Assert.Equal(@"C:\Real\Project.tsproj", Parse("--export-all", "--tsproj", @"C:\Real\Project.tsproj").ExistingTsprojPath);
+        }
+
+        [Fact]
+        public void PlcProjectName_DefaultsToProjectName_OverridableViaPlcName()
+        {
+            RunOptions defaultOptions = Parse("--source", ".", "--name", "MySolution");
+            Assert.Equal("MySolution", defaultOptions.PlcProjectName);
+            Assert.Equal("TIPC^MySolution^MySolution Project", defaultOptions.ProjectRootPath);
+
+            RunOptions overridden = Parse("--source", ".", "--name", "MySolution", "--plc-name", "ActualPlcProject");
+            Assert.Equal("ActualPlcProject", overridden.PlcProjectName);
+            Assert.Equal("TIPC^ActualPlcProject^ActualPlcProject Project", overridden.ProjectRootPath);
+        }
+
+        [Fact]
+        public void TsprojFilePath_UsesExistingTsprojPathVerbatim_WhenGiven()
+        {
+            RunOptions options = Parse("--export-all", "--tsproj", @"C:\Real\Project.tsproj");
+
+            Assert.Equal(@"C:\Real\Project.tsproj", options.TsprojFilePath);
+        }
     }
 }

@@ -10,3 +10,10 @@ githooks/logs/
 graphify-out/
 .graphify_python
 .stconfig
+
+# --export-links output: a discovery/bootstrapping AID, not the permanent
+# source of truth (that opaque IDE-produced blob isn't hand-readable/
+# maintainable) — transcribe the discovered channel into a plain <Link>
+# entry in io-devices.xml, then this file isn't needed anymore. See
+# README.md's "Variable links (links.xml)" section.
+links.xml

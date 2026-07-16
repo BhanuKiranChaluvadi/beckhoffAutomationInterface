@@ -149,6 +149,17 @@ name=FromConfig
         }
 
         [Fact]
+        public void TsprojAndPlcNameOverrides_NeverComeFromConfig_OnlyCli()
+        {
+            WriteConfig(_dir, @"tsproj=C:\FromConfig.tsproj" + "\nplc-name=FromConfig");
+
+            RunOptions options = RunOptions.Parse(new[] { "--parse-only", "--name", "Real" }, cwd: _dir);
+
+            Assert.Null(options.ExistingTsprojPath);
+            Assert.Equal("Real", options.PlcProjectName);
+        }
+
+        [Fact]
         public void NoConfigFlag_SuppressesFileEvenWhenOnePresent()
         {
             WriteConfig(_dir, "name=FromConfig");

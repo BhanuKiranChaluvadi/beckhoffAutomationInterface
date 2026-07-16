@@ -73,60 +73,128 @@ events (no VS) → code → libs → io-tree → io-links/links.xml → done. VS
 opened lazily by the first artifact that needs the Automation Interface; a
 lone `--export-events` never launches it.
 
-## Implementation status (2026-07-15)
+## Implementation status — LIVE-VALIDATED 2026-07-16 (all phases complete)
 
-**Built and verified here (build + COM-free unit tests, 125 → 143 passing):**
-Tasks 0, 1, 3, 4, 5, 6, 7, 8 are implemented — all reverse-export code compiles,
-the CLI surface + overwrite guard + exit codes are verified by running the built
-`.exe`, and every COM-free unit (flag parsing, `LibraryManifestWriter` round-trip,
-`EventManifestWriter` round-trip + event-class discrimination, the IO product-code
-heuristic) is unit-tested.
+**Everything below is now empirically confirmed against real TwinCAT/Visual
+Studio COM, including two real production projects — not just unit-tested.**
+160 tests passing (was 125 before this feature).
 
-**Still needs a live TwinCAT XAE session** (COM can't run headless in this
-environment — see the run commands in the final report / README):
-- **Task 2 spike is UNRESOLVED, not skipped.** `--export-io`'s product read-back
-  is implemented against `ItemSubTypeName` (the field Beckhoff's `ScanBoxesTC2`
-  reads) with a product-code regex, and every non-clean value is reported as
-  `! verify`. Whether `ItemSubTypeName` yields the exact `CreateChild` `vInfo`
-  string on real hardware is the open question — run `--export-io` against the
-  real Shark project and diff the emitted `Product`s. If wrong, swap
-  `IoManifestWriter.DeriveProduct` for the `ProduceXml`/`.xti`-XML fallback.
-- Round-trip smokes for code/libs/events/io (reverse into a scratch source →
-  forward-sync into a scratch project → `--build` PASSED).
+**Task 2 spike — RESOLVED.** `ItemSubTypeName` alone was NOT the answer; the
+stronger, confirmed-reliable signal is `item.Name`'s own trailing
+`"(Product)"` parenthetical — TwinCAT's own default naming convention when a
+device is dragged from the ESI catalog — used verbatim (not regex-shortened),
+which correctly handles even non-Beckhoff/hyphenated catalog strings (Festo
+`EX260-SEC1`) that a bare product-code regex would have truncated wrongly.
+Falls back to a regex match embedded in `Name` (TwinCAT's OTHER auto-naming
+style, e.g. `EK1100_1.1`), then to `ItemSubTypeName`, in that order. Verified
+against 30 real terminals in `PLC_NFL_SHARK_V2` — every value matched its
+`ItemSubTypeName` description exactly. `IoManifestWriter.DeriveProduct` no
+longer needs a `ProduceXml`/`.xti` fallback; the current approach is sufficient.
 
-## Task List
+**Two real bugs found and fixed only by running against a live project:**
+1. **`ITcPlcLibRef.Name` never actually returns the assumed combined
+   `"Name, Version (Company)"` display format** — the real value is the bare
+   library name, optionally `#`-prefixed (e.g. `"Tc2_Standard"`,
+   `"#Tc2_System"`). `LibrarySyncEngine.TryParseDisplayName` now recognizes
+   this real shape, defaulting `Version="*"`/`Company="Beckhoff Automation
+   GmbH"` for the Beckhoff `Tc<N>_*` namespace (the exact convention already
+   used throughout this repo's own `libraries.xml` files), while still
+   refusing to guess a company for an unrecognized/third-party bare name.
+2. **Attempting to `RemoveReference` an implicit (`#`-prefixed) reference
+   crashed with a real, unhandled `COMException`** ("Specified library '...'
+   not found!") the moment a manifest didn't explicitly list it — true for
+   almost every real manifest, since implicit/template-provided references are
+   never meant to be listed. `TryParseDisplayName` now also returns
+   `isImplicit`, and `LibrarySyncEngine.Sync`'s orphan-removal loop skips any
+   implicit reference unconditionally. This was a genuine crash-on-first-run
+   bug in the EXISTING forward sync, only surfaced by reverse-export's
+   round-trip testing — not something reverse export introduced.
+
+**A genuine architecture gap was found and fixed: reverse export could not
+target an arbitrary pre-existing project.** The original design assumed
+`RunOptions.ProjectName` serves both the on-disk `.sln`/`.tsproj` file name
+AND the real PLC-project name inside `TIPC` — true only for projects this
+tool bootstrapped itself. Confirmed live against BOTH real projects that this
+assumption fails for genuinely pre-existing ones:
+- `PLC_NFL_SHARK_V2`: **no `.sln` at all** (a "loose" `.tsproj`), and its PLC
+  project is named `PLC_NFL_prj` — different from the `.tsproj`'s own name
+  `PLC_NFL_SHARK`.
+- `PLC_NF_PRO`: has a `.sln` matching this tool's own folder convention, but
+  its PLC project is `PLC_NF_PRO_project` — again different from the XAE
+  project name `PLC_NF_PRO`.
+
+Fixed with two new CLI overrides, CLI-only (never from `.stconfig`):
+- **`--tsproj <path>`**: adopt an arbitrary `.tsproj` directly via
+  `EnvDTE.Solution.AddFromFile` (new `TwinCatProjectOpener.OpenExistingReadOnly`),
+  bypassing the `.sln`/dest-name convention entirely.
+- **`--plc-name <name>`**: the real `TIPC` tree name, decoupled from
+  `ProjectName` (which stays the on-disk file-name concept).
+
+**Critical safety fix found and applied BEFORE running against real
+projects:** `TwinCatSession.EnsureOpen` originally only skipped its
+`Project.Save()`/`Solution.SaveAs()` step when `--tsproj` was explicitly
+given — meaning reverse export via the *normal* `--dest`/`--name` path (as
+used for `PLC_NF_PRO`, which already has a matching `.sln`) would have
+actually WRITTEN to the real project. Fixed so reverse export ALWAYS attaches
+read-only via `OpenExistingReadOnly`, regardless of whether a `.sln` already
+exists — verified via byte-identical file hashes on a scratch project before
+touching anything real.
+
+**Live-validated end-to-end against two real production projects, read-only:**
+| Project | Method | Result |
+|---|---|---|
+| `PLC_NFL_SHARK_V2` (no `.sln`) | `--tsproj ...PLC_NFL_SHARK.tsproj --plc-name PLC_NFL_prj` | 305 `.st` files, 11 libraries (exact match to the existing hand-authored `ST/Shark/libraries.xml`), IO tree (6 devices/45 nodes), 5 event classes, `links.xml` — all written to `A3D/PLC/st/shark_v2` |
+| `PLC_NF_PRO` (has `.sln`) | `--dest ...A3D\PLC --name PLC_NF_PRO --plc-name PLC_NF_PRO_project` | 48 `.st` files (1 correctly reported as unsupported, not crashed), 10 libraries, IO tree (1 device/34 nodes, 5 flagged for review — a non-Beckhoff Festo/MFC catalog string, correctly not guessed), 2 event classes, `links.xml` — written to `A3D/PLC/st/pro` |
+
+Also confirmed a full forward round-trip (reverse-export → forward-sync into a
+fresh scratch project → `--build`) passes end-to-end, proving generated
+source is genuinely usable, not just superficially plausible.
+
+**One caveat found, disclosed to the user, and remediated:** merely *opening*
+a real project via `OpenExistingReadOnly` — even though no code ever calls
+`Save()`/`SaveAs()` — causes TwinCAT itself to silently bump one
+auto-generated version-stamp field per project (`Global_Version.TcGVL`'s
+`ProductVersion` for Shark V2; `PLC_NF_PRO_project.plcproj`'s
+`ProgramVersion` + some XML re-indentation for PRO), reflecting the locally
+installed TwinCAT build number. Confirmed cosmetic (no logic/content change)
+via `git diff` both times, reverted via `git checkout --` immediately after
+each run per explicit user confirmation. "Read-only" now means "never
+saves/writes anything semantic," not "the filesystem is provably 100% inert
+at the byte level" — worth knowing before a future run against a project with
+uncommitted changes of its own.
+
+## Task List — ALL COMPLETE
 
 ### Phase 1: Foundation + de-risk IO
 - [x] Task 0: Create task dir; commit current working tree first (clean baseline)
-- [x] Task 1: `--export-*` + `--overwrite` flags in `RunOptions` (+ `RunOptionsTests`) — 6 new tests
-- [~] Task 2 (SPIKE): read a live terminal's `Product` — IMPLEMENTED via ItemSubTypeName + regex; empirical confirmation pending a live session (see status above)
+- [x] Task 1: `--export-*` + `--overwrite` flags in `RunOptions` (+ `RunOptionsTests`)
+- [x] Task 2 (SPIKE): RESOLVED — see status above (Name-parenthetical primary signal)
 
 ### Checkpoint A
-- [ ] Tests green; spike result recorded in this file; IO scope decided
+- [x] Tests green; spike result recorded above; IO scope confirmed sufficient (no `.xti` fallback needed)
 
 ### Phase 2: Low-risk reversers (reuse proven readers)
 - [x] Task 3: `ProjectCodeExporter` — walk tree → all `.st` (reuses `PlcObjectExporter`; new `IsExportableKind` helper)
-- [x] Task 4: `LibraryManifestWriter` — references → `libraries.xml` (shared `TryParseDisplayName`/`ReadReferences`; 2 tests)
-- [x] Task 5: `EventManifestWriter` — `.tsproj` pool → `events.xml` + `event-classes/*.xml` (4 tests)
+- [x] Task 4: `LibraryManifestWriter` — references → `libraries.xml` (fixed real display-name format + implicit-reference crash)
+- [x] Task 5: `EventManifestWriter` — `.tsproj` pool → `events.xml` + `event-classes/*.xml`
 
 ### Checkpoint B
-- [x] COM-free round-trips unit-tested (writer → forward parser); [ ] live COM round-trips pending a session
+- [x] Round-trips verified LIVE (writer → forward sync → BUILD PASSED on scratch projects)
 
 ### Phase 3: IO + orchestration
-- [x] Task 6: `IoManifestWriter` — `TIID` tree → `io-devices.xml` (product read-back pending Task 2 confirmation; 6 tests on the heuristic)
-- [x] Task 7: Wire `--export-*`/`--export-all` into `Program`/`SyncPipeline` — lazy VS, overwrite guard, fixed order (events→code→libs→io→links)
+- [x] Task 6: `IoManifestWriter` — `TIID` tree → `io-devices.xml` (product heuristic confirmed against 30 real terminals + 5 real Festo/custom devices)
+- [x] Task 7: Wire `--export-*`/`--export-all` into `Program`/`SyncPipeline` — lazy VS, overwrite guard, fixed order; PLUS `--tsproj`/`--plc-name` for arbitrary pre-existing projects; PLUS the always-read-only safety fix
 
 ### Checkpoint C
-- [x] Overwrite guard verified via the built `.exe`: refuses on non-empty `--source` (303 files) exit 1; missing-project reverse exits 1
-- [ ] `--export-all` into an empty scratch source that forward-syncs + builds clean — pending a live session
+- [x] Overwrite guard verified via the built `.exe`
+- [x] `--export-all` into an empty scratch source that forward-syncs + builds clean — CONFIRMED LIVE (twice: via `--tsproj` no-`.sln` path, and via normal `--dest`/`--name` path)
 
 ### Phase 4: Docs + real-project smoke
 - [x] Task 8: README (reverse section + flag-table rows + adoption workflow + caveats)
-- [ ] Real Shark smoke into a scratch source dir — pending a live session
+- [x] Real-project smoke — CONFIRMED against BOTH `PLC_NFL_SHARK_V2` and `PLC_NF_PRO`, read-only, output at `A3D/PLC/st/shark_v2` and `A3D/PLC/st/pro`
 
 ### Checkpoint: Complete
-- [x] All COM-free acceptance criteria met, build green (143 tests), committed
-- [ ] Live-COM acceptance criteria (spike + round-trip smokes) — pending an XAE session
+- [x] All acceptance criteria met, build green (160 tests), live-validated against two real production projects, committed
 
 ## Risks and Mitigations
 | Risk | Impact | Mitigation |

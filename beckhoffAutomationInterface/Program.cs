@@ -222,12 +222,28 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
+            // Reverse export always targets an ALREADY-EXISTING project, read-only — it
+            // never bootstraps (there'd be nothing to export from) and never needs a
+            // .sln (see TwinCatSession.EnsureOpen). Only the resolved .tsproj file's
+            // existence is checked here; TsprojFilePath already resolves to --tsproj
+            // when given, else the conventional dest/name-derived path.
+            if (options.IsReverseExport)
+            {
+                if (!File.Exists(options.TsprojFilePath))
+                {
+                    Console.Error.WriteLine("ERROR: project file not found:");
+                    Console.Error.WriteLine("  {0}", options.TsprojFilePath);
+                    Console.Error.WriteLine("Check --source/--dest/--name/--tsproj point at the intended project.");
+                    Console.Error.WriteLine("Reverse export never bootstraps a new project — there must be a real one to read from.");
+                    Environment.Exit(1);
+                }
+            }
             // Creating a NEW project is explicit (--init), never a silent fallback: a
             // mistyped --dest/--name used to quietly bootstrap a fresh empty project
             // (and once planted one inside the real project's own folder tree — see
             // tasks/archive/2026-07-14-post-review-hardening/). In CI, a wrong path now
             // fails loudly instead of green-building an empty project.
-            if (!File.Exists(options.SolutionFilePath) && !options.Init)
+            else if (!File.Exists(options.SolutionFilePath) && !options.Init)
             {
                 Console.Error.WriteLine("ERROR: solution not found at:");
                 Console.Error.WriteLine("  {0}", options.SolutionFilePath);

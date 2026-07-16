@@ -155,7 +155,14 @@ namespace BeckhoffAutomationInterface
 
         public string SolutionDirectory => Path.Combine(DestinationFolder, ProjectName);
         public string SolutionFilePath => Path.Combine(SolutionDirectory, ProjectName + ".sln");
-        public string TsprojFilePath => Path.Combine(SolutionDirectory, ProjectName, ProjectName + ".tsproj");
+
+        /// <summary>When ExistingTsprojPath is given (see --tsproj), that path is used
+        /// verbatim — the read-only "adopt an arbitrary existing project" path for
+        /// reverse export (see TwinCatProjectOpener.OpenExistingReadOnly), which bypasses
+        /// the dest/name/.sln convention entirely since a real pre-existing project's
+        /// on-disk layout (and whether it even HAS a .sln) can't be assumed. Otherwise
+        /// unchanged: the conventional nested path this tool's own --init creates.</summary>
+        public string TsprojFilePath => ExistingTsprojPath ?? Path.Combine(SolutionDirectory, ProjectName, ProjectName + ".tsproj");
 
         public string LibraryManifestPath => Path.Combine(SourceFolder, "libraries.xml");
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
@@ -186,12 +193,32 @@ namespace BeckhoffAutomationInterface
 
         public string PousTreePath => TreePath("POUs");
         public string ReferencesTreePath => TreePath("References");
-        public string ProjectRootPath => string.Format("TIPC^{0}^{0} Project", ProjectName);
 
-        string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", ProjectName, leaf);
+        /// <summary>The real TIPC tree name of the PLC project (TIPC^&lt;PlcProjectName&gt;^
+        /// &lt;PlcProjectName&gt; Project^...). For a project this tool bootstrapped itself
+        /// (--init), this always equals ProjectName (the XAE/.tsproj name), since
+        /// TwinCatProjectOpener.BootstrapNew creates both with the same name. For an
+        /// ARBITRARY pre-existing project being reverse-exported (see --plc-name), the PLC
+        /// project can have a different name than the .tsproj file itself — confirmed live
+        /// against PLC_NFL_SHARK_V2, whose .tsproj is "PLC_NFL_SHARK" but whose PLC project
+        /// (TIPC^PLC_NFL_prj) is "PLC_NFL_prj". Defaults to ProjectName when not given, so
+        /// every existing forward-sync/--init scenario is completely unaffected.</summary>
+        public string PlcProjectName { get; }
+
+        public string ProjectRootPath => string.Format("TIPC^{0}^{0} Project", PlcProjectName);
+
+        string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", PlcProjectName, leaf);
+
+        /// <summary>When set (via --tsproj), reverse export opens THIS exact existing
+        /// .tsproj file directly — read-only, never saved — instead of resolving
+        /// SolutionFilePath/TsprojFilePath from DestinationFolder/ProjectName. This is the
+        /// "adopt an arbitrary pre-existing project" path: such a project may have no .sln
+        /// at all (confirmed live against PLC_NFL_SHARK_V2), which the normal dte.Solution.
+        /// Open flow requires. CLI-only; only meaningful together with a --export-* flag.</summary>
+        public string ExistingTsprojPath { get; }
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, bool configFileLoaded)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -210,6 +237,8 @@ namespace BeckhoffAutomationInterface
             ConfirmDeleteIo = confirmDeleteIo;
             ReverseExports = reverseExports;
             Overwrite = overwrite;
+            PlcProjectName = plcProjectName ?? projectName;
+            ExistingTsprojPath = existingTsprojPath;
             ConfigFileLoaded = configFileLoaded;
         }
 
@@ -308,6 +337,11 @@ namespace BeckhoffAutomationInterface
                 reverseExports: reverseExports,
                 // Safety-gated, CLI-only (like --init/--confirm-delete*): never from config.
                 overwrite: args.Contains("--overwrite"),
+                // --plc-name/--tsproj: CLI-only, reverse-export "adopt an arbitrary
+                // pre-existing project" overrides — never defaulted from .stconfig, since
+                // a wrong value here silently targets the wrong PLC project/file.
+                plcProjectName: GetOption(args, "--plc-name"),
+                existingTsprojPath: GetOption(args, "--tsproj"),
                 configFileLoaded: configFileLoaded);
         }
 
@@ -397,6 +431,12 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --export-all      all of the above + --export-links (links.xml)");
             Console.WriteLine("  --overwrite       allow reverse export to overwrite existing files in --source");
             Console.WriteLine("                    (required when --source already has .st files or manifests)");
+            Console.WriteLine("  --tsproj <path>   Adopt an ARBITRARY pre-existing .tsproj directly (read-only,");
+            Console.WriteLine("                    never saved) instead of resolving it from --dest/--name/.sln —");
+            Console.WriteLine("                    for projects with no .sln at all. Reverse export only.");
+            Console.WriteLine("  --plc-name <name> The real PLC project name inside TIPC, if it differs from");
+            Console.WriteLine("                    --name/the .tsproj file name (check the project's own");
+            Console.WriteLine("                    .plcproj file name if unsure). Reverse export only.");
             Console.WriteLine("  --config <path>   Look for '.stconfig' in this folder instead of --source");
             Console.WriteLine("  --no-config       Ignore any '.stconfig' defaults file for this run only");
             Console.WriteLine("  --help, -h        Show this message");
@@ -414,11 +454,13 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  command line. See .stconfig.example for a fully annotated template.");
             Console.WriteLine();
             Console.WriteLine("Variable links (\"links.xml\"):");
-            Console.WriteLine("  TwinCAT's own <VarLinks> export/import format (same as the XAE IDE's \"Export/");
-            Console.WriteLine("  Import Variable Mapping\"), applied via ConsumeMappingInfo in one bulk call");
-            Console.WriteLine("  alongside io-devices.xml's own <Links> section (both apply, neither replaces");
-            Console.WriteLine("  the other). Get real data into it with --export-links after linking by hand");
-            Console.WriteLine("  in the IDE. See links.xml.example for a fully annotated template.");
+            Console.WriteLine("  A DISCOVERY AID, not the recommended permanent home for links — prefer plain");
+            Console.WriteLine("  <Link PlcVar=\"...\" IoChannel=\"...\"/> entries in io-devices.xml (hand-readable,");
+            Console.WriteLine("  git-diffable). Use --export-links after linking by hand in the IDE to find out");
+            Console.WriteLine("  a real channel path, then transcribe it into io-devices.xml. links.xml is");
+            Console.WriteLine("  TwinCAT's own <VarLinks> export/import format, applied via ConsumeMappingInfo");
+            Console.WriteLine("  in one bulk call alongside io-devices.xml's <Links> if you keep it around. See");
+            Console.WriteLine("  links.xml.example for a fully annotated template.");
         }
     }
 }
