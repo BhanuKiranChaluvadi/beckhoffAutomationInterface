@@ -13,6 +13,9 @@
 # script will silently bootstrap a SEPARATE new project instead of updating the
 # existing one. If you ever bootstrap with an explicit --name that differs from the
 # source folder's name, add the matching --name below.
+#
+# Uses `sync all` (not `init`) - a missing project here is a hard error, not a silent
+# bootstrap, exactly like the old --incremental-without---init behavior.
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Exe = Join-Path $RepoRoot "beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe"
@@ -28,7 +31,7 @@ if (-not (Test-Path $Exe)) {
     exit 0
 }
 
-& $Exe --source $Source --dest $Dest --incremental *> $LogFile
+& $Exe sync all $Source --dest $Dest --incremental *> $LogFile
 $exitCode = $LASTEXITCODE
 
 Add-Content $LogFile ""

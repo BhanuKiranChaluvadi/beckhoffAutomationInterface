@@ -46,16 +46,22 @@ The executable ends up at `beckhoffAutomationInterface\bin\Debug\net48\beckhoffA
 ## Running the executable
 
 This is a standalone `.exe` — no `dotnet run`, no project file needed at
-runtime. Run it directly, from anywhere, pointing `--source`/`--dest` at
-whatever folders you want:
+runtime. Every invocation starts with a command: `build`, `sync`, `check`,
+`export`, or `init`. Run bare or with `--help` to list them:
+
+```powershell
+.\beckhoffAutomationInterface.exe --help
+```
+
+Run it directly, from anywhere, pointing at whatever folders you want:
 
 ```powershell
 # Full path, from any directory:
-C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
 
 # Or cd into the output folder first and use a relative path:
 cd beckhoffAutomationInterface\bin\Debug\net48
-.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
 ```
 
 **First time trying the tool at all?** Point it at the bundled `ST\sample`
@@ -65,15 +71,15 @@ throw away, and a good way to confirm your TwinCAT/Visual Studio COM setup
 works before running against anything real:
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\sample" --dest "C:\some\scratch\folder" --init
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\sample" --dest "C:\some\scratch\folder"
 ```
 
-`--init` is required the first time (creates a new solution/TwinCAT/PLC
-project at `--dest`); every run after that reopens and reconciles the
-existing one — see [Stage flags](#stage-flags-composable-one-shot-modes)
-below for `--init`'s full rationale, and the sections further down for
-every other flag, the manifests (`libraries.xml`/`io-devices.xml`/
-`events.xml`), and the typical day-to-day workflow.
+`init` is required the first time (creates a new solution/TwinCAT/PLC
+project at `--dest`); every later run uses `sync` to reopen and reconcile
+the existing one — see [Commands](#commands) below for the full command
+reference, and the sections further down for the manifests
+(`libraries.xml`/`io-devices.xml`/`events.xml`) and the typical day-to-day
+workflow.
 
 ## Directory layout
 
@@ -97,94 +103,108 @@ folder in the TwinCAT project (e.g. `ST/Shark/App/Shark/PRG_MAIN.st` becomes
 
 ## Running it
 
-The tool takes the folder of `.st` files as `--source` and the folder under
-which the TwinCAT solution lives as `--dest`. Both default to `.` (the
-current directory) if omitted; the project/solution name defaults to
-`--source`'s own folder name.
+Every subcommand takes the folder of `.st` files (or, for `build`, the PLC
+project itself) as a **positional path** — the first argument after the
+command name. `sync`/`init` also take `--dest`, the folder under which the
+TwinCAT solution lives; it defaults to `.` (the current directory) if
+omitted, as does the project/solution name (defaults to the source folder's
+own name).
 
 ```powershell
 cd beckhoffAutomationInterface\bin\Debug\net48
 
-# First-ever run for a project: --init explicitly allows creating the
-# solution/TwinCAT/PLC project. Without it, a missing solution is a hard
-# error (exit 1) in EVERY mode — so a mistyped path fails loudly instead of
-# silently building a fresh empty project.
-.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root" --init
+# First-ever run for a project: `init` explicitly allows creating the
+# solution/TwinCAT/PLC project. Without it (i.e. using `sync`), a missing
+# solution is a hard error (exit 1) — so a mistyped path fails loudly
+# instead of silently building a fresh empty project.
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
 
 # Full run: sync .st files, libraries, IO devices/links, events, then build
 # and report. Takes several minutes for a large source tree.
-.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
+.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
 
 # Bare invocation or --help prints usage and exits.
 .\beckhoffAutomationInterface.exe
 .\beckhoffAutomationInterface.exe --help
 ```
 
-### Stage flags (composable one-shot modes)
+### Commands
 
-The pipeline is made of five stages. Passing any stage flag(s) runs **exactly
-those stages** — in a fixed order, regardless of flag order — then exits.
-Passing **none** of them runs everything (the full sync+build above). This is
-how one-time per-project setup (device tree, Create PLC Data Type, Event
-Classes) runs in isolation without touching code or compiling.
+The pipeline is made of five stages. `sync <mode>` runs **exactly one**
+stage (or `all` for every stage in order) then exits — this is how
+one-time per-project setup (device tree, Create PLC Data Type, Event
+Classes) runs in isolation without touching code or compiling. `build`
+compiles only, without syncing anything first.
 
-| Stage flag | What it does | Visual Studio? |
+| Command | What it does | Visual Studio? |
 |---|---|---|
-| `--sync-code` | `.st` files → PLC POUs (parse, lint, drift warnings, sync, save). No build. | opens VS |
-| `--sync-libs` | `libraries.xml` → PLC library references. | opens VS |
-| `--sync-io` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
-| `--sync-events` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
-| `--build` (alias `--build-only`, deprecated) | Open, compile, report errors mapped back to `.st file:line`. **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** | opens VS |
+| `sync code <path>` | `.st` files → PLC POUs (parse, lint, drift warnings, sync, save). No build. | opens VS |
+| `sync libs <path>` | `libraries.xml` → PLC library references. | opens VS |
+| `sync io <path>` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
+| `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
+| `sync all <path>` | Every stage above, in order, then build. | opens VS |
+| `build <path> [--plc-name X]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
-Stage execution order for any subset: code → libs → io-tree → `.tsproj` edits
-(io templates + events) → io links → build. Visual Studio is opened lazily by
-the first stage that needs it and closed for the `.tsproj` edits.
+Stage execution order for `sync all`: code → libs → io-tree → `.tsproj`
+edits (io templates + events) → io links → build. Visual Studio is opened
+lazily by the first stage that needs it and closed for the `.tsproj` edits.
+
+> **Known gap:** unlike the old flat-flag CLI, `sync` runs exactly one mode
+> per invocation — there's no current way to compose an arbitrary subset
+> (e.g. the old `--sync-io --sync-events` in one run) other than `all`
+> (every stage) or separate invocations (each reopening Visual Studio). Not
+> a blocker for the common cases below, but a real regression if you relied
+> on combining specific stages — see `docs/ideas/cli-subcommand-redesign.md`.
 
 ```powershell
-# One-time setup, in isolation (no code sync, no build):
-.\beckhoffAutomationInterface.exe --source ... --dest ... --sync-io --sync-events
+# One-time setup, in isolation (no code sync, no build) — two invocations,
+# each opening/closing Visual Studio once (see "Known gap" above):
+.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
 # Only push ST code changes into the project, don't compile:
-.\beckhoffAutomationInterface.exe --source ... --dest ... --sync-code
+.\beckhoffAutomationInterface.exe sync code "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
-# CI pipeline: compile only, fail the job on errors. Never bootstraps —
-# a wrong path exits 1 instead of green-building an empty project.
-.\beckhoffAutomationInterface.exe --source ... --dest ... --build
+# CI pipeline: compile only, fail the job on errors. Works for a project
+# this tool manages via .st source, or an arbitrary native one (no .st tree,
+# no .sln) — either way, never bootstraps: a wrong path exits 1 instead of
+# green-building nothing.
+.\beckhoffAutomationInterface.exe build "C:\...\SomeProject"
 if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 ```
 
 ### Other flags
 
-| Flag | Default | Purpose |
-|---|---|---|
-| `--source <path>` (alias `--src`) | `.` | Folder containing the `.st` files |
-| `--dest <path>` (alias `--dst`) | `.` | Folder under which `<name>/<name>.sln` lives |
-| `--name <name>` | `--source`'s folder name | Project/solution name |
-| `--init` | off | Allow creating the solution/TwinCAT/PLC project when missing. Without it, a missing solution is a hard error (exit 1) in every mode. |
-| `--check-events` (alias `--events-only`, deprecated) | off | Read-only check of `events.xml` against the `.tsproj` (declared vs actual), then exit — code 1 if any declared class is missing, 0 otherwise. No Visual Studio session. Usable as a fast pipeline gate. |
-| `--check-links` | off | Read-only check of every declared `%I`/`%Q` GVL/PROGRAM variable against `io-devices.xml`'s `<Links>` section, then exit — code 1 if any is unlinked or any `.st` file failed to parse, 0 otherwise. No Visual Studio session (see below). |
-| `--parse-only` | off | Parse every `.st` file with no Visual Studio involved at all — takes seconds. Use this first after any source or parser change to catch syntax/structure errors fast. Also prints the same %I/%Q link report as `--check-links`, non-blocking. |
-| `--ignore <glob>` | none | Exclude `.st` files matching this glob pattern (repeatable, e.g. `--ignore "*_deprecated.st" --ignore "Lib/Legacy/**"`). Merged with a `.stignore` file in `--source`, if present. |
-| `--incremental` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires `--source` to be a git repo with a prior full sync's baseline. |
-| `--confirm-delete-io` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
-| `--export <name>` | none | Write the named live PLC object's current text back to its mirrored `.st` file (all supported kinds — see below). |
-| `--export-links` | off | Write ALL currently-linked PLC-variable-to-IO-channel mappings out to `links.xml` (see below) — the way to capture links made by hand in the TwinCAT IDE. |
-| `--export-code` / `--export-libs` / `--export-io` / `--export-events` | off | **Reverse export** — regenerate the corresponding source artifact FROM the existing project (`.st` tree / `libraries.xml` / `io-devices.xml` / `events.xml` + templates). See [Reverse export](#reverse-export-adopting-an-existing-project). |
-| `--export-all` | off | **Reverse export everything**: all `.st` + `libraries.xml` + `io-devices.xml` + `events.xml` (+ `event-classes/*.xml`) + `links.xml`. |
-| `--overwrite` | off | Allow reverse export to overwrite existing files in `--source`. Required when `--source` already contains `.st` files or manifests (safe-by-default, CLI-only — never from `.stconfig`). |
-| `--format-check` | off | Report (never write) `.st` style issues — trailing whitespace, mixed line endings, EOF newline hygiene — with no Visual Studio session needed (see below). |
-| `--config <path>` | `--source`'s folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
-| `--no-config` | off | Ignore any `.stconfig` defaults file for this run only. |
+These apply within the subcommands noted; `--source`/`--dest`/`--name` and
+`--tsproj`/`--plc-name` from the old flat-flag CLI are now expressed as the
+positional path (see [Commands](#commands) above) plus `--project` for
+`check events`/`export`.
 
-The `githooks/` incremental worker is unaffected by `--init`: it always
-targets an already-bootstrapped project (the reopen path).
+| Flag | Applies to | Default | Purpose |
+|---|---|---|---|
+| `--dest <path>` | `sync`, `init` | `.` | Folder under which `<name>/<name>.sln` lives |
+| `--name <name>` | `sync`, `init` | source path's folder name | Project/solution name |
+| `--project <path>` | `check events`, `export *` | — | The existing `.tsproj` file, or a folder containing exactly one, to attach to |
+| `--plc-name <name>` | `build`, `export *` | the `.tsproj`'s own base name | The real PLC project name inside `TIPC`, if it differs — check the project's own `.plcproj` file name if unsure |
+| `--ignore <glob>` | `sync`, `check` | none | Exclude `.st` files matching this glob pattern (repeatable). Merged with a `.stignore` file in the source folder, if present. |
+| `--incremental` | `sync` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires the source folder to be a git repo with a prior full sync's baseline. |
+| `--confirm-delete-io` | `sync io`, `sync all` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
+| `--overwrite` | `export *` | off | Allow reverse export to overwrite existing files in the source folder. Required when it already contains `.st` files or manifests (safe-by-default, CLI-only — never from `.stconfig`). |
+| `--config <path>` | all | source path's folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
+| `--no-config` | all | off | Ignore any `.stconfig` defaults file for this run only. |
+
+The single-object `--export <name>` legacy flag (write one live PLC object's
+text back to `.st`) has no subcommand equivalent yet.
+
+The `githooks/` incremental worker is unaffected by `init`: it always
+targets an already-bootstrapped project (the `sync` reopen path).
 
 ### Default options (`.stconfig`)
 
-Retyping `--source`/`--dest`/`--name` (and other flags) on every invocation
-gets old fast. Drop a `.stconfig` file at the **top level of your `--source`
-project** — the same place a `.stignore` file already lives — and the tool
-loads it automatically:
+Retyping `--dest`/`--name` (and other flags) on every invocation gets old
+fast. Drop a `.stconfig` file at the **top level of your source folder** —
+the same place a `.stignore` file already lives — and the tool loads it
+automatically:
 
 ```
 # ST\Shark\.stconfig
@@ -194,19 +214,20 @@ incremental=true
 ```
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\path\to\ST\Shark"
-# resolves dest/name/etc. from ST\Shark\.stconfig — only --source still needed
+.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark"
+# resolves dest/name/etc. from ST\Shark\.stconfig — only the source path still needed
 ```
 
 **Discovery order:** `--config <path>` (look there instead), else the
-resolved `--source` folder, else the process's current directory if neither
-is given. Use `--config` to keep `.stconfig` somewhere other than inside
-`--source` — that file can then set its own `source` key too, since at that
-point `--source` hasn't been resolved from the command line yet.
+resolved source path, else the process's current directory if neither is
+given. Use `--config` to keep `.stconfig` somewhere other than inside the
+source folder — that file can then set its own `source` key too, since at
+that point the source path hasn't been resolved from the command line yet.
 
-**Precedence:** an explicit command-line flag always wins; `.stconfig` only
-fills in what you didn't type; anything neither specifies falls back to
-today's hardcoded default (e.g. `.` for `--source`/`--dest`).
+**Precedence:** an explicit command-line flag (or positional path) always
+wins; `.stconfig` only fills in what you didn't type; anything neither
+specifies falls back to today's hardcoded default (e.g. `.` for the source
+path/`--dest`).
 
 **Supported keys:** `source`, `dest`, `name`, `export`, plus the boolean
 flags `export-links`, `incremental`, `parse-only`, `format-check`,
@@ -272,10 +293,10 @@ much faster once a project has many objects.
 
 ```powershell
 # First run: full sync, establishes the baseline in .st-sync-state
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
 # Later runs, after committing .st changes: only re-syncs what changed
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental
 ```
 
 By default, `git diff`-reported deletions are only **warned** about, never
@@ -284,7 +305,7 @@ PLC object(s) are left in place. Add `--confirm-delete` to actually remove
 them:
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental --confirm-delete
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental --confirm-delete
 ```
 
 `--confirm-delete` is conservative by design: it only deletes an object when
@@ -320,16 +341,16 @@ name the project was originally bootstrapped with.
 
 Some objects can only be created manually via the XAE UI (e.g. IO-scanned
 DUTs, Event Classes) but should still live in `.st` source once created.
-`--export <ObjectName>` finds that live object, reads its current text, and
-writes it to the correct mirrored `.st` file path (creating folders as
+`export object <ObjectName>` finds that live object, reads its current text,
+and writes it to the correct mirrored `.st` file path (creating folders as
 needed) — the read-side counterpart of the normal sync, using the same
 `DeclarationText`/`ImplementationText` properties `PouSyncEngine` writes.
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export T_Beckhoff_AmbientSensor
+.\beckhoffAutomationInterface.exe export object T_Beckhoff_AmbientSensor "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
 ```
 
-`--export` now supports every PLC object kind synced from `.st` source: DUTs
+`export object` now supports every PLC object kind synced from `.st` source: DUTs
 (STRUCT/ENUM/ALIAS), GVLs, and FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE
 objects — including their child METHODs and PROPERTIES, stitched back
 together in tree order with the correct terminators
@@ -345,44 +366,56 @@ special characters in comments/strings may not survive an export exactly.
 
 ### Reverse export (adopting an existing project)
 
-`--export <name>` above writes **one** object back to `.st`. The `--export-*`
-family is the whole-project version: point them at an **existing** TwinCAT
-project (`--dest`/`--name`) and they regenerate the entire `--source` tree, so
-you can start managing a project you already have as git-tracked `.st` source.
-This is the reverse of the normal sync — a **one-time bootstrap**, not the
-ongoing flow (once the tree exists, edit `.st` and sync forward as usual).
+`export object <name>` above writes **one** object back to `.st`. `export
+code|libs|io|events|all` is the whole-project version: point one at an
+**existing** TwinCAT project (`--project`) and it regenerates the entire
+source tree (the positional path), so you can start managing a project you
+already have as git-tracked `.st` source. This is the reverse of the normal
+sync — a **one-time bootstrap**, not the ongoing flow (once the tree exists,
+edit `.st` and sync forward with `sync` as usual).
 
-| Flag | Generates |
+| Command | Generates |
 |---|---|
-| `--export-code` | every POU/DUT/GVL → mirrored `.st` files under `--source` |
-| `--export-libs` | library references → `libraries.xml` |
-| `--export-io` | the `TIID` device/box/terminal tree → `io-devices.xml` |
-| `--export-events` | `.tsproj` Event Classes → `events.xml` + `event-classes/*.xml` (no Visual Studio needed) |
-| `--export-all` | all of the above **plus** `--export-links` (`links.xml`) |
+| `export code` | every POU/DUT/GVL → mirrored `.st` files under the source path |
+| `export libs` | library references → `libraries.xml` |
+| `export io` | the `TIID` device/box/terminal tree → `io-devices.xml` |
+| `export events` | `.tsproj` Event Classes → `events.xml` + `event-classes/*.xml` (no Visual Studio needed) |
+| `export all` | all of the above **plus** `export links` (`links.xml`) |
 
 ```powershell
 # One-time: bootstrap a fresh source tree from an existing project, then commit it.
-.\beckhoffAutomationInterface.exe --dest "C:\...\TwinCAT" --name Shark --source "C:\...\ST\Shark-new" --export-all
+.\beckhoffAutomationInterface.exe export all "C:\...\ST\Shark-new" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
 cd "C:\...\ST\Shark-new"; git init; git add -A; git commit -m "Import Shark from TwinCAT"
 # From here on, edit .st and sync FORWARD as normal (see "Typical workflow").
 ```
 
 **Adopting an ARBITRARY pre-existing project** (one this tool didn't bootstrap
-itself) often needs two extra overrides, since a real project's PLC-project
-name (inside `TIPC`) commonly differs from its `.tsproj`/solution file name,
-and it may not even have a `.sln` at all:
+itself) just needs `--project` pointed at the right place, since a real
+project's PLC-project name (inside `TIPC`) commonly differs from its
+`.tsproj`/solution file name, and it may not even have a `.sln` at all:
 
 | Flag | Purpose |
 |---|---|
-| `--tsproj <path>` | Adopt this exact `.tsproj` file directly (read-only, never saved) — bypasses `--dest`/`--name`/`.sln` resolution entirely. Use when the project has **no `.sln`** ("loose" tsproj). |
-| `--plc-name <name>` | The real PLC-project name inside `TIPC`, if it differs from `--name`/the `.tsproj` file name — check the project's own `.plcproj` file name if unsure. |
+| `--project <path>` | The `.tsproj` file (or a folder containing exactly one) to attach to (read-only, never saved) — no `--dest`/`--name`/`.sln` resolution involved. Works whether or not the project has a `.sln` at all. |
+| `--plc-name <name>` | The real PLC-project name inside `TIPC`, if it differs from the `.tsproj` file's own base name — check the project's own `.plcproj` file name if unsure. |
 
 ```powershell
 # A project with NO .sln at all (check its own .plcproj file name for --plc-name):
-.\beckhoffAutomationInterface.exe --tsproj "C:\...\SomeProject\SomeProject.tsproj" --plc-name RealPlcProjectName --source "C:\...\ST\new" --export-all
+.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\SomeProject\SomeProject.tsproj" --plc-name RealPlcProjectName
 
 # A project that DOES have a matching .sln, but a differently-named PLC project inside:
-.\beckhoffAutomationInterface.exe --dest "C:\...\Projects" --name SomeProject --plc-name RealPlcProjectName --source "C:\...\ST\new" --export-all
+.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\Projects\SomeProject" --plc-name RealPlcProjectName
+```
+
+**`--project`/`--plc-name` also work with `build` alone — no `export`
+required.** This is the path for CI compiling a PLC project that's natively
+hosted (its own `.tsproj`/`.plcproj` checked into git directly, no `.st`
+source tree, possibly no `.sln` at all) rather than one this tool manages:
+
+```powershell
+# CI: compile an arbitrary pre-existing project, no reverse export involved.
+.\beckhoffAutomationInterface.exe build "C:\...\SomeProject" --plc-name RealPlcProjectName
+if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 ```
 
 Both forms attach to the project **read-only** — no `Project.Save()`/
@@ -398,17 +431,18 @@ times it was observed. If the project is git-tracked, a quick `git status`/
 it's safe to `git checkout --` away.
 
 **Safety — `--overwrite`:** to avoid clobbering hand-edited source, reverse
-export **refuses** (exit 1) if `--source` already contains any `.st` files or
-manifests. Pass `--overwrite` to regenerate in place, or point `--source` at an
-empty folder. Like `--init`/`--confirm-delete*`, `--overwrite`, `--tsproj`, and
-`--plc-name` are all CLI-only and never read from `.stconfig`. Reverse export
-also requires the project to already exist (it never bootstraps — a missing
-project is a hard error, since there is nothing to export from).
+export **refuses** (exit 1) if the source path already contains any `.st`
+files or manifests. Pass `--overwrite` to regenerate in place, or point the
+source path at an empty folder. Like `--init`/`--confirm-delete*`,
+`--overwrite`, `--project`, and `--plc-name` are all CLI-only and never read
+from `.stconfig`. Reverse export also requires the project to already exist
+(it never bootstraps — a missing project is a hard error, since there is
+nothing to export from).
 
 **Caveats:**
-- The non-ASCII round-trip caveat above applies to `--export-code` too (it reuses
+- The non-ASCII round-trip caveat above applies to `export code` too (it reuses
   the same per-object exporter).
-- `--export-io` recovers each terminal's `Product` primarily from the trailing
+- `export io` recovers each terminal's `Product` primarily from the trailing
   `"(Product)"` in its **Name** — TwinCAT's own default naming convention when
   a device is dragged from the ESI catalog (confirmed live against 30 real
   terminals, including non-Beckhoff/hyphenated catalog strings like a Festo
@@ -452,13 +486,13 @@ naming convention and are never checked.
 `io-devices.xml`'s `<Links>` section (see "Manifests" below for the full
 sync mechanism) maps a declared `%I`/`%Q` variable to a physical IO channel;
 nothing enforces that every variable you declare actually has one.
-`--check-links` (or, more lightly, every `--parse-only`) parses all `.st`
+`check links` (or, more lightly, every `check parse`) parses all `.st`
 source, finds every
 `AT %I*`/`AT %Q*` declaration in a **GVL or PROGRAM**, and cross-checks it
 against `<Links>`:
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --check-links
+.\beckhoffAutomationInterface.exe check links "C:\...\ST\Shark"
 ```
 
 ```
@@ -469,7 +503,7 @@ against `<Links>`:
 ```
 
 It reports two things: declared variables with **no matching `<Link>`**
-(exit code 1 under `--check-links` if any exist — a stale-configuration gate
+(exit code 1 under `check links` if any exist — a stale-configuration gate
 usable in CI), and `<Link>` entries whose `PlcVar` matches **no** declared
 variable (a stale/typo'd entry, e.g. left over after a rename) — these are
 always informational only, never affecting the exit code.
@@ -499,7 +533,7 @@ into `io-devices.xml` as a normal `<Link>` entry (see above) and treat
    panel wiring comes in; nothing here can be derived automatically.
 2. Save, then run:
    ```powershell
-   .\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --export-links
+   .\beckhoffAutomationInterface.exe export links "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
    ```
    which writes the current mapping to `links.xml` via
    `ITcSysManager.ProduceMappingInfo` — the same thing "Export Variable
@@ -536,15 +570,15 @@ into `VarA` (no separate `GrpA`) — confirmed round-trip-verified end to end
 wild (`OwnerA` with separate `Prefix`/`Type`, `Link` with a separate `GrpA`
 plus `TypeA`/`InOutA`/`GuidA` metadata — the real
 `Spectrometer Instance Mappings.xml`'s own shape, and Beckhoff's official
-`CodeGenerationDemo` sample's alternate shape) — `--check-links` parses
+`CodeGenerationDemo` sample's alternate shape) — `check links` parses
 both, but only the shape above was confirmed to actually apply via
 `ConsumeMappingInfo` in this environment; the richer one was tried first and
-silently applied nothing (no COM exception, but an `--export-links`
-round-trip came back empty). If in doubt, always prefer `--export-links`
+silently applied nothing (no COM exception, but an `export links`
+round-trip came back empty). If in doubt, always prefer `export links`
 over hand-authoring this file.
 
 See [`links.xml.example`](links.xml.example) at the repo root for a fully
-annotated template. `--check-links`/`--parse-only` also cross-reference
+annotated template. `check links`/`check parse` also cross-reference
 `links.xml` entries the same way they do `io-devices.xml`'s `<Links>` — a
 `links.xml` entry whose variable is nested through a `FUNCTION_BLOCK`
 instance (e.g. `MAIN.fbSpec.inLogicSig[1]`, real usage seen in that same
@@ -553,12 +587,12 @@ reported informationally as "unresolvable," never as unlinked or stale.
 
 ### Style checking
 
-`--format-check` scans every non-ignored `.st` file under `--source` and
+`check format` scans every non-ignored `.st` file under the source path and
 prints a dry-run report of hygiene issues — it never modifies any file, and
-needs no Visual Studio session at all (similar to `--parse-only`):
+needs no Visual Studio session at all (similar to `check parse`):
 
 ```powershell
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --format-check
+.\beckhoffAutomationInterface.exe check format "C:\...\ST\Shark"
 ```
 
 It checks for: mixed line endings (both CRLF and bare LF in the same file),
@@ -571,24 +605,25 @@ possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
 
 ```powershell
 # 0. First time only: bootstrap the TwinCAT solution + one-time project setup
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --init
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --sync-io --sync-events
+.\beckhoffAutomationInterface.exe init "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
 # 1. Fast syntax check after editing .st files (no Visual Studio, ~instant)
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --parse-only
+.\beckhoffAutomationInterface.exe check parse "C:\...\ST\Shark"
 
 # 2. Full sync + build (reopens and reconciles the existing project)
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
 
 # 3. Fix compile errors reported, then iterate quickly without re-syncing
-.\beckhoffAutomationInterface.exe --source "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --build
+.\beckhoffAutomationInterface.exe build "C:\...\TwinCAT\Shark"
 ```
 
 > **Safety note:** `--dest` + the project name determine exactly which
 > `.sln`/`.tsproj` are targeted. Creating a NEW project always requires
-> `--init` — without it, a missing solution is a hard error, so a mistyped
-> path can never silently bootstrap (or bury a duplicate project inside)
-> the wrong location.
+> `init` (not `sync`) — a missing solution under `sync` is a hard error, so
+> a mistyped path can never silently bootstrap (or bury a duplicate project
+> inside) the wrong location.
 
 ## Manifests (config data, not `.st` source)
 
@@ -613,11 +648,11 @@ undeclared items are only warned about).
   (`Sync/TsprojEventClassEditor.cs`), using the exact `<DataType>` XML from a
   matching `event-classes/<Name>.xml` template with its REAL GUID. Verified
   surviving VS reload + build on the live project (2026-07-14). The read-only
-  `--check-events` still exists as a fast preflight/pipeline gate.
+  `check events` still exists as a fast preflight/pipeline gate.
 - **`MDP5001_*` PLC data type names are config-hash suffixes** TwinCAT
   computes from a terminal's PDO/revision configuration — they are NOT
   portable across machines whose ESI catalogs instantiate different terminal
-  revisions. If `.st` aliases report `Unknown type` for one, run `--build`
+  revisions. If `.st` aliases report `Unknown type` for one, run `build`
   once and read the actual generated `MDP5001_*` names out of the saved
   `.tsproj`, then update the aliases and `plc-data-types/*.xml` template.
 - **IO variable linking** requires the PLC instance's I/O image to exist,

@@ -218,12 +218,14 @@ namespace BeckhoffAutomationInterface
 
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", PlcProjectName, leaf);
 
-        /// <summary>When set (via --tsproj), reverse export opens THIS exact existing
-        /// .tsproj file directly — read-only, never saved — instead of resolving
+        /// <summary>When set (via --tsproj), opens THIS exact existing .tsproj file
+        /// directly — read-only, never saved — instead of resolving
         /// SolutionFilePath/TsprojFilePath from DestinationFolder/ProjectName. This is the
         /// "adopt an arbitrary pre-existing project" path: such a project may have no .sln
         /// at all (confirmed live against PLC_NFL_SHARK_V2), which the normal dte.Solution.
-        /// Open flow requires. CLI-only; only meaningful together with a --export-* flag.</summary>
+        /// Open flow requires. CLI-only. Valid either with a --export-* flag (reverse
+        /// export) or with --build alone (e.g. CI compiling a project natively hosted on
+        /// GitHub, never bootstrapped by this tool) — see TwinCatSession.EnsureOpen.</summary>
         public string ExistingTsprojPath { get; }
 
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
@@ -442,7 +444,10 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("                    (required when --source already has .st files or manifests)");
             Console.WriteLine("  --tsproj <path>   Adopt an ARBITRARY pre-existing .tsproj directly (read-only,");
             Console.WriteLine("                    never saved) instead of resolving it from --dest/--name/.sln —");
-            Console.WriteLine("                    for projects with no .sln at all. Reverse export only.");
+            Console.WriteLine("                    for projects with no .sln at all. Works with a --export-*");
+            Console.WriteLine("                    flag (reverse export) OR with --build alone (e.g. CI compiling");
+            Console.WriteLine("                    a project natively hosted on GitHub, never bootstrapped by");
+            Console.WriteLine("                    this tool).");
             Console.WriteLine("  --plc-name <name> The real PLC project name inside TIPC, if it differs from");
             Console.WriteLine("                    --name/the .tsproj file name (check the project's own");
             Console.WriteLine("                    .plcproj file name if unsure). Reverse export only.");
