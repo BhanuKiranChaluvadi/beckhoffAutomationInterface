@@ -124,6 +124,19 @@ namespace BeckhoffAutomationInterface
         /// legacy flags below are untouched and still work exactly as before.</summary>
         static string[] TranslateBuildSubcommand(string[] args)
         {
+            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
+            {
+                Console.WriteLine("Usage: beckhoffAutomationInterface build <path-to-.tsproj-or-folder> [--plc-name <name>]");
+                Console.WriteLine();
+                Console.WriteLine("Compiles an existing TwinCAT PLC project and reports pass/fail.");
+                Console.WriteLine("  <path>              A .tsproj file, or a folder containing exactly one.");
+                Console.WriteLine("  --plc-name <name>   The real PLC project name inside TIPC, if it differs");
+                Console.WriteLine("                      from the .tsproj file's own name.");
+                Console.WriteLine();
+                Console.WriteLine("Exit code: 0 = build passed, 1 = build failed or timed out.");
+                Environment.Exit(0);
+            }
+
             string path = null;
             string plcName = null;
             for (int i = 1; i < args.Length; i++)

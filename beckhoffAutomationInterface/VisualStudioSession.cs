@@ -23,11 +23,16 @@ namespace BeckhoffAutomationInterface
         public EnvDTE80.DTE2 Dte { get; }
 
         readonly int _devenvPid;
+        readonly DialogAutoDismisser _dialogAutoDismisser;
 
         VisualStudioSession(EnvDTE80.DTE2 dte, int devenvPid)
         {
             Dte = dte;
             _devenvPid = devenvPid;
+            // Only meaningful once we actually have a devenv PID to watch — falls back to
+            // relying on SuppressUI alone in the rare case that lookup failed (see Start()).
+            if (devenvPid > 0)
+                _dialogAutoDismisser = new DialogAutoDismisser(devenvPid);
         }
 
         /// <summary>Creates and waits for a new Visual Studio DTE instance to finish loading.</summary>
@@ -54,7 +59,13 @@ namespace BeckhoffAutomationInterface
             var devenvBefore = new System.Collections.Generic.HashSet<int>(
                 System.Diagnostics.Process.GetProcessesByName("devenv").Select(p => p.Id));
             EnvDTE80.DTE2 dte = (EnvDTE80.DTE2)Activator.CreateInstance(dteType);
-            dte.SuppressUI = false;
+            // Unattended automation (CI) must never block on a modal dialog with no one
+            // to click it — SuppressUI tells VS to auto-answer automation-triggered
+            // prompts with their default instead of popping a dialog. Previously false
+            // with no recorded rationale (likely an unconsidered scaffolding default);
+            // flipped after live CI runs hit both a "Target System Process Image Update"
+            // AmsNetId-mismatch prompt and a missing-.tmc dialog hanging the job.
+            dte.SuppressUI = true;
 
             Console.WriteLine("{0}: Waiting for Visual Studio to finish loading...", Now());
             WaitForVsToLoad(dte);
@@ -76,13 +87,18 @@ namespace BeckhoffAutomationInterface
         }
 
         /// <summary>Closes Visual Studio, force-killing it if a graceful Quit() doesn't
-        /// complete in time (e.g. a modal dialog is blocking shutdown).</summary>
+        /// complete in time (e.g. a modal dialog is blocking shutdown). The dialog watcher
+        /// stays running through Quit/force-kill (it could even help an otherwise-stuck
+        /// Quit() by clearing a blocking dialog first) and is only stopped once devenv is
+        /// confirmed gone — leaving it running indefinitely would otherwise leak the
+        /// background thread for the rest of the process's life.</summary>
         public void Dispose()
         {
             Console.WriteLine("{0}: Closing Visual Studio...", Now());
             TryQuit(VS_QUIT_TIMEOUT_MS);
             EnsureExited();
             MessageFilter.Revoke();
+            _dialogAutoDismisser?.Dispose();
         }
 
         /// <summary>Runs dte.Quit() on a background thread and waits up to timeoutMs for it
