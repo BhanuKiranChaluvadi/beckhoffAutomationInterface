@@ -117,98 +117,6 @@ namespace BeckhoffAutomationInterface
             return found;
         }
 
-        /// <summary>Maps a `sync` subcommand mode to its legacy stage flag; null for "all"
-        /// since no stage flag means SyncStages.All already (RunOptions' existing default).</summary>
-        static readonly Dictionary<string, string> SyncModeToStageFlag = new Dictionary<string, string>
-        {
-            ["code"] = "--sync-code",
-            ["libs"] = "--sync-libs",
-            ["io"] = "--sync-io",
-            ["events"] = "--sync-events",
-            ["variants"] = "--sync-variants",
-            ["all"] = null,
-        };
-
-        /// <summary>Translates the new `sync &lt;mode&gt; &lt;source-path&gt; [legacy flags...]`
-        /// subcommand syntax into the equivalent legacy --source/--sync-*/--build flags. Unlike
-        /// `build`/`check`, sync's remaining flags (--dest/--name/--init/--incremental/
-        /// --confirm-delete/--confirm-delete-io/--ignore) are forwarded verbatim rather than
-        /// individually re-parsed here — RunOptions.Parse already validates all of them, so
-        /// re-validating would just duplicate that logic. Third slice of
-        /// docs/ideas/cli-subcommand-redesign.md.</summary>
-        static string[] TranslateSyncSubcommand(string[] args)
-        {
-            if (args.Length < 2)
-            {
-                Console.Error.WriteLine("ERROR: 'sync' requires a mode: code|libs|io|events|variants|all.");
-                Environment.Exit(1);
-            }
-            string mode = args[1];
-            if (!SyncModeToStageFlag.ContainsKey(mode))
-            {
-                Console.Error.WriteLine("ERROR: unknown 'sync' mode '{0}' (expected code|libs|io|events|variants|all).", mode);
-                Environment.Exit(1);
-            }
-
-            string sourcePath = null;
-            var passthrough = new List<string>();
-            for (int i = 2; i < args.Length; i++)
-            {
-                if (sourcePath == null && !args[i].StartsWith("--"))
-                    sourcePath = args[i];
-                else
-                    passthrough.Add(args[i]);
-            }
-
-            if (sourcePath == null)
-            {
-                Console.Error.WriteLine("ERROR: 'sync {0}' requires a path to the .st source folder.", mode);
-                Environment.Exit(1);
-            }
-
-            var result = new List<string> { "--source", sourcePath };
-            result.AddRange(passthrough);
-            string stageFlag = SyncModeToStageFlag[mode];
-            if (stageFlag != null)
-                result.Add(stageFlag);
-            return result.ToArray();
-        }
-
-        /// <summary>Translates the new `init &lt;source-path&gt; --dest X [--name Y]`
-        /// subcommand syntax into the equivalent legacy --source/--dest/--name/--init flags.
-        /// Unlike build/check/export, init has nothing pre-existing to locate — it's the
-        /// bootstrap case ProjectLocator doesn't apply to — so it keeps the conventional
-        /// --dest/--name targeting verbatim rather than resolving a .tsproj. Fourth slice of
-        /// docs/ideas/cli-subcommand-redesign.md.</summary>
-        static string[] TranslateInitSubcommand(string[] args)
-        {
-            string sourcePath = null;
-            var passthrough = new List<string>();
-            for (int i = 1; i < args.Length; i++)
-            {
-                if (sourcePath == null && !args[i].StartsWith("--"))
-                    sourcePath = args[i];
-                else
-                    passthrough.Add(args[i]);
-            }
-
-            if (sourcePath == null)
-            {
-                Console.Error.WriteLine("ERROR: 'init' requires a path to the .st source folder.");
-                Environment.Exit(1);
-            }
-            if (!passthrough.Contains("--dest"))
-            {
-                Console.Error.WriteLine("ERROR: 'init' requires --dest <path> (where the new TwinCAT solution/project is created).");
-                Environment.Exit(1);
-            }
-
-            var result = new List<string> { "--source", sourcePath };
-            result.AddRange(passthrough);
-            result.Add("--init");
-            return result.ToArray();
-        }
-
         /// <summary>Prints the new top-level subcommand usage. Replaces the old flat-flag
         /// entry point as of the Slice 5 cutover (docs/ideas/cli-subcommand-redesign.md) —
         /// RunOptions.PrintUsage()'s detailed flag reference still exists and still backs
@@ -227,7 +135,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  check  events <source-path> --project <path>");
             Console.WriteLine("      Read-only preflight checks against .st source (and, for 'events', the project).");
             Console.WriteLine();
-            Console.WriteLine("  sync   code|libs|io|events|variants|all <source-path> [--dest X] [--init] [--incremental] [...]");
+            Console.WriteLine("  sync   code|libs|io|events|variants|all <source> --project <project> [--incremental] [--clean] [...]");
             Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
             Console.WriteLine();
             Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc-name X] [--overwrite]");
@@ -246,7 +154,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("      Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state,");
             Console.WriteLine("      boot projects and license expiry.");
             Console.WriteLine();
-            Console.WriteLine("  init   <source-path> --dest <path> [--name X]");
+            Console.WriteLine("  init   <source> --into <folder> [--name X]");
             Console.WriteLine("      Bootstrap a brand-new TwinCAT solution/PLC project.");
             Console.WriteLine();
             Console.WriteLine("Global option (any command that opens TwinCAT):");
@@ -325,13 +233,9 @@ namespace BeckhoffAutomationInterface
                 case "build":
                 case "check":
                 case "export":
-                    options = ParseOrExit(args, shell);
-                    break;
                 case "sync":
-                    args = TranslateSyncSubcommand(args);
-                    break;
                 case "init":
-                    args = TranslateInitSubcommand(args);
+                    options = ParseOrExit(args, shell);
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
@@ -341,12 +245,6 @@ namespace BeckhoffAutomationInterface
                     break;
             }
 
-            if (options == null)
-            {
-                if (shell != null)
-                    args = args.Concat(new[] { "--shell", shell }).ToArray();
-                options = RunOptions.Parse(args);
-            }
             if (options.ConfigFileLoaded)
                 Console.WriteLine("{0}: Loaded defaults from '.stconfig' (pass --no-config to ignore it).", Now());
             Console.WriteLine("{0}: Source='{1}'  Dest='{2}'  Project='{3}'", Now(), options.SourceFolder, options.DestinationFolder, options.ProjectName);
@@ -429,12 +327,12 @@ namespace BeckhoffAutomationInterface
                 List<string> existing = FindExistingSourceArtifacts(options);
                 if (existing.Count > 0)
                 {
-                    Console.Error.WriteLine("ERROR: --source already contains {0} file(s) that reverse export would overwrite:", existing.Count);
+                    Console.Error.WriteLine("ERROR: the source folder already contains {0} file(s) that reverse export would overwrite:", existing.Count);
                     foreach (string f in existing.Take(10))
                         Console.Error.WriteLine("  {0}", f);
                     if (existing.Count > 10)
                         Console.Error.WriteLine("  ... and {0} more", existing.Count - 10);
-                    Console.Error.WriteLine("Pass --overwrite to proceed, or point --source at an empty folder.");
+                    Console.Error.WriteLine("Pass --overwrite to proceed, or export into an empty folder.");
                     Environment.Exit(1);
                 }
             }
@@ -460,7 +358,7 @@ namespace BeckhoffAutomationInterface
                 {
                     Console.Error.WriteLine("ERROR: project file not found:");
                     Console.Error.WriteLine("  {0}", options.TsprojFilePath);
-                    Console.Error.WriteLine("Check --source/--dest/--name/--tsproj point at the intended project.");
+                    Console.Error.WriteLine("Check that --project (or the <project> argument) points at the intended project.");
                     Console.Error.WriteLine("This mode never bootstraps a new project — there must be a real one to read from.");
                     Environment.Exit(1);
                 }
@@ -474,8 +372,8 @@ namespace BeckhoffAutomationInterface
             {
                 Console.Error.WriteLine("ERROR: solution not found at:");
                 Console.Error.WriteLine("  {0}", options.SolutionFilePath);
-                Console.Error.WriteLine("Check --source/--dest/--name point at the intended project, or pass --init");
-                Console.Error.WriteLine("to create a brand-new solution/TwinCAT/PLC project at that path.");
+                Console.Error.WriteLine("Check that --project points at the intended project, or create a new one with");
+                Console.Error.WriteLine("'init <source> --into <folder>'.");
                 Environment.Exit(1);
             }
 

@@ -100,11 +100,20 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void BuildFlags_ReachRunOptions()
         {
-            RunOptions o = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--build", "--variant", "MachineB", "--no-config" });
-            RunOptions all = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--build", "--all-variants", "--no-config" });
+            string dir = TestProjects.NewTempDir("BuildFlags");
+            try
+            {
+                string tsproj = TestProjects.Adopted(dir, "P");
+                RunOptions o = TestProjects.Parse(dir, "build", tsproj, "--variant", "MachineB", "--no-config");
+                RunOptions all = TestProjects.Parse(dir, "build", tsproj, "--all-variants", "--no-config");
 
-            Assert.Equal("MachineB", o.Variant);
-            Assert.True(all.AllVariants);
+                Assert.Equal("MachineB", o.Variant);
+                Assert.True(all.AllVariants);
+            }
+            finally
+            {
+                System.IO.Directory.Delete(dir, recursive: true);
+            }
         }
     }
 }

@@ -69,25 +69,27 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void SyncVariantsFlag_SelectsOnlyTheVariantsStage()
+        public void SyncVariants_SelectsOnlyTheVariantsStage_AndThePlcItemPath()
         {
-            RunOptions o = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--sync-variants", "--no-config" });
+            string dir = TestProjects.NewTempDir("SyncVariants");
+            try
+            {
+                string sln = TestProjects.Owned(dir, "Shark");
+                RunOptions o = TestProjects.Parse(dir, "sync", "variants", TestProjects.Source(dir, "src"), "--project", sln, "--no-config");
 
-            Assert.Equal(SyncStages.Variants, o.Stages);
+                Assert.Equal(SyncStages.Variants, o.Stages);
+                Assert.Equal("TIPC^Shark", o.PlcItemPath);
+            }
+            finally
+            {
+                System.IO.Directory.Delete(dir, recursive: true);
+            }
         }
 
         [Fact]
         public void FullRun_IncludesTheVariantsStage()
         {
             Assert.True(SyncStages.All.HasFlag(SyncStages.Variants));
-        }
-
-        [Fact]
-        public void PlcItemPath_IsTheTipcChild()
-        {
-            RunOptions o = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--name", "Shark", "--no-config" });
-
-            Assert.Equal("TIPC^Shark", o.PlcItemPath);
         }
     }
 }

@@ -132,6 +132,90 @@ namespace BeckhoffAutomationInterface.Tests
             Rejected("needs <ObjectName>", () => Parse("export", "object", "--project", _tsproj));
         }
 
+        // ---------------------------------------------------------------- sync
+
+        [Theory]
+        [InlineData("code", 1)]
+        [InlineData("libs", 2)]
+        [InlineData("io", 4)]
+        [InlineData("events", 8)]
+        [InlineData("variants", 32)]
+        [InlineData("all", 63)]
+        public void Sync_ModeSelectsTheStage(string mode, int stage) // SyncStages is internal: passed as int
+        {
+            Assert.Equal((SyncStages)stage, Parse("sync", mode, _source, "--project", _ownedSln).Stages);
+        }
+
+        [Fact]
+        public void Sync_ProjectMayBeTheSln_ItsFolder_OrTheTsproj()
+        {
+            foreach (string project in new[] { _ownedSln, Path.GetDirectoryName(_ownedSln), _ownedTsproj })
+            {
+                RunOptions o = Parse("sync", "code", _source, "--project", project);
+
+                Assert.Equal(_ownedSln, o.SolutionFilePath);
+                Assert.Equal(_ownedTsproj, o.TsprojFilePath);
+                Assert.Null(o.ExistingTsprojPath);     // tool-owned: opened and saved normally
+                Assert.False(o.Init);
+            }
+        }
+
+        [Fact]
+        public void Sync_Options()
+        {
+            RunOptions o = Parse("sync", "all", _source, "--project", _ownedSln, "--incremental", "--confirm-delete",
+                "--confirm-delete-io", "--clean", "--ignore", "Old*.st", "--variant", "SAS");
+
+            Assert.True(o.Incremental && o.ConfirmDelete && o.ConfirmDeleteIo && o.Clean);
+            Assert.Equal(new[] { "Old*.st" }, o.IgnorePatterns);
+            Assert.Equal("SAS", o.Variant);
+        }
+
+        [Fact]
+        public void Sync_RefusesAProjectTheToolDidNotCreate_OrAMissingOne()
+        {
+            Rejected("not a project created by this tool", () => Parse("sync", "code", _source, "--project", _tsproj));
+            Rejected("project not found", () => Parse("sync", "code", _source, "--project", Path.Combine(_dir, "Nope")));
+            Rejected("needs --project", () => Parse("sync", "code", _source));
+            Rejected("unknown 'sync' mode", () => Parse("sync", "everything", _source, "--project", _ownedSln));
+            Rejected("unknown option --dest", () => Parse("sync", "all", _source, "--dest", _dir));   // replaced by --project
+        }
+
+        [Fact]
+        public void Sync_ProjectAndIncrementalFromStConfig()
+        {
+            File.WriteAllText(Path.Combine(_source, ".stconfig"), "project=" + _ownedSln + "\nincremental=true\n");
+
+            RunOptions o = Parse("sync", "all", _source);
+
+            Assert.Equal(_ownedSln, o.SolutionFilePath);
+            Assert.True(o.Incremental);
+        }
+
+        [Fact]
+        public void Sync_SafetyChoices_NeverComeFromStConfig()
+        {
+            File.WriteAllText(Path.Combine(_source, ".stconfig"), "confirm-delete=true\n");
+
+            Rejected("unknown key 'confirm-delete'", () => Parse("sync", "all", _source, "--project", _ownedSln));
+        }
+
+        // ---------------------------------------------------------------- init
+
+        [Fact]
+        public void Init_CreatesUnderInto_NamedAfterTheSourceFolder()
+        {
+            string into = Path.Combine(_dir, "New");
+
+            RunOptions o = Parse("init", _source, "--into", into);
+
+            Assert.True(o.Init);
+            Assert.Equal(SyncStages.All, o.Stages);
+            Assert.Equal(Path.Combine(into, "Shark", "Shark.sln"), o.SolutionFilePath);
+            Assert.Equal("SharkB", Parse("init", _source, "--into", into, "--name", "SharkB").ProjectName);
+            Rejected("needs --into", () => Parse("init", _source));
+        }
+
         // ---------------------------------------------------------------- .stconfig
 
         [Fact]

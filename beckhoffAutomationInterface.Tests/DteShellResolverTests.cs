@@ -145,38 +145,21 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void RunOptions_ShellFromCommandLine()
+        public void RunOptions_Shell_FromGlobalOption_ThenStConfig_ElseNull()
         {
-            RunOptions options = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--shell", "vs2022", "--no-config" });
-
-            Assert.Equal("vs2022", options.Shell);
-        }
-
-        [Fact]
-        public void RunOptions_ShellFromStConfig_WhenNotOnCommandLine()
-        {
-            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "DteShellResolverTests_" + System.Guid.NewGuid());
-            System.IO.Directory.CreateDirectory(dir);
+            string dir = TestProjects.NewTempDir("Shell");
             try
             {
+                string tsproj = TestProjects.Adopted(dir, "P");
+                Assert.Equal("vs2022", Cli.CommandLine.Parse(new[] { "build", tsproj, "--no-config" }, shell: "vs2022").Shell);
+                Assert.Null(Cli.CommandLine.Parse(new[] { "build", tsproj, "--no-config" }).Shell); // resolver picks the default
                 System.IO.File.WriteAllText(System.IO.Path.Combine(dir, ".stconfig"), "shell=xae\n");
-
-                RunOptions options = RunOptions.Parse(new[] { "--source", dir });
-
-                Assert.Equal("xae", options.Shell);
+                Assert.Equal("xae", Cli.CommandLine.Parse(new[] { "build", tsproj }, cwd: dir).Shell);
             }
             finally
             {
                 System.IO.Directory.Delete(dir, recursive: true);
             }
-        }
-
-        [Fact]
-        public void RunOptions_NoShell_IsNull_SoTheResolverPicksTheDefault()
-        {
-            RunOptions options = RunOptions.Parse(new[] { "--source", System.IO.Path.GetTempPath(), "--no-config" });
-
-            Assert.Null(options.Shell);
         }
     }
 }

@@ -20,40 +20,33 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void BuildOfAdoptedTsproj_WithoutSource_DoesNotMap()
         {
-            // What `build <path>` translates to: --tsproj, no --source.
-            RunOptions options = RunOptions.Parse(
-                new[] { "--tsproj", Path.Combine(_dir, "P.tsproj"), "--plc-name", "P", "--build", "--no-config" }, cwd: _dir);
+            string tsproj = TestProjects.Adopted(_dir, "P");
+
+            RunOptions options = TestProjects.Parse(_dir, "build", tsproj, "--no-config");
 
             Assert.False(options.SourceFolderExplicit);
             Assert.False(SyncPipeline.MapsErrorsToSource(options));
         }
 
         [Fact]
-        public void BuildOfAdoptedTsproj_WithExplicitSource_Maps()
+        public void BuildOfAdoptedTsproj_WithSourceFromStConfig_Maps()
         {
-            RunOptions options = RunOptions.Parse(
-                new[] { "--tsproj", Path.Combine(_dir, "P.tsproj"), "--source", _dir, "--build", "--no-config" });
+            string tsproj = TestProjects.Adopted(_dir, "P");
+            File.WriteAllText(Path.Combine(_dir, ".stconfig"), "source=" + _dir + "\n");
+
+            RunOptions options = TestProjects.Parse(_dir, "build", tsproj);
 
             Assert.True(options.SourceFolderExplicit);
             Assert.True(SyncPipeline.MapsErrorsToSource(options));
         }
 
         [Fact]
-        public void BuildOfAdoptedTsproj_WithSourceFromStConfig_Maps()
+        public void SyncOfAToolCreatedProject_Maps()
         {
-            File.WriteAllText(Path.Combine(_dir, ".stconfig"), "source=" + _dir + "\n");
+            string sln = TestProjects.Owned(_dir, "Shark");
+            string source = TestProjects.Source(_dir, "src");
 
-            RunOptions options = RunOptions.Parse(
-                new[] { "--tsproj", Path.Combine(_dir, "P.tsproj"), "--build" }, cwd: _dir);
-
-            Assert.True(SyncPipeline.MapsErrorsToSource(options));
-        }
-
-        [Fact]
-        public void LegacyBuildFromInsideTheSourceFolder_StillMaps()
-        {
-            // `cd ST\Shark; tool --build` — the current directory IS the source folder.
-            RunOptions options = RunOptions.Parse(new[] { "--build", "--no-config" }, cwd: _dir);
+            RunOptions options = TestProjects.Parse(_dir, "sync", "all", source, "--project", sln, "--no-config");
 
             Assert.True(SyncPipeline.MapsErrorsToSource(options));
         }

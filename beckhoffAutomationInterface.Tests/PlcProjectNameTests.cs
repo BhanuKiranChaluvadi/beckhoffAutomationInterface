@@ -38,11 +38,11 @@ namespace BeckhoffAutomationInterface.Tests
             Directory.CreateDirectory(dir);
             try
             {
-                RunOptions o = RunOptions.Parse(new[] { "--source", dir, "--init", "--no-config" });
+                RunOptions o = Cli.CommandLine.Parse(new[] { "init", dir, "--into", Path.GetTempPath(), "--no-config" });
 
                 Assert.NotNull(RunOptions.PlcProjectNameProblem(o.PlcProjectName));
                 Assert.Null(RunOptions.PlcProjectNameProblem(
-                    RunOptions.Parse(new[] { "--source", dir, "--init", "--name", "VariantSample", "--no-config" }).PlcProjectName));
+                    Cli.CommandLine.Parse(new[] { "init", dir, "--into", Path.GetTempPath(), "--name", "VariantSample", "--no-config" }).PlcProjectName));
             }
             finally
             {
