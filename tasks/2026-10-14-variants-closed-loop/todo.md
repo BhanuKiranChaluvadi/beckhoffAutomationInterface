@@ -211,13 +211,13 @@ and `ConsumeXml(<EnableImplicitDefines>true</EnableImplicitDefines>)`. Read befo
 so a second run changes nothing. Add it to `sync all`.
 
 **Acceptance criteria:**
-- [ ] After `sync variants`, `ProduceXml` of the PLC item shows `PvUseDefine="true"` and `EnableImplicitDefines=true`
-- [ ] A second run reports "no change"
-- [ ] A variant removed from the manifest is removed from the project (report it, like other stages)
+- [x] After `sync variants`, the `.tsproj` shows `<ProjectVariant PvUseDefine="true">` and the variants (2026-10-14, scratch `init` of `ST/VariantSample`)
+- [x] A second run reports "no change" (2026-10-14: "Variants already up to date (no change).")
+- [x] A variant removed from the manifest is removed from the project (report it, like other stages) — unit-tested (`VariantSyncTests`); real run at Checkpoint 2
 
 **Verification:**
-- [ ] Unit test: diff logic (current config vs manifest → actions)
-- [ ] Manual: scratch project; run twice; read the `.tsproj` and check `<ProjectVariant PvUseDefine="true">`
+- [x] Unit test: diff logic (current config vs manifest → actions)
+- [x] Manual: scratch project; run twice; read the `.tsproj` and check `<ProjectVariant PvUseDefine="true">`
 
 **Dependencies:** Task 5
 **Files likely touched:** new `Sync/VariantSyncEngine.cs`, `SyncPipeline.cs`, `RunOptions.cs` (stage), tests
@@ -243,8 +243,26 @@ any variant fails. If the project has variants but `PvDefine` is off, fail with 
 **Files likely touched:** `Sync/BuildRunner.cs`, `SyncPipeline.cs`, `RunOptions.cs`, new `Sync/VariantBuildReport.cs`, tests
 **Scope:** M
 
+## Task 7b: `init` rejects an invalid project name before it starts XAE
+**Description:** Found in Task 6 (2026-10-14). `init ST/variant-sample` derives the project name
+`variant-sample`; TwinCAT refuses it and the tool crashes with an unhandled exception
+("Cannot create new PLC project 'variant-sample'!", exit -532462766) after a 25 s XAE start.
+Validate the name (PLC identifier) in `init`/`sync` before the shell starts, and suggest `--name`.
+
+**Acceptance criteria:**
+- [ ] `init <folder-with-hyphen>` fails in under a second with a clear message and exit 1, no XAE started
+- [ ] `--name ValidName` works around it
+
+**Verification:**
+- [ ] Unit test: name validation
+- [ ] Manual: repeat the Task 6 failure case
+
+**Dependencies:** Task 0
+**Files likely touched:** `Program.cs` or `RunOptions.cs`, tests
+**Scope:** S
+
 ### Checkpoint 2: Variant builds
-- [ ] Add `ST/variant-sample` (port of `Experiments/VariantDemo/src` + `variants.xml`)
+- [ ] Add `ST/VariantSample` (port of `Experiments/VariantDemo/src` + `variants.xml`; a hyphen is not allowed in a PLC project name)
 - [ ] `sync all ST/variant-sample` then `build --all-variants`: both pass. The build log shows
       `VARIANT CHECK` and `FEATURE CHECK` messages for the correct branch.
 - [ ] Remove the variants from the scratch project's manifest → `sync variants` removes them

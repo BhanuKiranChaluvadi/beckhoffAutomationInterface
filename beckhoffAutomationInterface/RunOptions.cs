@@ -22,7 +22,8 @@ namespace BeckhoffAutomationInterface
         Io = 4,
         Events = 8,
         Build = 16,
-        All = Code | Libraries | Io | Events | Build,
+        Variants = 32,
+        All = Code | Libraries | Io | Events | Build | Variants,
     }
 
     /// <summary>
@@ -176,6 +177,10 @@ namespace BeckhoffAutomationInterface
         public string LibraryManifestPath => Path.Combine(SourceFolder, "libraries.xml");
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
+        public string VariantManifestPath => Path.Combine(SourceFolder, "variants.xml");
+
+        /// <summary>The PLC project's System Manager item, e.g. "TIPC^Shark" (variant settings live here).</summary>
+        public string PlcItemPath => "TIPC^" + PlcProjectName;
 
         /// <summary>TwinCAT-native &lt;VarLinks&gt; format (see Sync/VarLinksFile.cs) — the
         /// same schema the XAE IDE's own "Export/Import Variable Mapping" produces/reads.
@@ -310,6 +315,7 @@ namespace BeckhoffAutomationInterface
             if (args.Contains("--sync-libs")) cliStages |= SyncStages.Libraries;
             if (args.Contains("--sync-io")) cliStages |= SyncStages.Io;
             if (args.Contains("--sync-events")) cliStages |= SyncStages.Events;
+            if (args.Contains("--sync-variants")) cliStages |= SyncStages.Variants;
             if (args.Contains("--build")) cliStages |= SyncStages.Build;
             if (args.Contains("--build-only")) cliStages |= SyncStages.Build; // deprecated alias of --build
 
@@ -318,6 +324,7 @@ namespace BeckhoffAutomationInterface
             if (config.GetBool("sync-libs")) configStages |= SyncStages.Libraries;
             if (config.GetBool("sync-io")) configStages |= SyncStages.Io;
             if (config.GetBool("sync-events")) configStages |= SyncStages.Events;
+            if (config.GetBool("sync-variants")) configStages |= SyncStages.Variants;
             if (config.GetBool("build")) configStages |= SyncStages.Build;
 
             // Stage flags are a GROUP, not five independent merges: if the CLI names any

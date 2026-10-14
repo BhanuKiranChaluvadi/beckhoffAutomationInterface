@@ -61,11 +61,12 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 
 ### Phase 2: Variant builds
 - [x] Task 5: `variants.xml` manifest + parser
-- [ ] Task 6: `sync variants` stage (apply variants, groups, implicit defines)
+- [x] Task 6: `sync variants` stage (apply variants, groups, implicit defines)
 - [ ] Task 7: `build --variant` / `--all-variants` with per-variant report
+- [ ] Task 7b: `init` rejects an invalid project name before XAE starts (found in Task 6)
 
 ### Checkpoint 2: Variant builds
-- [ ] `ST/variant-sample` (port of the VariantDemo) builds both variants. Build log shows each variant's own branch.
+- [ ] `ST/VariantSample` (port of the VariantDemo) builds both variants. Build log shows each variant's own branch.
 
 ### Phase 3: Variant I/O trees
 - [ ] Task 8: Spike — per-variant disable of I/O items and links (scratch project, findings only)

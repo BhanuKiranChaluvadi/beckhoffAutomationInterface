@@ -74,6 +74,12 @@ namespace BeckhoffAutomationInterface
             SyncStages stages = _options.Stages;
 
             // Phase A — stages that work through the open project's Automation Interface.
+            // Variants first: the build at the end needs the variant defines in place.
+            if (stages.HasFlag(SyncStages.Variants))
+            {
+                _session.EnsureOpen();
+                SyncVariants();
+            }
             if (stages.HasFlag(SyncStages.Code))
             {
                 _session.EnsureOpen();
@@ -353,6 +359,44 @@ namespace BeckhoffAutomationInterface
 
         /// <summary>Libraries stage: libraries.xml -> PLC library references (config
         /// data, not .st source).</summary>
+        /// <summary>Variants stage: apply variants.xml (see VariantSyncEngine). No manifest =
+        /// nothing to do, so projects without variants are untouched.</summary>
+        void SyncVariants()
+        {
+            VariantManifest desired;
+            try
+            {
+                desired = VariantManifestParser.Parse(_options.VariantManifestPath);
+            }
+            catch (VariantManifestException ex)
+            {
+                Console.WriteLine("{0}: VARIANTS FAILED — {1}", Now(), ex.Message);
+                Environment.ExitCode = 1;
+                return;
+            }
+            if (desired == null)
+            {
+                Console.WriteLine("{0}: No variant manifest '{1}' — variants stage skipped.", Now(), _options.VariantManifestPath);
+                return;
+            }
+
+            Console.WriteLine("{0}: Syncing {1} variant(s), {2} group(s)...", Now(), desired.Variants.Count, desired.Groups.Count);
+            VariantSyncReport report = null;
+            RetryOnBusy(() => report = VariantSyncEngine.Sync(_session.SysManager, _options.PlcItemPath, desired), "syncing variants");
+
+            PrintLines("+ variant  ", report.Added);
+            PrintLines("- variant  ", report.Removed);
+            if (report.DefinesSwitchedOn)
+                Console.WriteLine("    ~ variant defines switched on for '{0}' (PvDefine + implicit defines)", _options.PlcItemPath);
+            if (report.NoChange)
+            {
+                Console.WriteLine("{0}: Variants already up to date (no change).", Now());
+                return;
+            }
+            _session.Project.Save();
+            Console.WriteLine("{0}: Variant sync complete ({1} added, {2} removed).", Now(), report.Added.Count, report.Removed.Count);
+        }
+
         void SyncLibraries()
         {
             Console.WriteLine("{0}: Parsing library manifest '{1}'...", Now(), _options.LibraryManifestPath);

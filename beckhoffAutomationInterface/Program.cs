@@ -270,6 +270,7 @@ namespace BeckhoffAutomationInterface
             ["libs"] = "--sync-libs",
             ["io"] = "--sync-io",
             ["events"] = "--sync-events",
+            ["variants"] = "--sync-variants",
             ["all"] = null,
         };
 
@@ -284,13 +285,13 @@ namespace BeckhoffAutomationInterface
         {
             if (args.Length < 2)
             {
-                Console.Error.WriteLine("ERROR: 'sync' requires a mode: code|libs|io|events|all.");
+                Console.Error.WriteLine("ERROR: 'sync' requires a mode: code|libs|io|events|variants|all.");
                 Environment.Exit(1);
             }
             string mode = args[1];
             if (!SyncModeToStageFlag.ContainsKey(mode))
             {
-                Console.Error.WriteLine("ERROR: unknown 'sync' mode '{0}' (expected code|libs|io|events|all).", mode);
+                Console.Error.WriteLine("ERROR: unknown 'sync' mode '{0}' (expected code|libs|io|events|variants|all).", mode);
                 Environment.Exit(1);
             }
 
@@ -507,7 +508,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  check  events <source-path> --project <path>");
             Console.WriteLine("      Read-only preflight checks against .st source (and, for 'events', the project).");
             Console.WriteLine();
-            Console.WriteLine("  sync   code|libs|io|events|all <source-path> [--dest X] [--init] [--incremental] [...]");
+            Console.WriteLine("  sync   code|libs|io|events|variants|all <source-path> [--dest X] [--init] [--incremental] [...]");
             Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
             Console.WriteLine();
             Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc-name X] [--overwrite]");
