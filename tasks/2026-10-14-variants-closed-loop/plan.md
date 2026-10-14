@@ -81,10 +81,10 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 12: ADS client + `expect.json` parser
 - [x] Task 13: `activate` command
 - [x] Task 14: `verify` command
-- [ ] Task 15: `doctor` command
+- [x] Task 15: `doctor` command
 
 ### Checkpoint 4: Closed loop
-- [ ] `ST/variant-sample`: `activate` + `verify` pass for both variants on `UmRT_Default`.
+- [x] `ST/VariantSample`: `activate` + `verify` pass for both variants on `UmRT_Default`.
 
 ### Phase 5: CLI cleanup
 - [ ] Task 16: CLI spec (command table, option names, legacy → new map) — review with the user

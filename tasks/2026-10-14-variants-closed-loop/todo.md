@@ -426,20 +426,21 @@ state and AMS Net ID, and the trial license `ExpireTime` per runtime. Mark an ex
 soon-expired (< 2 days) license.
 
 **Acceptance criteria:**
-- [ ] On this PC it shows both shells, TwinCAT 3.1.4026.24, `UmRT_Default` (`199.4.42.250.1.1`) and its license expiry
-- [ ] It never changes anything (read-only)
+- [x] On this PC it shows both shells, TwinCAT 3.1.4026.24, `UmRT_Default` (`199.4.42.250.1.1`) and its license expiry
+      (2026-10-14: also the local runtime: Config, no license; UmRT: Run, VariantSample, "valid until 2026-10-22 (7 days left)")
+- [x] It never changes anything (read-only)
 
 **Verification:**
-- [ ] Unit test: license XML parse and expiry classification
-- [ ] Manual: run on this PC and on the bench PC
+- [x] Unit test: license XML parse and expiry classification (`DoctorTests`, incl. the real expired-at-midnight case)
+- [x] Manual: run on this PC (bench PC: at the bench run)
 
 **Dependencies:** Task 1
 **Files likely touched:** new `Doctor.cs`, `Program.cs`, tests
 **Scope:** S
 
 ### Checkpoint 4: Closed loop
-- [ ] `ST/variant-sample`: `activate --yes` + `verify` pass for both variants on `UmRT_Default`
-- [ ] `doctor` output reviewed
+- [x] `ST/VariantSample`: `activate --yes` + `verify` pass for both variants on `UmRT_Default` (2026-10-14, see Task 13)
+- [x] `doctor` output reviewed (matches the observed runtime and license state)
 - [ ] Review with the user before Phase 5
 
 ---

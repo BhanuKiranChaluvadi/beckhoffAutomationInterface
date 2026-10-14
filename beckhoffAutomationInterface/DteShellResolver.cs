@@ -103,6 +103,16 @@ namespace BeckhoffAutomationInterface
                 + Environment.NewLine + string.Join(Environment.NewLine, problems));
         }
 
+        /// <summary>Every known shell with its exe path (usable) or its problem — for `doctor`.</summary>
+        public static IEnumerable<(DteShell Shell, string Detail, bool Usable)> Status(IComRegistry registry, Func<string, bool> fileExists)
+        {
+            foreach (DteShell shell in DteShell.All)
+            {
+                string problem = Check(shell, registry, fileExists, out string exePath);
+                yield return (shell, problem ?? exePath, problem == null);
+            }
+        }
+
         static string Check(DteShell shell, IComRegistry registry, Func<string, bool> fileExists, out string exePath)
         {
             exePath = null;

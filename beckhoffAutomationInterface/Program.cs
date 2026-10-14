@@ -539,6 +539,10 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  verify --target umrt|local --expect <expect.json> [--variant V] [--timeout S]");
             Console.WriteLine("      Read live PLC values over ADS and compare them with expect.json (exit 0 = all as expected).");
             Console.WriteLine();
+            Console.WriteLine("  doctor");
+            Console.WriteLine("      Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state,");
+            Console.WriteLine("      boot projects and license expiry.");
+            Console.WriteLine();
             Console.WriteLine("  init   <source-path> --dest <path> [--name X]");
             Console.WriteLine("      Bootstrap a brand-new TwinCAT solution/PLC project.");
             Console.WriteLine();
@@ -588,6 +592,9 @@ namespace BeckhoffAutomationInterface
                 case "activate":
                     Environment.Exit(Runtime.RuntimeCommands.Activate(args, shell));
                     break;
+                case "doctor":
+                    Environment.Exit(Runtime.Doctor.Run());
+                    break;
                 case "build":
                     args = TranslateBuildSubcommand(args);
                     break;
@@ -605,7 +612,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, doctor.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;
