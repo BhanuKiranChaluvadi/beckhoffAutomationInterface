@@ -83,11 +83,12 @@ namespace BeckhoffAutomationInterface.Sync
 
             foreach (var p in placed)
             {
+                bool changed;
                 try
                 {
-                    ((ITcPlcDeclaration)p.Item).DeclarationText = p.Source.DeclarationText;
+                    changed = SetDeclaration(p.Item, p.Source.DeclarationText);
                     if (p.Source.ImplementationText != null)
-                        ((ITcPlcImplementation)p.Item).ImplementationText = p.Source.ImplementationText;
+                        changed |= SetImplementation(p.Item, p.Source.ImplementationText);
                 }
                 catch (Exception ex)
                 {
@@ -96,7 +97,7 @@ namespace BeckhoffAutomationInterface.Sync
                     throw;
                 }
 
-                (p.IsNew ? report.Created : report.Updated).Add(p.Source.RelativeFolder.Length > 0
+                Record(report, p.IsNew, changed, p.Source.RelativeFolder.Length > 0
                     ? p.Source.RelativeFolder + "/" + p.Source.Name
                     : p.Source.Name);
             }
@@ -175,17 +176,17 @@ namespace BeckhoffAutomationInterface.Sync
                 {
                     ITcSmTreeItem item = CreateOrGet(ownerItem, method.Name, methodType, null, out bool isNew);
 
-                    ((ITcPlcDeclaration)item).DeclarationText = method.DeclarationText;
+                    bool changed = SetDeclaration(item, method.DeclarationText);
                     try
                     {
-                        ((ITcPlcImplementation)item).ImplementationText = method.ImplementationText;
+                        changed |= SetImplementation(item, method.ImplementationText);
                     }
                     catch (InvalidCastException) when (isInterfaceOwner)
                     {
                         // Interface method signatures have no implementation body.
                     }
 
-                    (isNew ? report.Created : report.Updated).Add($"{ownerName}.{method.Name}");
+                    Record(report, isNew, changed, $"{ownerName}.{method.Name}");
                 }
 
                 // NOTE: no orphan pruning of an owner's children here — a FUNCTION_BLOCK's
@@ -224,35 +225,67 @@ namespace BeckhoffAutomationInterface.Sync
                 {
                     // A property's return type (carried in BaseType) is required as vInfo.
                     ITcSmTreeItem propItem = CreateOrGet(ownerItem, prop.Name, propType, prop.BaseType, out bool isNew);
-                    ((ITcPlcDeclaration)propItem).DeclarationText = prop.DeclarationText;
+                    bool changed = SetDeclaration(propItem, prop.DeclarationText);
 
                     if (prop.GetText != null)
                     {
-                        ITcSmTreeItem getItem = CreateOrGet(propItem, "Get", getType, null, out _);
-                        SetAccessorBody(getItem, prop.GetText, isItf);
+                        ITcSmTreeItem getItem = CreateOrGet(propItem, "Get", getType, null, out bool newGet);
+                        changed |= SetAccessorBody(getItem, prop.GetText, isItf) || newGet;
                     }
                     if (prop.SetText != null)
                     {
-                        ITcSmTreeItem setItem = CreateOrGet(propItem, "Set", setType, null, out _);
-                        SetAccessorBody(setItem, prop.SetText, isItf);
+                        ITcSmTreeItem setItem = CreateOrGet(propItem, "Set", setType, null, out bool newSet);
+                        changed |= SetAccessorBody(setItem, prop.SetText, isItf) || newSet;
                     }
 
-                    (isNew ? report.Created : report.Updated).Add($"{ownerName}.{prop.Name}");
+                    Record(report, isNew, changed, $"{ownerName}.{prop.Name}");
                 }
             }
         }
 
-        static void SetAccessorBody(ITcSmTreeItem accessor, string body, bool isInterface)
+        static bool SetAccessorBody(ITcSmTreeItem accessor, string body, bool isInterface)
         {
             try
             {
-                ((ITcPlcImplementation)accessor).ImplementationText = body;
+                return SetImplementation(accessor, body);
             }
             catch (InvalidCastException) when (isInterface)
             {
                 // Interface property accessors have no implementation body.
+                return false;
             }
         }
+
+        // Write a text only when it differs from what the project already holds, so a re-sync of
+        // unchanged source writes nothing and reports the object as unchanged (and is faster).
+        static bool SetDeclaration(ITcSmTreeItem item, string text)
+        {
+            var decl = (ITcPlcDeclaration)item;
+            if (!TextDiffers(decl.DeclarationText, text))
+                return false;
+            decl.DeclarationText = text;
+            return true;
+        }
+
+        static bool SetImplementation(ITcSmTreeItem item, string text)
+        {
+            var impl = (ITcPlcImplementation)item;
+            if (!TextDiffers(impl.ImplementationText, text))
+                return false;
+            impl.ImplementationText = text;
+            return true;
+        }
+
+        /// <summary>True when the project text and the source text differ. Line endings and
+        /// whitespace at the very end are ignored: TwinCAT may store either.</summary>
+        internal static bool TextDiffers(string current, string desired)
+        {
+            string Normalize(string s) => (s ?? "").Replace("\r\n", "\n").TrimEnd();
+            return !string.Equals(Normalize(current), Normalize(desired), StringComparison.Ordinal);
+        }
+
+        static void Record(SyncReport report, bool isNew, bool changed, string name) =>
+            (isNew ? report.Created : changed ? report.Updated : report.Unchanged).Add(name);
 
         ITcSmTreeItem CreateOrGet(ITcSmTreeItem parent, string name, TREEITEMTYPES kind, object vInfo, out bool isNew)
         {

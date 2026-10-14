@@ -134,7 +134,18 @@ namespace BeckhoffAutomationInterface.Sync
         {
             ITcSmTreeItem item = TreeItemFactory.GetOrCreate(sysManager, parent, name, type, vInfo, out bool isNew);
             if (isNew)
+            {
+                // TwinCAT may put a new item somewhere else than asked: a terminal cannot hold
+                // E-bus terminals, so "children" of a terminal land beside it. The next run would
+                // not find them and create them again (found on ST/Shark BH2, 2026-10-14).
+                string expected = parent.PathName + "^" + name;
+                if (item.PathName != expected)
+                    throw new InvalidOperationException(string.Format(
+                        "io-devices.xml: TwinCAT placed '{0}' at '{1}', not at '{2}'. Check the nesting: " +
+                        "E-bus terminals belong under their coupler (for example EK1100), not under another terminal.",
+                        name, item.PathName, expected));
                 report.Created.Add(name);
+            }
             return item;
         }
 

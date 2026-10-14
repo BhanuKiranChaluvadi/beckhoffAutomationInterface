@@ -332,6 +332,8 @@ new option.
 | `not a project created by this tool` on `sync` | `sync` only works on a project made by `init`. For other projects, use `build` or `export`. |
 | `PLC project name ... is not valid` | Rename the source folder, or add `--name ValidName` to `init`. |
 | `BUILD FAILED — variant defines are off` | Run `bai sync variants` first. |
+| `object(s) are defined in more than one .st file` (`check parse` or `sync`) | Two files define the same object. Only one would reach the PLC, and which one depends on file order. Delete or rename the old file. |
+| `io-devices.xml: TwinCAT placed '...' at '...'` | The nesting in `io-devices.xml` is wrong. E-bus terminals go under their coupler (for example EK1100), not under another terminal. |
 | The PLC stays in Config after `activate` | Run `bai doctor`. Look at the license expiry date. Renew the trial license in the TwinCAT window. |
 | `verify` shows `FAIL` | The variant on the target is not the one you named, or the code does not do what `expect.json` says. Look at the actual values. |
 | Linking fails with `0x98510001` | The `%I*`/`%Q*` variable is not used in the code, so it is not in the process image. Use it in the code. |

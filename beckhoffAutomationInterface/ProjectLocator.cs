@@ -28,6 +28,14 @@ namespace BeckhoffAutomationInterface
                 return path;
             }
 
+            // A .sln (what 'sync --project' accepts too): look for the .tsproj in its folder.
+            if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!File.Exists(path))
+                    throw new FileNotFoundException($"sln not found: {path}", path);
+                path = Path.GetDirectoryName(Path.GetFullPath(path));
+            }
+
             if (!Directory.Exists(path))
                 throw new DirectoryNotFoundException($"path not found: {path}");
 

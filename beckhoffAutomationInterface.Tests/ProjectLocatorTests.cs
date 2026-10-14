@@ -56,6 +56,17 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void PathIsSln_FindsTheTsprojInItsFolder()   // 'activate <x>.sln' said "path not found" (e2e, 2026-10-14)
+        {
+            string tsproj = WriteTsproj(Path.Combine("Demo", "Demo"), "Demo.tsproj");
+            string sln = Path.Combine(_dir, "Demo", "Demo.sln");
+            File.WriteAllText(sln, "");
+
+            Assert.Equal(tsproj, ProjectLocator.ResolveTsprojPath(sln));
+            Assert.Throws<FileNotFoundException>(() => ProjectLocator.ResolveTsprojPath(Path.Combine(_dir, "Nope.sln")));
+        }
+
+        [Fact]
         public void PathIsFolder_WithNoTsproj_Throws()
         {
             Assert.Throws<FileNotFoundException>(() => ProjectLocator.ResolveTsprojPath(_dir));

@@ -118,7 +118,9 @@ namespace BeckhoffAutomationInterface
         /// Main's `using` still disposes/closes Visual Studio properly.</summary>
         void ExportObject()
         {
-            List<ITcSmTreeItem> matches = PlcObjectExporter.FindByName(_session.SysManager.LookupTreeItem(_options.ProjectRootPath), _options.ExportObjectName);
+            // Only code objects count: a task's call of a PROGRAM (e.g. PlcTask^MAIN) has the same name.
+            List<ITcSmTreeItem> matches = PlcObjectExporter.FindByName(_session.SysManager.LookupTreeItem(_options.ProjectRootPath), _options.ExportObjectName)
+                .Where(PlcObjectExporter.IsExportableKind).ToList();
             if (matches.Count == 0)
             {
                 Console.Error.WriteLine("ERROR: no PLC object named '{0}' found.", _options.ExportObjectName);
@@ -158,6 +160,7 @@ namespace BeckhoffAutomationInterface
         void ExportLinks()
         {
             string xml = ((ITcSysManager3)_session.SysManager).ProduceMappingInfo();
+            Directory.CreateDirectory(Path.GetDirectoryName(_options.VarLinksManifestPath));
             File.WriteAllText(_options.VarLinksManifestPath, xml);
             Console.WriteLine("{0}: Exported current variable links -> '{1}'.", Now(), _options.VarLinksManifestPath);
         }
@@ -309,6 +312,13 @@ namespace BeckhoffAutomationInterface
                 desiredPous = StFileParser.ParseFolder(_options.SourceFolder, _ignore);
             }
 
+            // Two files for one object: refuse before anything is written (see DuplicateObjects).
+            List<string> duplicates = DuplicateObjects.Find(desiredPous);
+            if (duplicates.Count > 0)
+                throw new InvalidOperationException(string.Format(
+                    "{0} object(s) are defined in more than one .st file; nothing was synced. Delete or rename the stale file:\n    {1}",
+                    duplicates.Count, string.Join("\n    ", duplicates)));
+
             // Warn-only drift detection (see tasks/archive/2026-07-14-post-review-hardening/,
             // Tasks 7-8 decision: warn always, prune opt-in): a previously-synced name
             // missing from the current parse means its .st source was renamed/deleted, but
@@ -345,8 +355,8 @@ namespace BeckhoffAutomationInterface
             PrintLines("- deleted  ", syncReport.Deleted);
 
             _session.Project.Save();
-            Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted).",
-                Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count);
+            Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted, {4} unchanged).",
+                Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count, syncReport.Unchanged.Count);
 
             // Record the new sync baseline (best-effort; silently skipped if SourceFolder
             // isn't inside a git repo, since --incremental is opt-in and needs one anyway).

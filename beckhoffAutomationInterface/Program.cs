@@ -58,6 +58,13 @@ namespace BeckhoffAutomationInterface
             foreach (string f in failures)
                 Console.WriteLine(f);
 
+            List<string> duplicates = Sync.DuplicateObjects.Find(parsed);
+            if (duplicates.Count > 0)
+            {
+                Console.WriteLine("{0}: [parse-only] {1} object(s) defined in more than one file (the last file would silently win):", Now(), duplicates.Count);
+                PrintLines("! DUPLICATE ", duplicates);
+            }
+
             List<string> lintIssues = Sync.StLinter.Lint(parsed);
             if (lintIssues.Count > 0)
             {
@@ -67,7 +74,7 @@ namespace BeckhoffAutomationInterface
 
             PrintLinkCheck(options, parsed);
 
-            return failures.Count == 0 ? 0 : 1;
+            return failures.Count == 0 && duplicates.Count == 0 ? 0 : 1;
         }
 
         /// <summary>Prints the %I/%Q &lt;-&gt; &lt;Links&gt; report (see Sync/LinkChecker.cs), never
@@ -401,9 +408,20 @@ namespace BeckhoffAutomationInterface
             // The Visual Studio session is owned by TwinCatSession: stages open it
             // lazily and the pipeline legitimately closes/reopens it mid-run for the
             // direct .tsproj edits — `using` here just guarantees final disposal.
-            using (var session = new TwinCatSession(options))
+            // A failed stage ends the run with one ERROR line and exit 1, not an unhandled-exception
+            // crash; the session is still closed (the catch runs after the using's Dispose).
+            try
             {
-                new SyncPipeline(session, options, ignore).Run();
+                using (var session = new TwinCatSession(options))
+                {
+                    new SyncPipeline(session, options, ignore).Run();
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
+                                       || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                Environment.Exit(1);
             }
         }
     }
