@@ -186,6 +186,8 @@ positional path (see [Commands](#commands) above) plus `--project` for
 | `--name <name>` | `sync`, `init` | source path's folder name | Project/solution name |
 | `--project <path>` | `check events`, `export *` | — | The existing `.tsproj` file, or a folder containing exactly one, to attach to |
 | `--plc-name <name>` | `build`, `export *` | the `.tsproj`'s own base name | The real PLC project name inside `TIPC`, if it differs — check the project's own `.plcproj` file name if unsure |
+| `--shell xae\|vs2022` | every command that opens TwinCAT | `xae` if installed, else `vs2022` | Which DTE shell to automate. `xae` = TwinCAT XAE shell (`TcXaeShell.DTE.17.0`, present on every TwinCAT engineering PC); `vs2022` = Visual Studio 2022 with TwinCAT integrated. The tool checks that the shell's exe exists before it starts. Also `shell=` in `.stconfig`. |
+| `--clean` | `build`, `sync` | off | Clean the solution before the build stage, so no stale result can pass. Also `clean=true` in `.stconfig`. |
 | `--ignore <glob>` | `sync`, `check` | none | Exclude `.st` files matching this glob pattern (repeatable). Merged with a `.stignore` file in the source folder, if present. |
 | `--incremental` | `sync` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires the source folder to be a git repo with a prior full sync's baseline. |
 | `--confirm-delete-io` | `sync io`, `sync all` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
@@ -229,9 +231,9 @@ wins; `.stconfig` only fills in what you didn't type; anything neither
 specifies falls back to today's hardcoded default (e.g. `.` for the source
 path/`--dest`).
 
-**Supported keys:** `source`, `dest`, `name`, `export`, plus the boolean
+**Supported keys:** `source`, `dest`, `name`, `export`, `shell`, plus the boolean
 flags `export-links`, `incremental`, `parse-only`, `format-check`,
-`check-events`, `check-links` (a value of `true`/`1`/`yes`, case-insensitive,
+`check-events`, `check-links`, `clean` (a value of `true`/`1`/`yes`, case-insensitive,
 is truthy — anything else, including a missing key, is false), and the five
 stage keys `sync-code`, `sync-libs`, `sync-io`, `sync-events`, `build`.
 
@@ -663,9 +665,19 @@ undeclared items are only warned about).
 
 ## Troubleshooting
 
-- **A `devenv.exe` process is left running after a crash/interrupt:** the
-  tool always tries to close Visual Studio in a `finally`/`Dispose`, but if
-  you kill the tool itself mid-run, close it manually: `Get-Process devenv | Stop-Process -Force`.
+- **A `TcXaeShell.exe` / `devenv.exe` process is left running after a crash/interrupt:** the
+  tool always tries to close the shell in a `finally`/`Dispose`, but if
+  you kill the tool itself mid-run, close it manually: `Get-Process TcXaeShell,devenv | Stop-Process -Force`.
+  Note: piping the tool's output into PowerShell's `Select-Object -First N` kills the tool
+  early (and leaves the shell running) — capture the output first, then filter it.
+- **`Class not registered` when the DTE is created:** the requested shell's ProgID is
+  registered but its class or exe is not (seen with `VisualStudio.DTE.17.0` on XAE-only PCs).
+  Use the default (`--shell xae`); the tool prints which shell and exe it uses.
+- **No Yes/No dialogs:** every run turns on TwinCAT's silent mode
+  (`ITcAutomationSettings.SilentMode`), so TwinCAT answers its own questions with the default
+  (for example "Target System Process Image Update"). Your previous setting is restored on
+  exit, so your interactive XAE still asks. `DialogAutoDismisser` stays as a safety net for
+  Visual Studio message boxes such as "…`.tmc` not found".
 - **`RPC_E_SERVERCALL_RETRYLATER` / random COM failures:** these are
   automatically retried internally; if you still see one bubble up, an
   existing lingering `devenv.exe` from a previous run is the usual cause —
