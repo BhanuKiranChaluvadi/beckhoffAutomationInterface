@@ -683,6 +683,10 @@ Build, run and check a project without touching XAE by hand. Two targets only:
   expired 7-day trial license. `verify`/`activate` say so; `doctor` shows the expiry date.
   The trial license must be renewed in XAE by a person (it asks for a security code).
 
+**End-to-end check:** [`e2e/variant-sample.ps1`](e2e/variant-sample.ps1) runs the whole loop on
+`ST/VariantSample` — init, build all variants, then for each variant activate, verify it, and
+verify the other one (which must fail) — and compares every exit code with the expected one.
+
 ## Manifests (config data, not `.st` source)
 
 Alongside the `.st` files, a project folder can contain:

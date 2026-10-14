@@ -439,6 +439,8 @@ soon-expired (< 2 days) license.
 **Scope:** S
 
 ### Checkpoint 4: Closed loop
+- [x] End-to-end script `e2e/variant-sample.ps1`, fresh run 2026-10-14: **E2E PASSED, all 10 steps as expected**
+      (doctor, init, build all, activate without --yes, activate A, verify A ok, verify B fails, activate B, verify B ok, verify A fails)
 - [x] `ST/VariantSample`: `activate --yes` + `verify` pass for both variants on `UmRT_Default` (2026-10-14, see Task 13)
 - [x] `doctor` output reviewed (matches the observed runtime and license state)
 - [ ] Review with the user before Phase 5
