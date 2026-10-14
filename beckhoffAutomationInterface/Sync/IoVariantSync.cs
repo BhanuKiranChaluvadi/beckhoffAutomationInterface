@@ -54,6 +54,22 @@ namespace BeckhoffAutomationInterface.Sync
             return state;
         }
 
+        /// <summary>For export: tree path → the variants that HAVE the item, in project order.
+        /// Only items that are absent from at least one variant (an item enabled everywhere
+        /// needs no attribute).</summary>
+        internal static Dictionary<string, List<string>> VariantsByPath(
+            Dictionary<string, Dictionary<string, bool>> state, IReadOnlyList<string> projectVariants)
+        {
+            var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, Dictionary<string, bool>> item in state)
+            {
+                List<string> enabled = projectVariants.Where(v => !(item.Value.TryGetValue(v, out bool disabled) && disabled)).ToList();
+                if (enabled.Count < projectVariants.Count)
+                    result[item.Key] = enabled;
+            }
+            return result;
+        }
+
         /// <summary>What to change (pure, unit-tested).</summary>
         internal static IoVariantPlan Plan(Dictionary<string, Dictionary<string, bool>> current,
                                            IReadOnlyList<IoVariantItem> desired, IReadOnlyList<string> projectVariants)

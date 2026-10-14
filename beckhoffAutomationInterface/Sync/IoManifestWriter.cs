@@ -63,8 +63,13 @@ namespace BeckhoffAutomationInterface.Sync
         // and the following "_" in "EL2008_1.6", and \b would silently fail to match at all.
         static readonly Regex ProductCode = new Regex(@"^([A-Z]{2,3}\d{3,4}(?:-\d{3,4})?)");
 
-        public static XDocument Build(ITcSmTreeItem ioRoot, IoExportReport report)
+        /// <param name="variantsByPath">Per-variant I/O items (tree path → variants that have the
+        /// item), from IoVariantSync.VariantsByPath; written as Variants="A,B". Null/empty for a
+        /// project without per-variant I/O.</param>
+        public static XDocument Build(ITcSmTreeItem ioRoot, IoExportReport report,
+                                      IReadOnlyDictionary<string, List<string>> variantsByPath = null)
         {
+            variantsByPath = variantsByPath ?? new Dictionary<string, List<string>>();
             var root = new XElement("IoTree");
             string directPrefix = ioRoot.PathName + "^";
 
@@ -75,10 +80,12 @@ namespace BeckhoffAutomationInterface.Sync
                     continue; // not a genuine direct child (flat-enumerated terminal) — skip
 
                 var deviceEl = new XElement("Device", new XAttribute("Name", device.Name));
-                if (device.Disabled == DISABLED_STATE.SMDS_DISABLED)
+                if (variantsByPath.TryGetValue(device.PathName, out List<string> deviceVariants))
+                    deviceEl.Add(new XAttribute("Variants", string.Join(",", deviceVariants))); // Disabled is per variant then
+                else if (device.Disabled == DISABLED_STATE.SMDS_DISABLED)
                     deviceEl.Add(new XAttribute("Disabled", "true"));
 
-                AppendChildren(device, deviceEl, report);
+                AppendChildren(device, deviceEl, report, variantsByPath);
                 root.Add(deviceEl);
                 report.DeviceCount++;
             }
@@ -86,7 +93,8 @@ namespace BeckhoffAutomationInterface.Sync
             return new XDocument(new XDeclaration("1.0", "utf-8", null), root);
         }
 
-        static void AppendChildren(ITcSmTreeItem parent, XElement parentEl, IoExportReport report)
+        static void AppendChildren(ITcSmTreeItem parent, XElement parentEl, IoExportReport report,
+                                   IReadOnlyDictionary<string, List<string>> variantsByPath)
         {
             string directPrefix = parent.PathName + "^";
             for (int i = 1; i <= parent.ChildCount; i++)
@@ -102,11 +110,13 @@ namespace BeckhoffAutomationInterface.Sync
                     new XAttribute("Name", child.Name));
                 if (!string.IsNullOrEmpty(product))
                     el.Add(new XAttribute("Product", product));
+                if (variantsByPath.TryGetValue(child.PathName, out List<string> variants))
+                    el.Add(new XAttribute("Variants", string.Join(",", variants)));
 
                 if (derivedHeuristically)
                     report.ProductsToVerify.Add($"{child.Name} -> Product=\"{product}\" (from Name/ItemSubTypeName=\"{child.ItemSubTypeName}\")");
 
-                AppendChildren(child, el, report);
+                AppendChildren(child, el, report, variantsByPath);
                 parentEl.Add(el);
                 report.NodeCount++;
             }

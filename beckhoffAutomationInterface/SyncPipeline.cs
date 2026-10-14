@@ -223,8 +223,16 @@ namespace BeckhoffAutomationInterface
             {
                 _session.EnsureOpen();
                 var ioReport = new IoExportReport();
-                RetryOnBusy(() => IoManifestWriter.Build(_session.SysManager.LookupTreeItem("TIID"), ioReport).Save(_options.IoManifestPath),
-                    "reading IO tree");
+                RetryOnBusy(() =>
+                {
+                    // Per-variant items (Variants="A,B") from one ProjectVariantItems read.
+                    Dictionary<string, List<string>> variantsByPath = IoVariantSync.VariantsByPath(
+                        IoVariantSync.ReadState(((ITcSysManager14)_session.SysManager).ProjectVariantItems),
+                        VariantSyncEngine.ProjectVariants(_session.SysManager));
+                    IoManifestWriter.Build(_session.SysManager.LookupTreeItem("TIID"), ioReport, variantsByPath).Save(_options.IoManifestPath);
+                    if (variantsByPath.Count > 0)
+                        Console.WriteLine("{0}: {1} I/O item(s) exist in some variants only (Variants attribute).", Now(), variantsByPath.Count);
+                }, "reading IO tree");
                 Console.WriteLine("{0}: Exported IO tree ({1} device(s), {2} box/terminal node(s)) -> '{3}'.",
                     Now(), ioReport.DeviceCount, ioReport.NodeCount, _options.IoManifestPath);
                 if (ioReport.ProductsToVerify.Count > 0)

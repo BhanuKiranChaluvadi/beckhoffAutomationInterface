@@ -81,6 +81,38 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void Export_WritesTheVariantsThatHaveTheItem()
+        {
+            Dictionary<string, List<string>> map = IoVariantSync.VariantsByPath(IoVariantSync.ReadState(RealXml), Variants);
+
+            Assert.Equal(new[] { "MachineA" }, map[El2008]);
+        }
+
+        [Fact]
+        public void Export_ItemEnabledEverywhere_NeedsNoAttribute()
+        {
+            var state = new Dictionary<string, Dictionary<string, bool>>
+            {
+                [El2008] = new Dictionary<string, bool> { ["MachineA"] = false, ["MachineB"] = false },
+            };
+
+            Assert.Empty(IoVariantSync.VariantsByPath(state, Variants));
+        }
+
+        [Fact]
+        public void Export_Then_Plan_IsANoOp()
+        {
+            // Round trip on the model: what export writes is exactly what sync would keep.
+            var state = IoVariantSync.ReadState(RealXml);
+            var exported = IoVariantSync.VariantsByPath(state, Variants);
+            var items = new List<IoVariantItem>();
+            foreach (var e in exported)
+                items.Add(new IoVariantItem(e.Key, e.Value));
+
+            Assert.Empty(IoVariantSync.Plan(state, items, Variants).Changes);
+        }
+
+        [Fact]
         public void Plan_PerVariantItemMissingFromTheManifest_IsOnlyWarnedAbout()
         {
             IoVariantPlan plan = IoVariantSync.Plan(IoVariantSync.ReadState(RealXml), new IoVariantItem[0], Variants);

@@ -336,12 +336,12 @@ every variant and write the `Variants` attribute. This is needed for adopting an
 multi-variant project.
 
 **Acceptance criteria:**
-- [ ] Export → sync → export of the scratch project gives the same `io-devices.xml`
-- [ ] Items without `PvDisable` export without the attribute (no diff for current projects)
+- [x] Export → sync → export of the scratch project gives the same `io-devices.xml` (2026-10-14: byte-identical; sync: 0 changed)
+- [x] Items without `PvDisable` export without the attribute (no diff for current projects)
 
 **Verification:**
-- [ ] Unit test: state → attribute formatting
-- [ ] Manual: the round trip above
+- [x] Unit test: state → attribute, enabled-everywhere → no attribute, export→plan is a no-op
+- [x] Manual: the round trip above
 
 **Dependencies:** Task 10
 **Files likely touched:** `Sync/IoManifestWriter.cs`, `Sync/PlcObjectExporter.cs` (if shared), tests
