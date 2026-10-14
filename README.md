@@ -659,6 +659,27 @@ manifests (example: [`ST/VariantSample`](ST/VariantSample)):
 - Each build prints the PLC's message pragmas, e.g. `{warning 'VARIANT CHECK: MachineA'}`, as
   `[PLC MESSAGE]` lines, so the log shows which branch was compiled.
 
+### Different I/O per machine
+
+When machines of one family have slightly different I/O trees, keep **one** `io-devices.xml`
+and mark the items that only some machines have (example: [`ST/VariantIoSample`](ST/VariantIoSample)):
+
+```xml
+<Terminal Name="Term 3 (EL2008)" Product="EL2008" Variants="MachineA" />
+```
+
+- `Variants="A,B"` works on `<Device>`, `<Box>` and `<Terminal>`. No attribute = all variants.
+  A child cannot be in a variant where its parent is not. Names must be in `variants.xml`.
+- `sync io` enables the item in those variants and disables it in the others (TwinCAT variant
+  management: `PvDisable` + `Disabled` per variant). A second run reports "0 changed".
+- `export io` writes the attribute back; export → sync → export is byte-identical.
+- **Links are the same in every variant** — TwinCAT stores them once
+  ([spike](docs/ideas/variant-io-spike.md)). A link to an item that is disabled in a variant is
+  harmless, so declare `%I*`/`%Q*` variables for all machines and link them once. A `Variants`
+  attribute on `<Link>` is rejected.
+- A `%I*`/`%Q*` variable must be used by the code to get into the process image; an unused one
+  cannot be linked.
+
 ## Closed loop on a runtime
 
 Build, run and check a project without touching XAE by hand. Two targets only:

@@ -348,9 +348,11 @@ multi-variant project.
 **Scope:** M
 
 ### Checkpoint 3: Variant I/O
-- [ ] Scratch project: a terminal that exists for variant A only is disabled in B
-- [ ] `build --all-variants` passes. The export round trip has no diff.
-- [ ] README section "Different I/O per machine" written (manifest attribute + D7 PLC rule)
+- [x] Scratch project: a terminal that exists for variant A only is disabled in B
+- [x] `build --all-variants` passes. The export round trip has no diff.
+      (`e2e/variant-io-sample.ps1`, 2026-10-14: **E2E PASSED, all 8 checks as expected**;
+      regression `e2e/variant-sample.ps1`: 10/10 as expected)
+- [x] README section "Different I/O per machine" written (manifest attribute + D7 PLC rule)
 - [ ] Review with the user before Phase 4
 
 ---

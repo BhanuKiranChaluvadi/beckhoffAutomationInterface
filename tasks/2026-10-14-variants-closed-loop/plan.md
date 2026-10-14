@@ -75,7 +75,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 11: `export io` writes the `Variants` attribute back (round trip)
 
 ### Checkpoint 3: Variant I/O
-- [ ] Scratch project: a terminal that exists for variant A only is disabled in B. Both variants build. Export → sync → export gives the same file.
+- [x] Scratch project: a terminal that exists for variant A only is disabled in B. Both variants build. Export → sync → export gives the same file.
 
 ### Phase 4: Closed loop
 - [x] Task 12: ADS client + `expect.json` parser

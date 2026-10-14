@@ -48,14 +48,27 @@ namespace BeckhoffAutomationInterface
 
         public void Dispose()
         {
-            try
+            // A just-closed shell can hold a file or folder handle for a moment (seen once in the
+            // e2e run: the files were gone, the empty folder was not), so retry briefly.
+            for (int attempt = 1; ; attempt++)
             {
-                Directory.Delete(_root, recursive: true);
-            }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-            {
-                // A just-closed shell can hold a file for a moment; a temp folder left behind is harmless.
-                Console.WriteLine("{0}: Note: could not delete the shadow copy '{1}' ({2}).", Clock.Now(), _root, ex.Message);
+                try
+                {
+                    if (Directory.Exists(_root))
+                        Directory.Delete(_root, recursive: true);
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    if (attempt < 5)
+                    {
+                        System.Threading.Thread.Sleep(500);
+                        continue;
+                    }
+                    // A temp folder left behind is harmless.
+                    Console.WriteLine("{0}: Note: could not delete the shadow copy '{1}' ({2}).", Clock.Now(), _root, ex.Message);
+                    return;
+                }
             }
         }
 
