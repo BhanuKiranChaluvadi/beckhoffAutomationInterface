@@ -34,7 +34,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 | D3 | Variants live in a new source manifest, `variants.xml` (variants, groups, define mode). A new stage `sync variants` applies it. | Same "manifest is the source of truth" pattern as `libraries.xml` / `io-devices.xml` / `events.xml`. |
 | D4 | Define mode: **implicit** (`PvDefine = true`, `EnableImplicitDefines = true`). The variant name and its group names become PLC defines. Groups act as feature switches. | Proven in the prototype. No per-variant define lists to keep in sync. |
 | D5 | `build --variant <v>` and `build --all-variants`. A variant switch always does Clean + Build. | The compiler does not check code in a branch that is not selected, so all variants must build. Incremental builds can hide old results. |
-| D6 | Per-variant I/O: optional `Variants="A,B"` attribute on `<Device>`, `<Box>`, `<Terminal>` and `<Link>` in `io-devices.xml`. No attribute = all variants. The tool sets `PvDisable` on the item and disables it in the variants that do not list it. | Beckhoff's documented mechanism (`ITcSmTreeItem9.PvDisable` + `Disabled` per `CurrentProjectVariant`). Keeps one manifest. **Spike first (Task 7):** link behaviour per variant is not yet proven. |
+| D6 | Per-variant I/O: optional `Variants="A,B"` attribute on `<Device>`, `<Box>`, `<Terminal>` in `io-devices.xml` (links stay variant-neutral — spike result). No attribute = all variants. The tool sets `PvDisable` on the item and disables it in the variants that do not list it. | Beckhoff's documented mechanism (`ITcSmTreeItem9.PvDisable` + `Disabled` per `CurrentProjectVariant`). Keeps one manifest. **Spike first (Task 7):** link behaviour per variant is not yet proven. |
 | D7 | PLC code rule (documented, not enforced by the tool): declare `AT %I*` / `AT %Q*` variables for all machines. An unlinked variable is harmless. Use `{IF defined (...)}` around a declaration only when its type differs between machines. | Keeps the PLC symbol layout identical across variants. This is important for ADS clients. |
 | D8 | ADS through native `TcAdsDll.dll` (P/Invoke, `Common64` for this x64 tool). No NuGet package. | Proven in the prototype. No new dependency for a net48 tool. |
 | D9 | `verify` reads an expectations file (`expect.json`: symbol, type, expected value or condition). | Plain data. Can live next to the PLC source. No YAML dependency. |
@@ -69,7 +69,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] `ST/VariantSample` (port of the VariantDemo) builds both variants. Build log shows each variant's own branch.
 
 ### Phase 3: Variant I/O trees
-- [ ] Task 8: Spike — per-variant disable of I/O items and links (scratch project, findings only)
+- [x] Task 8: Spike — per-variant disable of I/O items and links (scratch project, findings only) → `docs/ideas/variant-io-spike.md`
 - [ ] Task 9: `Variants` attribute in `io-devices.xml` (parser + validation)
 - [ ] Task 10: `sync io` applies per-variant enable/disable
 - [ ] Task 11: `export io` writes the `Variants` attribute back (round trip)
@@ -82,6 +82,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 13: `activate` command
 - [x] Task 14: `verify` command
 - [x] Task 15: `doctor` command
+- [ ] Task 15b: UmRT activation disables I/O; Config hint checks the license (found in Task 8)
 
 ### Checkpoint 4: Closed loop
 - [x] `ST/VariantSample`: `activate` + `verify` pass for both variants on `UmRT_Default`.

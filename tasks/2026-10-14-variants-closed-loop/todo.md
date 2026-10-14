@@ -286,8 +286,9 @@ and two terminals:
 4. Record what the `.tsproj` / `.xti` store for each case, and what `ProduceXml` shows.
 
 **Acceptance criteria:**
-- [ ] A findings note answers: does a link to a disabled terminal break build or activation? Does `PvLink` work, and how?
-- [ ] Decision recorded: D6 as written, or the fallback (variant-neutral links)
+- [x] A findings note answers: does a link to a disabled terminal break build or activation? Does `PvLink` work, and how?
+      (`docs/ideas/variant-io-spike.md`: disabled terminal + link builds fine; links are global, PvLink does not make them per variant)
+- [x] Decision recorded: **fallback — variant-neutral links**; `Variants` attribute on Device/Box/Terminal only
 
 **Verification:** Manual, on a scratch project. Findings note added to `docs/ideas/variant-io-spike.md`.
 **Dependencies:** Task 6
@@ -295,7 +296,7 @@ and two terminals:
 **Scope:** S
 
 ## Task 9: `Variants` attribute in `io-devices.xml`
-**Description:** Extend `IoManifestParser` (devices, boxes, terminals, links) with an optional
+**Description:** Extend `IoManifestParser` (devices, boxes, terminals — NOT links, see the spike) with an optional
 `Variants="A,B"` attribute. Validate the names against `variants.xml`. A child cannot be present
 in a variant where its parent is absent.
 
@@ -436,6 +437,26 @@ soon-expired (< 2 days) license.
 
 **Dependencies:** Task 1
 **Files likely touched:** new `Doctor.cs`, `Program.cs`, tests
+**Scope:** S
+
+## Task 15b: UmRT activation without EtherCAT; honest "stays in Config" hint
+**Description:** Found in the Task 8 spike. UmRT has no EtherCAT adapter: a project with an enabled
+master activates but TwinCAT stays in Config, with a valid license — yet the hint blamed the license.
+(1) `activate --target umrt` disables every I/O device for that activation only (in memory; the
+project is attached read-only and never saved) and says so. (2) The hint checks the target's
+license: expired → license; valid → "an I/O device the target cannot start (e.g. EtherCAT on UmRT)".
+
+**Acceptance criteria:**
+- [ ] Spike project (enabled EtherCAT master) activates on UmRT, PLC reaches Run, `verify` passes
+- [ ] The `.tsproj` on disk is unchanged by the activation
+- [ ] With a valid license, the Config hint no longer blames the license
+
+**Verification:**
+- [ ] Unit test: hint text for expired / valid / no license
+- [ ] Manual: the spike project on UmRT
+
+**Dependencies:** Tasks 13, 15
+**Files likely touched:** `Runtime/RuntimeCommands.cs`, `Runtime/Doctor.cs`, tests
 **Scope:** S
 
 ### Checkpoint 4: Closed loop
