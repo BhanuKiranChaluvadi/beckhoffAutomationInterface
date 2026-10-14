@@ -31,3 +31,79 @@ Update README, `plc-ci-setup-guide.md`, `github-self-hosted-runner-install-steps
 ## Open Questions
 - Does `System.CommandLine` (or a hand-rolled dispatcher) fit better given this is a `net48` console app? Worth a short spike before committing to the parsing approach.
 - Exact subcommand/flag names (e.g. `sync all` vs `sync` with no sub-verb) — implementation detail for the execution pass, not this planning pass.
+
+---
+
+## Final CLI spec — DRAFT for review (Task 16, 2026-10-14)
+
+Status: **draft, waiting for the user's approval.** Nothing below is implemented yet, except the
+four commands marked *(new style already)*.
+
+### Principles
+
+1. **Two kinds of path, always named the same way.**
+   - `<source>` — the `.st` source folder (`ST/Shark`). Positional.
+   - `--project <path>` — the TwinCAT project: a `.tsproj` file, or a folder that contains exactly
+     one. For `build` and `activate` it is the positional argument instead (it is the only path).
+2. **One name per concept.** `--plc` (was `--plc-name`), `--project` (replaces `--tsproj`,
+   `--dest` + `--name`), `--variant`, `--target`, `--shell`.
+3. **Clean break.** The old flat flags (`--source`, `--tsproj`, `--sync-*`, `--export-*`,
+   `--build`, `--parse-only`, …) are removed, not aliased (decided in this document above).
+4. **Parser:** hand-rolled, one small parser per command (the `CommandArgs` class written for
+   `activate`/`verify`). Reason: net48 console app, ~10 commands, no new dependency;
+   `System.CommandLine` would add a pre-release-era dependency for little gain.
+
+### Commands
+
+| Command | Arguments | Notes |
+|---|---|---|
+| `build <project>` | `[--plc X] [--clean] [--variant V \| --all-variants]` | unchanged shape |
+| `activate <project>` | `--target umrt\|local [--variant V] [--plc X] [--yes] [--timeout S]` | *(new style already)* |
+| `verify` | `--target umrt\|local --expect <file> [--variant V] [--timeout S]` | *(new style already)* |
+| `doctor` | — | *(new style already)* |
+| `check parse\|format\|links <source>` | | |
+| `check events <source>` | `--project <project>` | |
+| `sync code\|libs\|io\|events\|variants\|all <source>` | `--project <project> [--incremental] [--confirm-delete] [--confirm-delete-io] [--ignore G]` | `--project` replaces `--dest` + `--name` |
+| `export code\|libs\|io\|events\|links\|all <source>` | `--project <project> [--plc X] [--overwrite]` | |
+| `export object <Name> <source>` | `--project <project> [--plc X]` | |
+| `init <source>` | `--into <folder> [--name X]` | creates `<folder>\<name>\<name>.sln`; the only command that creates a project |
+
+**Global options** (every command that opens TwinCAT): `--shell xae|vs2022`, `--config <dir>`,
+`--no-config`.
+
+### `.stconfig` keys
+
+`project=`, `plc=`, `shell=`, `clean=`, `incremental=` (and the existing `source=`).
+Safety-gated options stay command-line only: `--init`-like creation, `--confirm-delete`,
+`--confirm-delete-io`, `--overwrite`, `--yes`.
+
+### Legacy → new
+
+| Legacy | New |
+|---|---|
+| `--source X --sync-code --dest D --name N` | `sync code X --project D\N\N` (or the `.tsproj`) |
+| `--source X` (full run) | `sync all X --project …` |
+| `--tsproj P --plc-name N --build` | `build P --plc N` |
+| `--source X --parse-only` | `check parse X` |
+| `--source X --format-check` | `check format X` |
+| `--source X --check-links` | `check links X` |
+| `--source X --tsproj P --check-events` | `check events X --project P` |
+| `--source X --tsproj P --export-io` | `export io X --project P` |
+| `--source X --tsproj P --export <Obj>` | `export object <Obj> X --project P` |
+| `--source X --dest D --name N --init` | `init X --into D --name N` |
+| `--plc-name N` | `--plc N` |
+
+### Callers to update in the same change (Task 20)
+
+`README.md`, `docs/plc-ci-setup-guide.md`, `docs/github-self-hosted-runner-install-steps.md`,
+`githooks/run-incremental-sync.ps1` (today: `sync all $Source --dest $Dest --incremental`),
+`e2e/*.ps1`, and every `.stconfig` that uses `dest=`/`name=`.
+
+### Open points for the reviewer
+
+1. `sync … --project` instead of `--dest` + `--name`: OK? (One path instead of two, and the same
+   meaning as everywhere else.)
+2. `init --into <folder>`: OK, or keep `--dest`?
+3. `--plc` instead of `--plc-name`: OK?
+4. Remove the legacy flags in one release (clean break), as decided above — still OK now that
+   CI and the git hook use them?

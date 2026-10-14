@@ -499,7 +499,7 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 `System.CommandLine` vs a hand-rolled dispatcher (net48).
 
 **Acceptance criteria:**
-- [ ] Spec covers every command and option. No two options mean the same thing.
+- [x] Spec covers every command and option. No two options mean the same thing. (Draft in `docs/ideas/cli-subcommand-redesign.md`, 2026-10-14)
 - [ ] The user approves the spec
 
 **Verification:** Review only.
