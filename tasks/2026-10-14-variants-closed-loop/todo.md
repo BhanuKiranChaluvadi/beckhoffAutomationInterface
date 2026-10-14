@@ -117,12 +117,13 @@ output pane and print its error lines (`file(line) : error: text`). Map them thr
 `ErrorLocationResolver` like normal errors.
 
 **Acceptance criteria:**
-- [ ] A failed build never prints "BUILD FAILED — N error(s)" with empty texts
-- [ ] Lines from the output pane are parsed into file, line and text
+- [x] A failed build never prints "BUILD FAILED — N error(s)" with empty texts (fallback when the error list has none)
+- [x] Lines from the output pane are parsed into file, line and text
 
 **Verification:**
-- [ ] Unit test: parse sample output-pane lines (`...MAIN.TcPOU(13) : error: C0032: ...`)
+- [x] Unit test: parse sample output-pane lines (`BuildOutputParserTests`, real 4026 output)
 - [ ] Manual: hide the XAE window in a scratch run; the errors still print with text
+      (NOT DONE: the tool always shows the window, so this path needs a hidden-window run. Regression check done 2026-10-14: a normal failed build still prints both error texts.)
 
 **Dependencies:** Task 0
 **Files likely touched:** `Sync/BuildRunner.cs`, new `Sync/BuildOutputParser.cs`, tests
@@ -149,7 +150,7 @@ location.
 **Scope:** S
 
 ## Task 4c: Failed build exits with `-1`, not the documented `1`
-**Description:** Found during Task 3. A failed `build` returned exit code `-1`. README and the CI
+**Description:** Found during Task 3. A failed `build` returned exit code `-1` when run from the BeckhoffLib directory (errors mapped to `.st` files there), but `1` when run from a directory without `.st` files (raw locations). So the `-1` is probably raised on the error-mapping path — check it together with Task 4b. README and the CI
 guide promise `1` ("CI contract: build failure = exit code 1"). Find where `-1` comes from and
 make every failure path return `1`.
 

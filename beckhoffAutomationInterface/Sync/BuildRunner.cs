@@ -104,7 +104,37 @@ namespace BeckhoffAutomationInterface.Sync
                 else
                     report.Warnings.Add(buildError);
             }
+
+            if (ShouldUseOutputPane(report))
+            {
+                List<BuildError> fromPane = BuildOutputParser.ParseErrors(ReadBuildOutputPane(dte));
+                if (fromPane.Count > 0)
+                {
+                    report.Errors.Clear();
+                    report.Errors.AddRange(fromPane);
+                }
+            }
             return report;
+        }
+
+        /// <summary>A failed build whose error list has no usable text (empty, or only
+        /// blank descriptions — seen when the XAE window is hidden) falls back to the
+        /// "Build" output pane, which always holds the compiler messages.</summary>
+        internal static bool ShouldUseOutputPane(BuildReport report) =>
+            !report.Succeeded && report.Errors.All(e => string.IsNullOrWhiteSpace(e.Description));
+
+        static string ReadBuildOutputPane(EnvDTE80.DTE2 dte)
+        {
+            try
+            {
+                EnvDTE.OutputWindowPane pane = dte.ToolWindows.OutputWindow.OutputWindowPanes.Item("Build");
+                EnvDTE.TextDocument doc = pane.TextDocument;
+                return doc.StartPoint.CreateEditPoint().GetText(doc.EndPoint);
+            }
+            catch (Exception ex) when (ex is COMException || ex is ArgumentException)
+            {
+                return null; // no pane, or not readable (hidden window): keep the error list result
+            }
         }
 
         /// <summary>Polls SolutionBuild.BuildState until the running clean/build is done, so
