@@ -68,8 +68,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 int err = plc.TryReadState(out ushort state);
                 Console.WriteLine("  PLC (851):    {0}", err == 0 ? AdsClient.StateName(state) : "not running (ADS error " + err + ")");
             }
-            string info = Path.Combine(bootFolder, "CurrentProjectInfo.json");
-            Console.WriteLine("  Boot project: {0}", File.Exists(info) ? RuntimeTargets.DescribeProjectInfo(File.ReadAllText(info)) : "(none)");
+            Console.WriteLine("  Boot project: {0}", RuntimeTargets.DescribeBootFolder(bootFolder) ?? "(none)");
 
             List<string> licenses = licenseFolders.Where(Directory.Exists)
                 .SelectMany(d => Directory.GetFiles(d, "*.tclrs")).ToList();

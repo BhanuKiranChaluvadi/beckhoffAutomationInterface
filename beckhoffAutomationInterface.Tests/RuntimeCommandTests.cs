@@ -108,6 +108,16 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void BootProject_ShowsAPlcOnlyUpdate()   // SAS after Shark: only Plc/Port_851* rewritten (2026-10-14)
+        {
+            var info = new System.DateTime(2026, 10, 14, 21, 29, 32);
+            Assert.Equal("Shark (activated x)", RuntimeTargets.WithPlcUpdate("Shark (activated x)", info, info.AddSeconds(1)));
+            Assert.Equal("Shark (activated x)", RuntimeTargets.WithPlcUpdate("Shark (activated x)", info, null));
+            Assert.Equal("Shark (activated x); PLC (port 851) updated 2026-10-14T21:45:57",
+                RuntimeTargets.WithPlcUpdate("Shark (activated x)", info, new System.DateTime(2026, 10, 14, 21, 45, 57)));
+        }
+
+        [Fact]
         public void ActivateTakesPlc_TheOldPlcNameNamesIt()
         {
             string[] options = { "--target", "--variant", "--plc", "--timeout" };

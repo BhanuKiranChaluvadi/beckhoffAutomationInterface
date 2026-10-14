@@ -79,11 +79,25 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         /// <summary>"name (created …)" of the boot project on the target, or null when there is none.</summary>
-        public static string CurrentBootProject(string target)
+        public static string CurrentBootProject(string target) => DescribeBootFolder(BootFolder(target));
+
+        /// <summary>CurrentProjectInfo.json describes the last SYSTEM activation. When only the PLC
+        /// changed (same system configuration, for example two machines of one family with the
+        /// I/O disabled), TwinCAT rewrites just Plc/Port_851*, so the PLC boot time is added.</summary>
+        internal static string DescribeBootFolder(string bootFolder)
         {
-            string info = Path.Combine(BootFolder(target), "CurrentProjectInfo.json");
-            return File.Exists(info) ? DescribeProjectInfo(File.ReadAllText(info)) : null;
+            string info = Path.Combine(bootFolder, "CurrentProjectInfo.json");
+            if (!File.Exists(info))
+                return null;
+            string plcBoot = Path.Combine(bootFolder, "Plc", "Port_851_boot.tizip");
+            return WithPlcUpdate(DescribeProjectInfo(File.ReadAllText(info)), File.GetLastWriteTime(info),
+                File.Exists(plcBoot) ? File.GetLastWriteTime(plcBoot) : (DateTime?)null);
         }
+
+        internal static string WithPlcUpdate(string description, DateTime infoWritten, DateTime? plcBootWritten) =>
+            plcBootWritten.HasValue && plcBootWritten.Value > infoWritten.AddSeconds(30)
+                ? string.Format("{0}; PLC (port 851) updated {1:yyyy-MM-ddTHH:mm:ss}", description, plcBootWritten.Value)
+                : description;
 
         /// <summary>Reads &lt;Value Name="AmsNetId" Type="BIN"&gt;C7042AFA0101&lt;/Value&gt; → "199.4.42.250.1.1".</summary>
         internal static string NetIdFromTcRegistry(string xml)
