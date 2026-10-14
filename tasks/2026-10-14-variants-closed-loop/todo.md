@@ -372,7 +372,7 @@ for BOOL, INT, DINT, UDINT, REAL, LREAL and STRING(n). Add an `expect.json` pars
 
 **Verification:**
 - [x] Unit tests: parser, value decoding from byte arrays, comparisons (`ExpectationTests`, fake PLC incl. "wrong variant running")
-- [ ] Manual: read `MAIN.sMachine` from `UmRT_Default` while a variant runs — done through `verify` (Task 14)
+- [x] Manual: read `MAIN.sMachine` from `UmRT_Default` while a variant runs — done through `verify` (Task 14): "MachineB"
 
 **Dependencies:** Task 0
 **Files likely touched:** new `Runtime/AdsClient.cs`, new `Runtime/ExpectationFile.cs`, tests
@@ -404,11 +404,13 @@ for PLC Run. If TwinCAT stays in Config, print "runtime stays in Config — chec
 only if all pass.
 
 **Acceptance criteria:**
-- [ ] Same output as the prototype for `ST/variant-sample` (6 checks per variant)
-- [ ] The Config-mode case prints the license hint and exits non-zero
+- [x] Same output as the prototype for `ST/VariantSample` (6 checks per variant)
+      (2026-10-14 on UmRT running MachineB: `--variant MachineB` → 6/6 OK, VERIFY PASSED, exit 0;
+      `--variant MachineA` → 6/6 FAIL (wrong variant running), exit 1)
+- [x] The Config-mode case prints the license hint and exits non-zero (2026-10-14: `--target local`, TwinCAT: Config, exit 1)
 
 **Verification:**
-- [ ] Unit test: result aggregation and exit code
+- [x] Unit tests: expectation selection, targets, argument parsing (`RuntimeCommandTests`); checks in `ExpectationTests`
 - [ ] Manual: Checkpoint 4
 
 **Dependencies:** Task 12

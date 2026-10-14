@@ -78,9 +78,9 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [ ] Scratch project: a terminal that exists for variant A only is disabled in B. Both variants build. Export → sync → export gives the same file.
 
 ### Phase 4: Closed loop
-- [ ] Task 12: ADS client + `expect.json` parser
+- [x] Task 12: ADS client + `expect.json` parser
 - [ ] Task 13: `activate` command
-- [ ] Task 14: `verify` command
+- [x] Task 14: `verify` command
 - [ ] Task 15: `doctor` command
 
 ### Checkpoint 4: Closed loop
