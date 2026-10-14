@@ -183,6 +183,8 @@ namespace BeckhoffAutomationInterface.Runtime
             }
 
             string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc"));
+            int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
+            bool running = false;
             ProjectShadowCopy shadow = null;
             try
             {
@@ -263,6 +265,9 @@ namespace BeckhoffAutomationInterface.Runtime
                     Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
                     sys.StartRestartTwinCAT();
                     Console.WriteLine("{0}: TwinCAT restart requested.", Now());
+
+                    using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
+                        running = WaitForPlcRun(target, netId, plc, timeoutS);
                 }
             }
             finally
@@ -270,12 +275,8 @@ namespace BeckhoffAutomationInterface.Runtime
                 shadow?.Dispose(); // after the shell is closed
             }
 
-            int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
-            using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
-            {
-                if (!WaitForPlcRun(target, netId, plc, timeoutS))
-                    return 1;
-            }
+            if (!running)
+                return 1;
             Console.WriteLine("{0}: ACTIVATED — boot project now: {1}", Now(), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
             return 0;
         }
@@ -314,8 +315,10 @@ namespace BeckhoffAutomationInterface.Runtime
             if (licenseExpiry.Value <= now)
                 return string.Format("The license expired {0:yyyy-MM-dd HH:mm}. Renew it in XAE (SYSTEM > License > 7 Days Trial License).", licenseExpiry.Value);
             return (licenseExpiry.Value == DateTime.MaxValue ? "The license has no expiry" : string.Format("The license is valid until {0:yyyy-MM-dd}", licenseExpiry.Value))
-                + ", so the likely cause is a device the target cannot start (for example an EtherCAT master on UmRT, which"
-                + " has no EtherCAT adapter) or another configuration error. Check the target's TwinCAT event log.";
+                + ", but it may not hold every license this project needs: licensed libraries (for example"
+                + " Tc2_TempController, Tc2_ControllerToolbox, Tc2_ModbusRTU) need their own. Make a new 7-day trial license in"
+                + " XAE with THIS project open (SYSTEM > License). Other causes: a device the target cannot start (for example"
+                + " an EtherCAT master on UmRT, which has no EtherCAT adapter) or another configuration error.";
         }
 
         /// <summary>Waits for the PLC (port 851) to report Run. On timeout, says why TwinCAT may
