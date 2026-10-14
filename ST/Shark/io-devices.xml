@@ -78,8 +78,8 @@
 
   <Device Name="BH2" Disabled="true">
     <Box Name="Box 44 (CU2508)" Product="CU2508" />
-    <Box Name="EK1100_2.1" Product="EK1100" />
-    <Terminal Name="EL3174_2.1" Product="EL3174" CreatePlcType="Channel">
+    <Box Name="EK1100_2.1" Product="EK1100">
+      <Terminal Name="EL3174_2.1" Product="EL3174" CreatePlcType="Channel" />
       <Terminal Name="EL3174_2.2" Product="EL3174" CreatePlcType="Channel" />
       <Terminal Name="EL3174_2.3" Product="EL3174" CreatePlcType="Channel" />
       <Terminal Name="EL1008_2.1" Product="EL1008" />
@@ -99,7 +99,7 @@
       <Terminal Name="EL3443_2.1" Product="EL3443" />
       <Terminal Name="EL6022_2.1" Product="EL6022" />
       <Terminal Name="EL9011_2.1" Product="EL9011" />
-    </Terminal>
+    </Box>
   </Device>
 
   <Device Name="BH3" Disabled="true">
