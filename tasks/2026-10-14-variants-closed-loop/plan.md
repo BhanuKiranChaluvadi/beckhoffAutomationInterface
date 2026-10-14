@@ -109,7 +109,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 
 1. Expectations format: **JSON** (D9).
 2. `variants.xml` lives **next to the other manifests** in the source folder (D3).
-3. `activate` works on **any target**, but only with `--yes`, after it prints the current boot project (D10).
+3. `activate` has **two targets only** (user, 2026-10-14): `--target umrt` (UmRT_Default) or `--target local` (this PC's runtime). The AMS Net ID is read from the target's own config (UmRT: `...\Runtimes\UmRT_Default\3.1\TcRegistry.xml`; local: registry `TwinCAT3\System\AmsNetId`). Real machines are out of scope for now. `--yes` is still required (D10).
 4. `ST/variant-sample` (port of the VariantDemo) is **added** to this repo as the test fixture.
 5. Phase 5 (CLI cleanup) starts **after Checkpoint 4**, as ordered in this plan.
 6. `tasks/2026-07-15-reverse-export-scaffold/` **moved to `tasks/archive/`** (work done per git history).

@@ -291,7 +291,7 @@ for BOOL, INT, DINT, UDINT, REAL, LREAL and STRING(n). Add an `expect.json` pars
 **Scope:** M
 
 ## Task 13: `activate` command
-**Description:** `activate <project> --target <netId> [--variant v] [--yes]`. Steps: open the project,
+**Description:** `activate <project> --target umrt|local [--variant v] [--yes]`. Only these two targets (user decision). Resolve the AMS Net ID from the target's config (UmRT: `TcRegistry.xml` of `UmRT_Default`; local: registry `HKLM\SOFTWARE\WOW6432Node\Beckhoff\TwinCAT3\System\AmsNetId`). Steps: open the project,
 set the variant, `SetTargetNetId`, set boot autostart, clean + build, then print the project
 that is on the target now (ADS or `CurrentProjectInfo.json` for a local UmRT). Without `--yes`,
 stop here. With `--yes`: `ActivateConfiguration`, `StartRestartTwinCAT`.
@@ -302,7 +302,7 @@ stop here. With `--yes`: `ActivateConfiguration`, `StartRestartTwinCAT`.
 - [ ] A build failure stops before activation
 
 **Verification:**
-- [ ] Unit test: argument validation (no default target)
+- [ ] Unit test: target name → AMS Net ID resolution (`umrt`, `local`, unknown name rejected, no default target)
 - [ ] Manual: `UmRT_Default`. Back up its `Boot` folder first.
 
 **Dependencies:** Tasks 7, 12
@@ -310,7 +310,7 @@ stop here. With `--yes`: `ActivateConfiguration`, `StartRestartTwinCAT`.
 **Scope:** M
 
 ## Task 14: `verify` command
-**Description:** `verify --target <netId> --expect <file> --variant <v>`. Wait up to N seconds
+**Description:** `verify --target umrt|local --expect <file> --variant <v>`. Wait up to N seconds
 for PLC Run. If TwinCAT stays in Config, print "runtime stays in Config — check the license
 (`doctor`)". Then read and compare every expectation and print one OK/FAIL line each. Exit 0
 only if all pass.
