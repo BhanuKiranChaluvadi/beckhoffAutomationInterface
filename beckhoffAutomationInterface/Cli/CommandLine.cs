@@ -61,6 +61,27 @@ namespace BeckhoffAutomationInterface.Cli
             ["build"] = "use the command: build <project>",
         };
 
+        /// <summary>Flags of the old flat CLI, rejected with the replacement (README "Other flags").</summary>
+        static readonly Dictionary<string, string> RemovedOptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["--dest"] = "sync: --project <the .sln, its folder or the .tsproj>; init: --into <folder>",
+            ["--source"] = "pass the source folder as the path after the command",
+            ["--tsproj"] = "use --project (export, check events) or the path after 'build'",
+            ["--plc-name"] = "use --plc",
+            ["--init"] = "use the command: init <source> --into <folder>",
+            ["--parse-only"] = "use the command: check parse <source>",
+            ["--format-check"] = "use the command: check format <source>",
+            ["--check-links"] = "use the command: check links <source>",
+            ["--check-events"] = "use the command: check events <source> --project <project>",
+            ["--export"] = "use the command: export object <Name> <source> --project <project>",
+            ["--export-links"] = "use the command: export links <source> --project <project>",
+            ["--sync-code"] = "use the command: sync code …",
+            ["--sync-libs"] = "use the command: sync libs …",
+            ["--sync-io"] = "use the command: sync io …",
+            ["--sync-events"] = "use the command: sync events …",
+            ["--build"] = "use the command: build <project>",
+        };
+
         static readonly Dictionary<string, SyncStages> SyncModes = new Dictionary<string, SyncStages>
         {
             ["code"] = SyncStages.Code,
@@ -303,7 +324,8 @@ namespace BeckhoffAutomationInterface.Cli
                     else if (switchSet.Contains(arg))
                         a._switches.Add(arg);
                     else if (arg.StartsWith("--"))
-                        throw new UsageException("unknown option " + arg + ".", usage);
+                        throw new UsageException("unknown option " + arg + "."
+                            + (RemovedOptions.TryGetValue(arg, out string hint) ? " Removed - " + hint : ""), usage);
                     else
                         a.Positionals.Add(arg);
                 }

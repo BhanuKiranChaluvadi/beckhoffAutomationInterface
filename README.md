@@ -57,11 +57,11 @@ Run it directly, from anywhere, pointing at whatever folders you want:
 
 ```powershell
 # Full path, from any directory:
-C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
+C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
 
 # Or cd into the output folder first and use a relative path:
 cd beckhoffAutomationInterface\bin\Debug\net48
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
 ```
 
 **First time trying the tool at all?** Point it at the bundled `ST\sample`
@@ -71,12 +71,12 @@ throw away, and a good way to confirm your TwinCAT/Visual Studio COM setup
 works before running against anything real:
 
 ```powershell
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\sample" --dest "C:\some\scratch\folder"
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\sample" --into "C:\some\scratch\folder"
 ```
 
 `init` is required the first time (creates a new solution/TwinCAT/PLC
-project at `--dest`); every later run uses `sync` to reopen and reconcile
-the existing one — see [Commands](#commands) below for the full command
+project at `<into>\<name>\<name>.sln`); every later run uses `sync --project`
+to reopen and reconcile the existing one — see [Commands](#commands) below for the full command
 reference, and the sections further down for the manifests
 (`libraries.xml`/`io-devices.xml`/`events.xml`) and the typical day-to-day
 workflow.
@@ -105,10 +105,11 @@ folder in the TwinCAT project (e.g. `ST/Shark/App/Shark/PRG_MAIN.st` becomes
 
 Every subcommand takes the folder of `.st` files (or, for `build`, the PLC
 project itself) as a **positional path** — the first argument after the
-command name. `sync`/`init` also take `--dest`, the folder under which the
-TwinCAT solution lives; it defaults to `.` (the current directory) if
-omitted, as does the project/solution name (defaults to the source folder's
-own name).
+command name. `init` also takes `--into`, the folder under which it creates
+`<name>\<name>.sln` (`<name>` is the source folder's own name unless you pass
+`--name`). `sync` takes `--project`: the `.sln` that `init` created, its
+folder, or its `.tsproj`. `sync` only accepts a project that `init` created; it
+refuses an adopted project (use `build`/`export --project` for those).
 
 ```powershell
 cd beckhoffAutomationInterface\bin\Debug\net48
@@ -117,11 +118,11 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 # solution/TwinCAT/PLC project. Without it (i.e. using `sync`), a missing
 # solution is a hard error (exit 1) — so a mistyped path fails loudly
 # instead of silently building a fresh empty project.
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
+.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
 
 # Full run: sync .st files, libraries, IO devices/links, events, then build
 # and report. Takes several minutes for a large source tree.
-.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark" --dest "C:\path\to\TwinCAT-projects-root"
+.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark" --project "C:\path\to\TwinCAT-projects-root\Shark"
 
 # Bare invocation or --help prints usage and exits.
 .\beckhoffAutomationInterface.exe
@@ -138,6 +139,7 @@ compiles only, without syncing anything first.
 
 | Command | What it does | Visual Studio? |
 |---|---|---|
+| `init <path> --into <folder> [--name N]` | Create the solution/TwinCAT/PLC project, then run `sync all`. The only command that may create a project. | opens VS |
 | `sync code <path>` | `.st` files → PLC POUs (parse, lint, drift warnings, sync, save). No build. | opens VS |
 | `sync libs <path>` | `libraries.xml` → PLC library references. | opens VS |
 | `sync io <path>` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
@@ -146,8 +148,10 @@ compiles only, without syncing anything first.
 | `sync all <path>` | Every stage above, in order, then build. | opens VS |
 | `activate <path> --target umrt\|local [--variant V] --yes` | Build one variant and activate it on UmRT_Default or this PC's runtime, then wait for the PLC to reach Run. Without `--yes` it only shows the target's current boot project (changes nothing). See [Closed loop on a runtime](#closed-loop-on-a-runtime). | opens VS (only with `--yes`) |
 | `verify --target umrt\|local --expect <expect.json> [--variant V]` | Read live PLC values over ADS and compare them with `expect.json`. Exit 0 = all as expected. | no VS |
+| `check parse\|format\|links <path>` / `check events <path> --project P` | Fast checks without a build: parse the `.st` files, check their formatting, check `io-devices.xml` links, or check `events.xml` against the project. | `parse`/`format`/`links`: no VS |
+| `export code\|libs\|io\|events\|links\|all <path> --project P` / `export object <Name> <path> --project P` | Write the project's content back to `.st` and manifests (see [Reverse export](#reverse-export-adopting-an-existing-project)). | opens VS (except `events`) |
 | `doctor` | Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state, boot projects, license expiry. | no VS |
-| `build <path> [--plc-name X] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
+| `build <path> [--plc X] [--clean] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
 Stage execution order for `sync all`: variants → code → libs → io-tree → `.tsproj`
 edits (io templates + events) → io links → build. Visual Studio is opened
@@ -155,7 +159,7 @@ lazily by the first stage that needs it and closed for the `.tsproj` edits.
 
 > **Known gap:** unlike the old flat-flag CLI, `sync` runs exactly one mode
 > per invocation — there's no current way to compose an arbitrary subset
-> (e.g. the old `--sync-io --sync-events` in one run) other than `all`
+> (e.g. only `io` and `events` in one run) other than `all`
 > (every stage) or separate invocations (each reopening Visual Studio). Not
 > a blocker for the common cases below, but a real regression if you relied
 > on combining specific stages — see `docs/ideas/cli-subcommand-redesign.md`.
@@ -163,11 +167,11 @@ lazily by the first stage that needs it and closed for the `.tsproj` edits.
 ```powershell
 # One-time setup, in isolation (no code sync, no build) — two invocations,
 # each opening/closing Visual Studio once (see "Known gap" above):
-.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
-.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
+.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
 
 # Only push ST code changes into the project, don't compile:
-.\beckhoffAutomationInterface.exe sync code "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync code "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
 
 # CI pipeline: compile only, fail the job on errors. Works for a project
 # this tool manages via .st source, or an arbitrary native one (no .st tree,
@@ -179,49 +183,45 @@ if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 
 ### Other flags
 
-These apply within the subcommands noted; `--source`/`--dest`/`--name` and
-`--tsproj`/`--plc-name` from the old flat-flag CLI are now expressed as the
-positional path (see [Commands](#commands) above) plus `--project` for
-`check events`/`export`.
+These apply within the subcommands noted. An old flag (for example `--dest`,
+`--plc-name`, `--sync-code`) is an error that names the replacement.
 
 | Flag | Applies to | Default | Purpose |
 |---|---|---|---|
-| `--dest <path>` | `sync`, `init` | `.` | Folder under which `<name>/<name>.sln` lives |
-| `--name <name>` | `sync`, `init` | source path's folder name | Project/solution name |
-| `--project <path>` | `check events`, `export *` | — | The existing `.tsproj` file, or a folder containing exactly one, to attach to |
-| `--plc-name <name>` | `build`, `export *` | the `.tsproj`'s own base name | The real PLC project name inside `TIPC`, if it differs — check the project's own `.plcproj` file name if unsure |
+| `--into <folder>` | `init` | — (required) | Folder under which `<name>\<name>.sln` is created |
+| `--name <name>` | `init` | source path's folder name | Project/solution name |
+| `--project <path>` | `sync`, `check events`, `export *` | `project=` in `.stconfig` | `sync`: the `.sln` that `init` created, its folder, or its `.tsproj`. `check events`/`export`: any existing `.tsproj`, or a folder containing exactly one (attached read-only). |
+| `--plc <name>` | `build`, `export *` | the `.tsproj`'s own base name | The real PLC project name inside `TIPC`, if it differs — check the project's own `.plcproj` file name if unsure |
 | `--shell xae\|vs2022` | every command that opens TwinCAT | `xae` if installed, else `vs2022` | Which DTE shell to automate. `xae` = TwinCAT XAE shell (`TcXaeShell.DTE.17.0`, present on every TwinCAT engineering PC); `vs2022` = Visual Studio 2022 with TwinCAT integrated. The tool checks that the shell's exe exists before it starts. Also `shell=` in `.stconfig`. |
 | `--clean` | `build`, `sync` | off | Clean the solution before the build stage, so no stale result can pass. Also `clean=true` in `.stconfig`. |
 | `--ignore <glob>` | `sync`, `check` | none | Exclude `.st` files matching this glob pattern (repeatable). Merged with a `.stignore` file in the source folder, if present. |
 | `--incremental` | `sync` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires the source folder to be a git repo with a prior full sync's baseline. |
+| `--confirm-delete` | `sync code`, `sync all` | off | With `--incremental`: actually delete PLC objects whose `.st` file was deleted (see below). CLI-only. |
+| `--variant <V>` / `--all-variants` | `build`, `sync` | all variants | Build one variant only, or (the default) every variant in turn. See [Machine variants](#machine-variants). |
 | `--confirm-delete-io` | `sync io`, `sync all` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
 | `--overwrite` | `export *` | off | Allow reverse export to overwrite existing files in the source folder. Required when it already contains `.st` files or manifests (safe-by-default, CLI-only — never from `.stconfig`). |
 | `--config <path>` | all | source path's folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
 | `--no-config` | all | off | Ignore any `.stconfig` defaults file for this run only. |
-
-The single-object `--export <name>` legacy flag (write one live PLC object's
-text back to `.st`) has no subcommand equivalent yet.
 
 The `githooks/` incremental worker is unaffected by `init`: it always
 targets an already-bootstrapped project (the `sync` reopen path).
 
 ### Default options (`.stconfig`)
 
-Retyping `--dest`/`--name` (and other flags) on every invocation gets old
+Retyping `--project` (and other options) on every invocation gets old
 fast. Drop a `.stconfig` file at the **top level of your source folder** —
 the same place a `.stignore` file already lives — and the tool loads it
 automatically:
 
 ```
 # ST\Shark\.stconfig
-dest=C:\path\to\TwinCAT-projects-root
-name=Shark
+project=C:\path\to\TwinCAT-projects-root\Shark
 incremental=true
 ```
 
 ```powershell
 .\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark"
-# resolves dest/name/etc. from ST\Shark\.stconfig — only the source path still needed
+# resolves project/etc. from ST\Shark\.stconfig — only the source path still needed
 ```
 
 **Discovery order:** `--config <path>` (look there instead), else the
@@ -232,28 +232,20 @@ that point the source path hasn't been resolved from the command line yet.
 
 **Precedence:** an explicit command-line flag (or positional path) always
 wins; `.stconfig` only fills in what you didn't type; anything neither
-specifies falls back to today's hardcoded default (e.g. `.` for the source
-path/`--dest`).
+specifies falls back to the built-in default.
 
-**Supported keys:** `source`, `dest`, `name`, `export`, `shell`, plus the boolean
-flags `export-links`, `incremental`, `parse-only`, `format-check`,
-`check-events`, `check-links`, `clean` (a value of `true`/`1`/`yes`, case-insensitive,
-is truthy — anything else, including a missing key, is false), and the five
-stage keys `sync-code`, `sync-libs`, `sync-io`, `sync-events`, `build`.
+**Supported keys:** `source`, `project`, `shell`, and the booleans `clean`,
+`incremental` (`true`/`1`/`yes`, case-insensitive, is true; anything else is
+false). Any other key is an error. A key from the old CLI (`dest`, `name`,
+`plc-name`, `sync-code`, `parse-only`, ...) is an error that names its
+replacement, so an old file can never be half-applied by accident. The
+command (`sync code`, `check parse`, ...) always chooses the stage; a
+defaults file cannot.
 
-**Stage keys are a group, not five independent defaults:** if the command
-line names *any* `--sync-*`/`--build` flag, `.stconfig`'s stage keys are
-ignored entirely for that run — a config default like `build=true` can
-never silently tack an extra stage onto a one-off `--sync-code`-only
-invocation. If the command line names no stage flag at all, `.stconfig`'s
-stage keys are used instead (if any are set); if neither specifies one, the
-run defaults to `All`, same as always.
-
-**`--init`, `--confirm-delete`, and `--confirm-delete-io` can never come
-from `.stconfig`** — only a real command-line flag counts, full stop. These
-exist specifically so their effect can't happen by accident (see
-`--confirm-delete-io` above and `--init`'s rationale below); letting a
-defaults file set them would defeat the entire point.
+**`--confirm-delete`, `--confirm-delete-io`, `--overwrite`, `--plc` and
+`--yes` can never come from `.stconfig`.** Only a real command-line flag
+counts. They exist so that their effect cannot happen by accident; a
+defaults file that set them would defeat that.
 
 Pass `--no-config` to ignore `.stconfig` for one invocation without
 deleting or renaming it. When a `.stconfig` was actually loaded, the tool
@@ -265,7 +257,7 @@ annotated template — copy it to `.stconfig` in your launch folder and edit.
 
 ### Ignoring source files
 
-Add a `.stignore` file at the root of `--source` to permanently exclude `.st`
+Add a `.stignore` file at the root of the source folder to permanently exclude `.st`
 files from every sync (one gitignore-style glob pattern per line, `#`
 comments and blank lines allowed):
 
@@ -286,12 +278,12 @@ with no `/` only matches a *file* by that exact name, not a folder. Use
 See [`.stignore.example`](.stignore.example) at the repo root for a fuller,
 annotated sample covering each pattern shape (single file, name pattern,
 whole folder, one folder's direct files but not its subfolders, a folder at
-any depth) — copy it to `.stignore` in your `--source` folder and edit.
+any depth) — copy it to `.stignore` in your source folder and edit.
 
 ### Incremental sync
 
 Every successful `.st` sync (full or `--incremental`) records the current git
-commit SHA in `.st-sync-state` at the root of `--source` (requires `--source`
+commit SHA in `.st-sync-state` at the root of the source folder (requires it
 to be inside a git repo; skipped silently otherwise). A later run with
 `--incremental` reads that SHA, computes `git diff --name-status` against it,
 and parses/syncs ONLY the changed `.st` files instead of the whole folder —
@@ -299,10 +291,10 @@ much faster once a project has many objects.
 
 ```powershell
 # First run: full sync, establishes the baseline in .st-sync-state
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
 
 # Later runs, after committing .st changes: only re-syncs what changed
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark" --incremental
 ```
 
 By default, `git diff`-reported deletions are only **warned** about, never
@@ -311,7 +303,7 @@ PLC object(s) are left in place. Add `--confirm-delete` to actually remove
 them:
 
 ```powershell
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT" --incremental --confirm-delete
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark" --incremental --confirm-delete
 ```
 
 `--confirm-delete` is conservative by design: it only deletes an object when
@@ -339,9 +331,9 @@ The hook (`githooks/post-commit`) is a fast no-op unless the commit touched
 detached. That script assumes the TwinCAT project already exists at
 `C:\Users\<you>\Documents\TwinCAT` with the ST source at `<repo>\ST\Shark` —
 override with `$env:BECKHOFF_TWINCAT_DEST` / `$env:BECKHOFF_ST_SOURCE` if
-different. It does **not** pass `--name`, so the project name defaults to
-the source folder's own directory name ("Shark") — this must match whatever
-name the project was originally bootstrapped with.
+different. It passes `--project <dest>\<source folder name>` (e.g.
+`...\TwinCAT\Shark`), so the project must have been created with that name.
+A wrong path fails loudly ("project not found"); it never creates a project.
 
 ### Exporting manual PLC-side edits
 
@@ -402,25 +394,25 @@ project's PLC-project name (inside `TIPC`) commonly differs from its
 
 | Flag | Purpose |
 |---|---|
-| `--project <path>` | The `.tsproj` file (or a folder containing exactly one) to attach to (read-only, never saved) — no `--dest`/`--name`/`.sln` resolution involved. Works whether or not the project has a `.sln` at all. |
-| `--plc-name <name>` | The real PLC-project name inside `TIPC`, if it differs from the `.tsproj` file's own base name — check the project's own `.plcproj` file name if unsure. |
+| `--project <path>` | The `.tsproj` file (or a folder containing exactly one) to attach to (read-only, never saved) — no `.sln` resolution involved. Works whether or not the project has a `.sln` at all. |
+| `--plc <name>` | The real PLC-project name inside `TIPC`, if it differs from the `.tsproj` file's own base name — check the project's own `.plcproj` file name if unsure. |
 
 ```powershell
-# A project with NO .sln at all (check its own .plcproj file name for --plc-name):
-.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\SomeProject\SomeProject.tsproj" --plc-name RealPlcProjectName
+# A project with NO .sln at all (check its own .plcproj file name for --plc):
+.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\SomeProject\SomeProject.tsproj" --plc RealPlcProjectName
 
 # A project that DOES have a matching .sln, but a differently-named PLC project inside:
-.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\Projects\SomeProject" --plc-name RealPlcProjectName
+.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\Projects\SomeProject" --plc RealPlcProjectName
 ```
 
-**`--project`/`--plc-name` also work with `build` alone — no `export`
+**`--plc` also works with `build` alone — no `export`
 required.** This is the path for CI compiling a PLC project that's natively
 hosted (its own `.tsproj`/`.plcproj` checked into git directly, no `.st`
 source tree, possibly no `.sln` at all) rather than one this tool manages:
 
 ```powershell
 # CI: compile an arbitrary pre-existing project, no reverse export involved.
-.\beckhoffAutomationInterface.exe build "C:\...\SomeProject" --plc-name RealPlcProjectName
+.\beckhoffAutomationInterface.exe build "C:\...\SomeProject" --plc RealPlcProjectName
 if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
 ```
 
@@ -439,9 +431,8 @@ it's safe to `git checkout --` away.
 **Safety — `--overwrite`:** to avoid clobbering hand-edited source, reverse
 export **refuses** (exit 1) if the source path already contains any `.st`
 files or manifests. Pass `--overwrite` to regenerate in place, or point the
-source path at an empty folder. Like `--init`/`--confirm-delete*`,
-`--overwrite`, `--project`, and `--plc-name` are all CLI-only and never read
-from `.stconfig`. Reverse export also requires the project to already exist
+source path at an empty folder. `--overwrite` and `--plc` are CLI-only and
+never read from `.stconfig`. Reverse export also requires the project to already exist
 (it never bootstraps — a missing project is a hard error, since there is
 nothing to export from).
 
@@ -611,22 +602,22 @@ possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
 
 ```powershell
 # 0. First time only: bootstrap the TwinCAT solution + one-time project setup
-.\beckhoffAutomationInterface.exe init "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
-.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
-.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe init "C:\...\ST\Shark" --into "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
+.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
 
 # 1. Fast syntax check after editing .st files (no Visual Studio, ~instant)
 .\beckhoffAutomationInterface.exe check parse "C:\...\ST\Shark"
 
 # 2. Full sync + build (reopens and reconciles the existing project)
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --dest "C:\...\TwinCAT"
+.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
 
 # 3. Fix compile errors reported, then iterate quickly without re-syncing
 .\beckhoffAutomationInterface.exe build "C:\...\TwinCAT\Shark"
 ```
 
-> **Safety note:** `--dest` + the project name determine exactly which
-> `.sln`/`.tsproj` are targeted. Creating a NEW project always requires
+> **Safety note:** `--project` names exactly which `.sln`/`.tsproj` is
+> targeted, and `sync` only accepts a project that `init` created. Creating a NEW project always requires
 > `init` (not `sync`) — a missing solution under `sync` is a hard error, so
 > a mistyped path can never silently bootstrap (or bury a duplicate project
 > inside) the wrong location.

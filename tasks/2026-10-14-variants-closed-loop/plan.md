@@ -92,8 +92,8 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 16: CLI spec (command table, option names, legacy → new map) — review with the user
 - [x] Task 17: New parser for `build`/`activate`/`verify`/`doctor`
 - [x] Task 18: New parser for `check` / `export`
-- [ ] Task 19: New parser for `sync` / `init`; remove legacy flags
-- [ ] Task 20: Update README, CI guide, runner guide, `githooks/*.ps1`
+- [x] Task 19: New parser for `sync` / `init`; remove legacy flags
+- [x] Task 20: Update README, CI guide, runner guide, `githooks/*.ps1`
 
 ### Checkpoint 5: Complete
 - [ ] All tests pass. No legacy flag remains. Docs and hooks use the new syntax.

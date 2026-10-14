@@ -72,7 +72,7 @@ sequenceDiagram
     GH->>GH: workflow triggered (on push to main/master)
     GH-->>Runner: job dispatched (runner polls GitHub — no inbound connection)
     Runner->>GH: actions/checkout@v4 (pulls the pushed commit)
-    Runner->>Tool: beckhoffAutomationInterface.exe build &lt;path&gt; [--plc-name ...]
+    Runner->>Tool: beckhoffAutomationInterface.exe build &lt;path&gt; [--plc ...]
     Tool->>VS: open project via VisualStudio.DTE.17.0 (COM)
     VS->>TC: Rebuild PLC project
     TC-->>VS: compile result + error list
@@ -191,9 +191,9 @@ real one and pass it explicitly:
 
 ```powershell
 Get-ChildItem -Recurse -Filter *.plcproj -Path "C:\ci\plc-checkout" | Select-Object FullName
-# --plc-name = that .plcproj file's name WITHOUT the extension
+# --plc = that .plcproj file's name WITHOUT the extension
 
-.\beckhoffAutomationInterface.exe build "C:\ci\plc-checkout" --plc-name "<RealPlcName>"
+.\beckhoffAutomationInterface.exe build "C:\ci\plc-checkout" --plc "<RealPlcName>"
 ```
 
 This mode never calls `Project.Save()`/`Solution.SaveAs()` — it's safe to
@@ -332,9 +332,9 @@ jobs:
         shell: powershell
         run: |
           $tool = "C:\tools\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe"
-          $plcName = "<RealPlcName>"   # from Step 4.2 — omit --plc-name entirely if not needed
+          $plcName = "<RealPlcName>"   # from Step 4.2 — omit --plc entirely if not needed
 
-          & $tool build "$env:GITHUB_WORKSPACE" --plc-name $plcName
+          & $tool build "$env:GITHUB_WORKSPACE" --plc $plcName
           if ($LASTEXITCODE -ne 0) {
             throw "PLC build failed (exit code $LASTEXITCODE)"
           }

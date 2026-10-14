@@ -180,18 +180,18 @@ step GitHub shows you, but skip it — see Part 4.
             shell: powershell
             run: |
               $tool = "C:\tools\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe"
-              $plcName = "<RealPlcName>"   # omit --plc-name below entirely if not needed
+              $plcName = "<RealPlcName>"   # omit --plc below entirely if not needed
 
-              & $tool build "$env:GITHUB_WORKSPACE" --plc-name $plcName
+              & $tool build "$env:GITHUB_WORKSPACE" --plc $plcName
               if ($LASTEXITCODE -ne 0) {
                 throw "PLC build failed (exit code $LASTEXITCODE)"
               }
     ```
 28. `build` finds the checked-out repo's single `.tsproj` automatically —
-    only replace `<RealPlcName>` (or drop `--plc-name` entirely if the
+    only replace `<RealPlcName>` (or drop `--plc` entirely if the
     `.tsproj`'s own base name already matches). If you need to check: on the
     bench PC, inside a checkout of the PLC repo, run
-    `Get-ChildItem -Recurse -Filter *.plcproj` — `--plc-name` is that file's
+    `Get-ChildItem -Recurse -Filter *.plcproj` — `--plc` is that file's
     name **without** the extension.
 29. Confirm `C:\tools\beckhoffAutomationInterface\...\beckhoffAutomationInterface.exe`
     already exists on the bench PC (this tool, built once — see

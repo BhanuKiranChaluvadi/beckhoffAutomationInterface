@@ -182,6 +182,15 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void OldFlags_NameTheirReplacement()
+        {
+            Rejected("Removed - sync: --project", () => Parse("sync", "all", _source, "--dest", _dir));
+            Rejected("Removed - use --plc", () => Parse("build", _tsproj, "--plc-name", "X"));
+            Rejected("Removed - use the command: check parse", () => Parse("check", "format", _source, "--parse-only"));
+            Rejected("unknown option --colour.", () => Parse("build", _tsproj, "--colour"));   // no hint for a never-known flag
+        }
+
+        [Fact]
         public void Sync_ProjectAndIncrementalFromStConfig()
         {
             File.WriteAllText(Path.Combine(_source, ".stconfig"), "project=" + _ownedSln + "\nincremental=true\n");

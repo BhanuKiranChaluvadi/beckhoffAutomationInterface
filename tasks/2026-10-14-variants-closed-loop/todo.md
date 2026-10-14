@@ -529,8 +529,8 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 
 ## Task 19: New parser for `sync` and `init`; remove legacy flags
 **Acceptance criteria:**
-- [ ] `sync` and `init` follow the spec. `.stconfig` keys still work (renamed keys documented).
-- [ ] No legacy flat flag is accepted. `RunOptions` keeps only the options model.
+- [x] `sync` and `init` follow the spec. `.stconfig` keys still work (renamed keys documented).
+- [x] No legacy flat flag is accepted. `RunOptions` keeps only the options model.
 
 **Verification:** Unit tests. `RunOptionsTests` / `RunOptionsConfigFileTests` updated.
 **Dependencies:** Task 18
@@ -539,9 +539,9 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 
 ## Task 20: Docs and hooks
 **Acceptance criteria:**
-- [ ] README, `docs/plc-ci-setup-guide.md`, `docs/github-self-hosted-runner-install-steps.md`
+- [x] README, `docs/plc-ci-setup-guide.md`, `docs/github-self-hosted-runner-install-steps.md`
       and `githooks/run-incremental-sync.ps1` use only the new syntax
-- [ ] `grep` finds no legacy flag in docs or scripts
+- [x] `grep` finds no legacy flag in docs or scripts
 
 **Verification:** `grep -rn -- "--source\|--tsproj\|--sync-\|--export-" README.md docs githooks` returns nothing
 **Dependencies:** Task 19
@@ -549,7 +549,7 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 **Scope:** M
 
 ### Checkpoint 5: Complete
-- [ ] All tests pass. No legacy flag remains.
+- [x] All tests pass. No legacy flag remains.
 - [ ] Bench PC full loop: `sync all` → `build --all-variants` → `activate --yes` → `verify`
 - [ ] Ready for review
 

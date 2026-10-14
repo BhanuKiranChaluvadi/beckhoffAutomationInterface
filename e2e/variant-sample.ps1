@@ -42,7 +42,7 @@ function Step([string] $name, [int] $expectedExit, [string[]] $argv) {
 Push-Location $Work
 try {
     Step 'doctor'                       0 @('doctor')
-    Step 'init (sync all + build all)'  0 @('init', $source, '--dest', $Work)
+    Step 'init (sync all + build all)'  0 @('init', $source, '--into', $Work)
     $tsproj = (Get-ChildItem $Work -Recurse -Filter 'VariantSample.tsproj' | Select-Object -First 1).FullName
     Step 'build (all variants)'         0 @('build', $tsproj)
     Step 'activate without --yes'       1 @('activate', $tsproj, '--target', $Target, '--variant', 'MachineA')

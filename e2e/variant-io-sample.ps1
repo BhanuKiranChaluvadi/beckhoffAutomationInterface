@@ -37,12 +37,12 @@ function Step([string] $label, [int] $expectedExit, [string] $mustContain, [stri
 
 Push-Location $Work
 try {
-    Step 'init (sync all + build all)'   0 'Per-variant IO: 1 item(s), 1 changed'   @('init', $source, '--dest', $Work, '--name', $name)
-    Step 'sync io again'                 0 'Per-variant IO: 1 item(s), 0 changed'   @('sync', 'io', $source, '--dest', $Work, '--name', $name)
+    Step 'init (sync all + build all)'   0 'Per-variant IO: 1 item(s), 1 changed'   @('init', $source, '--into', $Work, '--name', $name)
+    Step 'sync io again'                 0 'Per-variant IO: 1 item(s), 0 changed'   @('sync', 'io', $source, '--project', (Join-Path $Work $name))
     $tsproj = (Get-ChildItem $Work -Recurse -Filter "$name.tsproj" | Select-Object -First 1).FullName
     Step 'export io'                     0 '1 I/O item(s) exist in some variants only' @('export', 'io', "$Work\export1", '--project', $tsproj)
     Copy-Item (Join-Path $source 'variants.xml') "$Work\export1"
-    Step 'sync io from the export'       0 'Per-variant IO: 1 item(s), 0 changed'   @('sync', 'io', "$Work\export1", '--dest', $Work, '--name', $name)
+    Step 'sync io from the export'       0 'Per-variant IO: 1 item(s), 0 changed'   @('sync', 'io', "$Work\export1", '--project', (Join-Path $Work $name))
     Step 'export io again'               0 'Exported IO tree'                       @('export', 'io', "$Work\export2", '--project', $tsproj)
     Step 'build (all variants)'          0 'ALL 2 VARIANT(S) PASSED'                @('build', $tsproj)
 }

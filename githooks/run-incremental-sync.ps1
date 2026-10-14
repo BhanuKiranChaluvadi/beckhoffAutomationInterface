@@ -7,12 +7,10 @@
 # TwinCAT project or ST source don't live at the defaults below (also used to point
 # this script at a disposable scratch project for testing, without editing the script).
 #
-# IMPORTANT: no --name is passed, so the project name defaults to the source folder's
-# own directory name (RunOptions.Parse's convention) - this MUST match whatever name
-# the project was originally bootstrapped with (e.g. "Shark" for ST/Shark), or this
-# script will silently bootstrap a SEPARATE new project instead of updating the
-# existing one. If you ever bootstrap with an explicit --name that differs from the
-# source folder's name, add the matching --name below.
+# The project is <Dest>\<name>\<name>.sln, where <name> is the source folder's own name
+# (what `init` uses unless it was given --name). If the project was bootstrapped with a
+# different --name, set $Project to <Dest>\<that name>. A wrong path fails loudly
+# ("project not found") - it never bootstraps a new project.
 #
 # Uses `sync all` (not `init`) - a missing project here is a hard error, not a silent
 # bootstrap, exactly like the old --incremental-without---init behavior.
@@ -31,7 +29,8 @@ if (-not (Test-Path $Exe)) {
     exit 0
 }
 
-& $Exe sync all $Source --dest $Dest --incremental *> $LogFile
+$Project = Join-Path $Dest (Split-Path $Source -Leaf)
+& $Exe sync all $Source --project $Project --incremental *> $LogFile
 $exitCode = $LASTEXITCODE
 
 Add-Content $LogFile ""
