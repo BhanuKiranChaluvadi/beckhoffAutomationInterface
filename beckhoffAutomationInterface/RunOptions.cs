@@ -393,6 +393,20 @@ namespace BeckhoffAutomationInterface
                 allVariants: args.Contains("--all-variants"));
         }
 
+        static readonly System.Text.RegularExpressions.Regex PlcIdentifier =
+            new System.Text.RegularExpressions.Regex(@"^[A-Za-z_][A-Za-z0-9_]*$");
+
+        /// <summary>Null when TwinCAT accepts the PLC project name, else a message. The name
+        /// defaults to the source folder's name, so a folder like "variant-sample" fails.</summary>
+        public static string PlcProjectNameProblem(string plcProjectName)
+        {
+            if (plcProjectName != null && PlcIdentifier.IsMatch(plcProjectName))
+                return null;
+            return string.Format(
+                "PLC project name '{0}' is not valid: TwinCAT needs letters, digits and '_' only, not starting with a digit. " +
+                "The name comes from the source folder unless you pass --name <ValidName>.", plcProjectName);
+        }
+
         static string GetOption(string[] args, params string[] flags)
         {
             foreach (string flag in flags)

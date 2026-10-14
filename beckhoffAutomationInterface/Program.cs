@@ -733,6 +733,18 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
+            // A project created or reopened BY NAME needs a name TwinCAT accepts. Check it
+            // here, before a ~25 s shell start ends in "Cannot create new PLC project".
+            if (!options.IsReverseExport && options.ExistingTsprojPath == null)
+            {
+                string nameProblem = RunOptions.PlcProjectNameProblem(options.PlcProjectName);
+                if (nameProblem != null)
+                {
+                    Console.Error.WriteLine("ERROR: " + nameProblem);
+                    Environment.Exit(1);
+                }
+            }
+
             // The Visual Studio session is owned by TwinCatSession: stages open it
             // lazily and the pipeline legitimately closes/reopens it mid-run for the
             // direct .tsproj edits — `using` here just guarantees final disposal.

@@ -254,12 +254,12 @@ any variant fails. If the project has variants but `PvDefine` is off, fail with 
 Validate the name (PLC identifier) in `init`/`sync` before the shell starts, and suggest `--name`.
 
 **Acceptance criteria:**
-- [ ] `init <folder-with-hyphen>` fails in under a second with a clear message and exit 1, no XAE started
-- [ ] `--name ValidName` works around it
+- [x] `init <folder-with-hyphen>` fails in under a second with a clear message and exit 1, no XAE started (2026-10-14: 0.2 s)
+- [x] `--name ValidName` works around it (init + 2 variants built)
 
 **Verification:**
-- [ ] Unit test: name validation
-- [ ] Manual: repeat the Task 6 failure case
+- [x] Unit test: name validation (`PlcProjectNameTests`)
+- [x] Manual: repeat the Task 6 failure case (`check parse` on that folder still works)
 
 **Dependencies:** Task 0
 **Files likely touched:** `Program.cs` or `RunOptions.cs`, tests
