@@ -66,7 +66,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 7b: `init` rejects an invalid project name before XAE starts (found in Task 6)
 
 ### Checkpoint 2: Variant builds
-- [ ] `ST/VariantSample` (port of the VariantDemo) builds both variants. Build log shows each variant's own branch.
+- [x] `ST/VariantSample` (port of the VariantDemo) builds both variants. Build log shows each variant's own branch.
 
 ### Phase 3: Variant I/O trees
 - [ ] Task 8: Spike — per-variant disable of I/O items and links (scratch project, findings only)
@@ -108,6 +108,12 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 | COM calls fail while XAE is busy; modal dialogs block. | Medium | Keep the existing message filter and `DialogAutoDismisser`. Add new dialogs only after they are seen in a real run. |
 | COM behaviour cannot be unit-tested. | Medium | Keep COM code thin. Unit-test the pure parts (resolvers, parsers, comparisons). Verify COM paths manually on scratch projects, never on `ST/Shark` or a live machine project. |
 | CLI clean break breaks teammates' scripts. | Medium | Task 16 review first. Update every doc and hook in the same pass (Task 20). |
+
+## Order change (2026-10-14)
+
+Phase 4 (closed loop on the runtime) runs **before** Phase 3 (variant I/O trees). Reason: the
+user asked for a closed loop that is tested end to end; Phase 4 depends only on Phase 2, while
+Phase 3 starts with a spike (Task 8) whose result is still open.
 
 ## Decisions on the open questions (2026-10-14, user: "follow recommendations")
 
