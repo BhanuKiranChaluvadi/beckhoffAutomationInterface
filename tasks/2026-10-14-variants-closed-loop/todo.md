@@ -318,13 +318,13 @@ project variant set `Disabled` to enabled or disabled. Restore the original `Cur
 at the end. Apply link rules from the Task 8 decision. Report the changes per variant.
 
 **Acceptance criteria:**
-- [ ] The scratch terminal is enabled in A and disabled in B after `sync io`
-- [ ] A second run reports no change
-- [ ] Items without the attribute are untouched (no `PvDisable` set)
+- [x] The scratch terminal is enabled in A and disabled in B after `sync io` (`ST/VariantIoSample`, read back from TwinCAT)
+- [x] A second run reports no change ("1 item(s), 0 changed")
+- [x] Items without the attribute are untouched (no `PvDisable` set) — only the EL2008 appears in `ProjectVariantItems`
 
 **Verification:**
-- [ ] Unit test: plan logic (manifest + current state → per-variant actions)
-- [ ] Manual: scratch project; `build --all-variants` passes after `sync io`
+- [x] Unit test: plan logic (manifest + current state → per-variant actions), with the real spike XML (`IoVariantSyncTests`)
+- [x] Manual: scratch project; `build --all-variants` passes after `sync io`; moving the terminal to MachineB → 1 change, state flipped
 
 **Dependencies:** Tasks 9, 6
 **Files likely touched:** `Sync/IoSyncEngine.cs`, `Sync/VariableLinkEngine.cs` (if links), `SyncPipeline.cs`, tests

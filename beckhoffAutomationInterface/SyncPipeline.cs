@@ -434,10 +434,55 @@ namespace BeckhoffAutomationInterface
             PrintLines("~ state    ", ioReport.StateChanged);
             PrintLines("!! WARNING ", ioReport.Warnings);
 
+            SyncIoVariants(desiredIoDevices);
+
             _session.Project.Save();
             Console.WriteLine("{0}: IO sync complete ({1} created, {2} deleted, {3} state change(s), {4} warning(s)).",
                 Now(), ioReport.Created.Count, ioReport.Deleted.Count, ioReport.StateChanged.Count, ioReport.Warnings.Count);
             return desiredIoDevices;
+        }
+
+        /// <summary>Io stage, per-variant part: devices/boxes/terminals with a Variants
+        /// attribute are enabled in those project variants and disabled in the others
+        /// (see IoVariantSync). Nothing to do when no item has the attribute.</summary>
+        void SyncIoVariants(List<IoDeviceSpec> desiredIoDevices)
+        {
+            List<IoVariantItem> items = IoVariantRules.ItemsWithVariants(desiredIoDevices);
+            if (items.Count == 0)
+                return;
+
+            VariantManifest variants;
+            try
+            {
+                variants = VariantManifestParser.Parse(_options.VariantManifestPath);
+            }
+            catch (VariantManifestException ex)
+            {
+                Console.WriteLine("{0}: IO VARIANTS FAILED — {1}", Now(), ex.Message);
+                Environment.ExitCode = 1;
+                return;
+            }
+            List<string> problems = IoVariantRules.Validate(desiredIoDevices, variants);
+            IReadOnlyList<string> projectVariants = VariantSyncEngine.ProjectVariants(_session.SysManager);
+            if (problems.Count == 0)
+                problems.AddRange(variants.Variants.Where(v => !projectVariants.Contains(v))
+                    .Select(v => string.Format("variant '{0}' is not in the project yet — run 'sync variants' first.", v)));
+            if (problems.Count > 0)
+            {
+                Console.WriteLine("{0}: IO VARIANTS FAILED — io-devices.xml:", Now());
+                foreach (string problem in problems)
+                    Console.WriteLine("    ! {0}", problem);
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            IoVariantPlan plan = null;
+            RetryOnBusy(() => plan = IoVariantSync.Sync(_session.SysManager, items, projectVariants), "syncing per-variant IO");
+            foreach (IoVariantState change in plan.Changes)
+                Console.WriteLine("    ~ variants {0}: enabled in {1}", change.TreePath,
+                    string.Join(", ", change.DisabledByVariant.Where(v => !v.Value).Select(v => v.Key)));
+            PrintLines("!! WARNING ", plan.Warnings);
+            Console.WriteLine("{0}: Per-variant IO: {1} item(s), {2} changed.", Now(), items.Count, plan.Changes.Count);
         }
 
         /// <summary>Direct .tsproj file edits — the two settings with no Automation

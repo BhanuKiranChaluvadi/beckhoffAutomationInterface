@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "MachineA": [
+      { "symbol": "MAIN.sMachine",           "type": "STRING(16)", "equals": "MachineA" },
+      { "symbol": "MAIN.rMaxPressure",       "type": "REAL",       "equals": 3.0 },
+      { "symbol": "MAIN.bDoorsFitted",       "type": "BOOL",       "equals": false },
+      { "symbol": "MAIN.sPcvDriver",         "type": "STRING(16)", "equals": "Modbus" },
+      { "symbol": "PRG_PcvModbus.nCycles",   "type": "UDINT",      "increases": true },
+      { "symbol": "PRG_PcvEtherCAT.nCycles", "type": "UDINT",      "absentOrZero": true }
+    ],
+    "MachineB": [
+      { "symbol": "MAIN.sMachine",           "type": "STRING(16)", "equals": "MachineB" },
+      { "symbol": "MAIN.rMaxPressure",       "type": "REAL",       "equals": 10.0 },
+      { "symbol": "MAIN.bDoorsFitted",       "type": "BOOL",       "equals": true },
+      { "symbol": "MAIN.sPcvDriver",         "type": "STRING(16)", "equals": "EtherCAT" },
+      { "symbol": "PRG_PcvEtherCAT.nCycles", "type": "UDINT",      "increases": true },
+      { "symbol": "PRG_PcvModbus.nCycles",   "type": "UDINT",      "absentOrZero": true }
+    ]
+  }
+}

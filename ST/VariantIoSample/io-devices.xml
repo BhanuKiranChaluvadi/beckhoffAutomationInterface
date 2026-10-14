@@ -1,0 +1,16 @@
+﻿<!--
+  Test fixture for per-variant I/O (tasks/2026-10-14-variants-closed-loop, Phase 3).
+  The EL2008 exists on MachineA only (Variants="MachineA"); everything else exists on every
+  machine. Links are NOT per variant (TwinCAT stores them once) - see
+  docs/ideas/variant-io-spike.md.
+  The master is declared Disabled: an enabled EtherCAT master with no linked variables
+  stops the build with TwinCAT's modal "needs sync master" dialog (see ST/sample).
+-->
+<IoTree>
+	<Device Name="Device 1 (EtherCAT)" Disabled="true">
+		<Box Name="Term 1 (EK1100)" Product="EK1100">
+			<Terminal Name="Term 2 (EL1008)" Product="EL1008" />
+			<Terminal Name="Term 3 (EL2008)" Product="EL2008" Variants="MachineA" />
+		</Box>
+	</Device>
+</IoTree>

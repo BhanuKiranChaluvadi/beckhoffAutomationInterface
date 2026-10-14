@@ -71,7 +71,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 ### Phase 3: Variant I/O trees
 - [x] Task 8: Spike — per-variant disable of I/O items and links (scratch project, findings only) → `docs/ideas/variant-io-spike.md`
 - [x] Task 9: `Variants` attribute in `io-devices.xml` (parser + validation)
-- [ ] Task 10: `sync io` applies per-variant enable/disable
+- [x] Task 10: `sync io` applies per-variant enable/disable
 - [ ] Task 11: `export io` writes the `Variants` attribute back (round trip)
 
 ### Checkpoint 3: Variant I/O
