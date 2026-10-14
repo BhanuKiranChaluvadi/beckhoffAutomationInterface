@@ -10,6 +10,9 @@ The tool is idempotent: re-running it against the same source/destination
 only creates what's missing, updates what changed, and leaves everything
 else untouched.
 
+> **New here?** Start with [HOW-TO-USE.md](HOW-TO-USE.md) — short, task-by-task steps for every
+> command. This README is the full reference.
+
 > **Deletion is opt-in, not automatic.** A normal (non-`--incremental`) sync
 > never deletes PLC objects for `.st` files you've removed or renamed — they
 > linger harmlessly in the TwinCAT project. Only `--incremental --confirm-delete`
@@ -705,6 +708,13 @@ Build, run and check a project without touching XAE by hand. Two targets only:
 **End-to-end check:** [`e2e/variant-sample.ps1`](e2e/variant-sample.ps1) runs the whole loop on
 `ST/VariantSample` — init, build all variants, then for each variant activate, verify it, and
 verify the other one (which must fail) — and compares every exit code with the expected one.
+[`e2e/variant-io-sample.ps1`](e2e/variant-io-sample.ps1) does the same for per-variant I/O.
+[`e2e/all-commands.ps1`](e2e/all-commands.ps1) runs **every** command on copies of the real
+fixtures (`ST/Shark`, `ST/sample`, `ST/VariantSample`): command-line errors, every check, the
+Shark init/sync/build/export life cycle including an export → sync round trip, a compile error
+mapped to its `.st` line, incremental sync, the git hook worker, and read-only runtime checks
+(it never activates). Run `variant-sample.ps1` first; each step's output is kept in
+`<work>\logs\`.
 
 ## Manifests (config data, not `.st` source)
 
