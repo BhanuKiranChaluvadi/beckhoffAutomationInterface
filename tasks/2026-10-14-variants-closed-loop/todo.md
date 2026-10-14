@@ -169,8 +169,8 @@ make every failure path return `1`.
 **Scope:** S
 
 ### Checkpoint 1: Fixes
-- [ ] All tests pass. Build is clean.
-- [ ] `build` passes on this PC with `--shell xae` and with `--shell vs2022`
+- [x] All tests pass (202). Build is clean (0 warnings).
+- [x] `build` passes on this PC with `--shell xae` and with `--shell vs2022` (2026-10-14, incl. `--clean`, silent mode on/restored, no shell left running)
 - [ ] **Manual on the bench/CI PC (XAE only):** `build` passes. The `TODO.md` crash is gone.
 - [ ] Review with the user before Phase 2
 

@@ -44,15 +44,15 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 ## Task list (index — details in `todo.md`)
 
 ### Phase 0: Baseline
-- [ ] Task 0: Clean baseline (commit or park the untracked `TODO.md`, `images/`)
+- [x] Task 0: Clean baseline (commit or park the untracked `TODO.md`, `images/`)
 
 ### Phase 1: Works on XAE-only PCs
-- [ ] Task 1: DTE shell resolver (`TcXaeShell` default, VS 2022 fallback, `--shell`)
-- [ ] Task 2: Process detection for `devenv` **and** `TcXaeShell`
-- [ ] Task 2a: TwinCAT silent mode — no Yes/No prompts, previous setting restored (user request)
-- [ ] Task 3: Clean before build (`--clean`)
-- [ ] Task 4: Build-output-pane fallback for empty error texts
-- [ ] Task 4b: `build <path>` must not map errors to `.st` files of the current directory (found in Task 3)
+- [x] Task 1: DTE shell resolver (`TcXaeShell` default, VS 2022 fallback, `--shell`)
+- [x] Task 2: Process detection for `devenv` **and** `TcXaeShell`
+- [x] Task 2a: TwinCAT silent mode — no Yes/No prompts, previous setting restored (user request)
+- [x] Task 3: Clean before build (`--clean`)
+- [x] Task 4: Build-output-pane fallback for empty error texts
+- [x] Task 4b: `build <path>` must not map errors to `.st` files of the current directory (found in Task 3)
 - [x] Task 4c: failed build exits `-1` — closed, not a bug (test-command artifact)
 
 ### Checkpoint 1: Fixes
