@@ -367,12 +367,12 @@ for BOOL, INT, DINT, UDINT, REAL, LREAL and STRING(n). Add an `expect.json` pars
 ```
 
 **Acceptance criteria:**
-- [ ] The parser supports `equals`, `increases`, `absentOrZero` and a `tolerance` for REAL/LREAL
-- [ ] ADS error 1808 (symbol not found) is reported as "absent", not as a crash
+- [x] The parser supports `equals`, `increases`, `absentOrZero` and a `tolerance` for REAL/LREAL
+- [x] ADS error 1808 (symbol not found) is reported as "absent", not as a crash
 
 **Verification:**
-- [ ] Unit tests: parser, value decoding from byte arrays, comparisons
-- [ ] Manual: read `MAIN.sMachine` from `UmRT_Default` while a variant runs
+- [x] Unit tests: parser, value decoding from byte arrays, comparisons (`ExpectationTests`, fake PLC incl. "wrong variant running")
+- [ ] Manual: read `MAIN.sMachine` from `UmRT_Default` while a variant runs — done through `verify` (Task 14)
 
 **Dependencies:** Task 0
 **Files likely touched:** new `Runtime/AdsClient.cs`, new `Runtime/ExpectationFile.cs`, tests
