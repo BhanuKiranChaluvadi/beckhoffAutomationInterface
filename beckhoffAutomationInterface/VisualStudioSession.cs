@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Interop.TCatSysManager;
 using static BeckhoffAutomationInterface.Clock;
 
 namespace BeckhoffAutomationInterface
@@ -24,6 +25,11 @@ namespace BeckhoffAutomationInterface
         public DteShell Shell { get; }
 
         readonly int _devenvPid;
+
+        // TwinCAT silent mode is a persistent XAE setting: remember the user's value and put
+        // it back on Dispose, so their interactive XAE still asks its questions.
+        ITcAutomationSettings _automationSettings;
+        bool _previousSilentMode;
         readonly DialogAutoDismisser _dialogAutoDismisser;
 
         VisualStudioSession(EnvDTE80.DTE2 dte, DteShell shell, int devenvPid)
@@ -79,6 +85,11 @@ namespace BeckhoffAutomationInterface
             WaitForVsToLoad(dte);
             Console.WriteLine("{0}: Visual Studio is ready.", Now());
 
+            // SuppressUI covers Visual Studio's own prompts; TwinCAT's (e.g. "Target System
+            // Process Image Update", Yes/No) need TwinCAT's silent mode. An unattended run
+            // must never wait for a click.
+            ITcAutomationSettings automationSettings = EnableSilentMode(dte, out bool previousSilentMode);
+
             // Identify our devenv process (the one that appeared after CreateInstance), so we
             // can force-kill it later if a graceful dte.Quit() leaves it alive (e.g. behind a
             // modal dialog). Fall back to the HWND method if the diff is inconclusive.
@@ -94,7 +105,10 @@ namespace BeckhoffAutomationInterface
             }
             Console.WriteLine("{0}: Shell process: {1} (pid {2}, found by {3}).", Now(), shell.ProcessName, devenvPid, pidSource);
 
-            return new VisualStudioSession(dte, shell, devenvPid);
+            var session = new VisualStudioSession(dte, shell, devenvPid);
+            session._automationSettings = automationSettings;
+            session._previousSilentMode = previousSilentMode;
+            return session;
         }
 
         /// <summary>Closes Visual Studio, force-killing it if a graceful Quit() doesn't
@@ -103,8 +117,46 @@ namespace BeckhoffAutomationInterface
         /// Quit() by clearing a blocking dialog first) and is only stopped once devenv is
         /// confirmed gone — leaving it running indefinitely would otherwise leak the
         /// background thread for the rest of the process's life.</summary>
+        /// <summary>Turns TwinCAT silent mode on. Returns null (and warns) if the TwinCAT
+        /// automation settings object is not available — the run continues, with
+        /// SuppressUI and DialogAutoDismisser as the remaining safety nets.</summary>
+        static ITcAutomationSettings EnableSilentMode(EnvDTE80.DTE2 dte, out bool previous)
+        {
+            previous = false;
+            try
+            {
+                var settings = (ITcAutomationSettings)dte.GetObject("TcAutomationSettings");
+                previous = settings.SilentMode;
+                settings.SilentMode = true;
+                Console.WriteLine("{0}: TwinCAT silent mode on (was: {1}).", Now(), previous ? "on" : "off");
+                return settings;
+            }
+            catch (Exception ex) when (ex is COMException || ex is InvalidCastException)
+            {
+                Console.WriteLine("{0}: WARNING: could not enable TwinCAT silent mode ({1}); TwinCAT dialogs may appear.", Now(), ex.Message);
+                return null;
+            }
+        }
+
+        void RestoreSilentMode()
+        {
+            if (_automationSettings == null || _previousSilentMode)
+                return;
+            try
+            {
+                _automationSettings.SilentMode = false;
+                Console.WriteLine("{0}: TwinCAT silent mode restored to off.", Now());
+            }
+            catch (COMException)
+            {
+                Console.WriteLine("{0}: WARNING: could not restore TwinCAT silent mode to off.", Now());
+            }
+            _automationSettings = null;
+        }
+
         public void Dispose()
         {
+            RestoreSilentMode();
             Console.WriteLine("{0}: Closing Visual Studio...", Now());
             TryQuit(VS_QUIT_TIMEOUT_MS);
             EnsureExited();

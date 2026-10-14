@@ -83,12 +83,12 @@ interactive XAE still asks. Keep `DialogAutoDismisser` as a safety net. Known pr
 "…\PLC_NFL_prj.tmc not found" (OK).
 
 **Acceptance criteria:**
-- [ ] Silent mode is on during every session and the previous value is restored on exit (also after a failure)
-- [ ] The log says once: "TwinCAT silent mode on (was: X)"
+- [x] Silent mode is on during every session and the previous value is restored on exit (also after a failure — restore runs first in `Dispose`)
+- [x] The log says once: "TwinCAT silent mode on (was: X)"
 - [ ] CI run on the bench PC (project with EL1918, no `.tmc`) finishes with no dialog shown
 
 **Verification:**
-- [ ] Manual: read `SilentMode` before and after a run on this PC — unchanged
+- [x] Manual: read `SilentMode` before and after a run on this PC — unchanged (2026-10-14: two runs, both "was: off" → "restored to off")
 - [ ] Manual (Checkpoint 1): bench PC run with no click
 
 **Dependencies:** Task 1
