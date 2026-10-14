@@ -138,12 +138,12 @@ given explicitly (`.stconfig source=` or a future `--source`); otherwise print t
 location.
 
 **Acceptance criteria:**
-- [ ] `build <tsproj>` from an unrelated directory prints the raw `.TcPOU` location, never a foreign `.st` path
-- [ ] With an explicit source folder, mapping works as today
+- [x] `build <tsproj>` from an unrelated directory prints the raw `.TcPOU` location, never a foreign `.st` path
+- [x] With an explicit source folder (`--source` or `.stconfig source=`), mapping works as today; legacy `cd <source>; --build` still maps
 
 **Verification:**
-- [ ] Unit test: "no explicit source" → no provenance index used
-- [ ] Manual: repeat the Task 3 error injection from another directory
+- [x] Unit test: "no explicit source" → no provenance index used (`ErrorMappingSourceTests`)
+- [x] Manual: repeat the Task 3 error injection from another directory (2026-10-14: raw `MAIN.TcPOU (Impl):1`, exit 1)
 
 **Dependencies:** Task 0
 **Files likely touched:** `SyncPipeline.cs` (`TryBuildProvenanceIndex`), `RunOptions.cs` (know whether source was explicit), tests
@@ -155,7 +155,10 @@ guide promise `1` ("CI contract: build failure = exit code 1"). Find where `-1` 
 make every failure path return `1`.
 
 **Acceptance criteria:**
-- [ ] Build failure → exit code 1; build timeout → exit code 1; success → 0
+- [x] Build failure → exit code 1; build timeout → exit code 1; success → 0
+      **Closed — not a bug (2026-10-14).** The `-1` came from the test command: PowerShell's
+      `Select-Object -First N` stops the pipeline early and kills the native process. A full
+      capture of the same failing build gives exit code 1, from both directories.
 
 **Verification:**
 - [ ] Manual: the Task 3 error injection, check `$LASTEXITCODE`

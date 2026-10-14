@@ -547,6 +547,8 @@ namespace BeckhoffAutomationInterface
         /// files still map. Best-effort: a parse failure just means raw locations.</summary>
         Dictionary<string, StPouSource> TryBuildProvenanceIndex()
         {
+            if (!MapsErrorsToSource(_options))
+                return new Dictionary<string, StPouSource>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 return ErrorLocationResolver.BuildIndex(StFileParser.ParseFolder(_options.SourceFolder, _ignore));
@@ -556,6 +558,13 @@ namespace BeckhoffAutomationInterface
                 return new Dictionary<string, StPouSource>(StringComparer.OrdinalIgnoreCase);
             }
         }
+
+        /// <summary>`build &lt;path&gt;` (an existing .tsproj) has no source folder of its own:
+        /// the default "." is just the caller's current directory, and mapping errors
+        /// through unrelated .st files there points at the wrong file. Map only when the
+        /// project was not adopted from a path, or a source folder was given explicitly.</summary>
+        internal static bool MapsErrorsToSource(RunOptions options) =>
+            options.ExistingTsprojPath == null || options.SourceFolderExplicit;
 
         static string FormatErrorLocation(BuildError error, Dictionary<string, StPouSource> provenance)
         {

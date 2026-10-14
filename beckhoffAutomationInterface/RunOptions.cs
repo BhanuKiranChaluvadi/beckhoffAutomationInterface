@@ -235,8 +235,12 @@ namespace BeckhoffAutomationInterface
         /// <summary>Clean the solution before the build stage (--clean / .stconfig "clean").</summary>
         public bool Clean { get; }
 
+        /// <summary>True when the source folder came from --source or .stconfig "source",
+        /// false when it fell back to the current directory.</summary>
+        public bool SourceFolderExplicit { get; }
+
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -260,6 +264,7 @@ namespace BeckhoffAutomationInterface
             ConfigFileLoaded = configFileLoaded;
             Shell = shell;
             Clean = clean;
+            SourceFolderExplicit = sourceFolderExplicit;
         }
 
         /// <summary>
@@ -365,7 +370,8 @@ namespace BeckhoffAutomationInterface
                 configFileLoaded: configFileLoaded,
                 // Not safety-gated: picking a shell never changes a project.
                 shell: GetOption(args, "--shell") ?? config.GetString("shell"),
-                clean: args.Contains("--clean") || config.GetBool("clean"));
+                clean: args.Contains("--clean") || config.GetBool("clean"),
+                sourceFolderExplicit: cliSource != null || config.GetString("source") != null);
         }
 
         static string GetOption(string[] args, params string[] flags)
