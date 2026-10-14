@@ -1,5 +1,0 @@
-FUNCTION F_GetCompany : STRING(80)
-VAR
-END_VAR
-    F_GetCompany := 'ATLANT 3D';
-END_FUNCTION

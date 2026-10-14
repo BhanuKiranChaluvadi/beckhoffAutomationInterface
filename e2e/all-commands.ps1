@@ -7,10 +7,11 @@
 .DESCRIPTION
     Groups:
       A  command line: usage, --help, removed flags, wrong paths, .stconfig rules (no TwinCAT)
-      B  read-only checks on ST/Shark (300 files), ST/sample, ST/VariantSample (no TwinCAT)
-      C  ST/Shark life cycle: init, every sync mode (second run = no change), check events,
+      B  read-only checks on ST/sample, plus generated failures: an unlinked %I variable and
+         one object defined in two files (no TwinCAT)
+      C  ST/sample life cycle: init, every sync mode (second run = no change), check events,
          build --clean, every export mode, overwrite guard, export -> sync round trip
-      D  ST/sample: compile error mapped to the .st file and line, then fixed again;
+      D  the same project: compile error mapped to the .st file and line, then fixed again;
          incremental sync after a git commit; the post-commit worker script
       E  runtime, read-only only: activate preview on both targets, verify on both targets
 
@@ -91,9 +92,8 @@ function NewGitCopy([string] $from, [string] $to) {
     InRepo $to init -q; InRepo $to add -A; InRepo $to commit -q -m 'fixture'
 }
 
-$shark   = "$Work\src\Shark";  NewGitCopy "$st\Shark"  $shark
-$sample  = "$Work\src\sample"; NewGitCopy "$st\sample" $sample
-$sharkSln = "$Work\tc\Shark"
+$sample    = "$Work\src\sample"; NewGitCopy "$st\sample" $sample
+$sampleSln = "$Work\tc\sample"
 $expect  = "$st\VariantSample\expect.json"
 
 Push-Location $Work
@@ -104,14 +104,14 @@ try {
     Step A 'build --help'                             0 @('Usage: beckhoffAutomationInterface build') @('build', '--help')
     Step A 'activate --help'                          0 @('activate <path', '--plc <name>') @('activate', '--help')
     Step A 'verify --help'                            0 @('verify --target') @('verify', '--help')
-    Step A 'unknown command'                          1 @('unknown command') @('deploy', $shark)
-    Step A 'old --dest names --project'               1 @('Removed - sync: --project') @('sync', 'all', $shark, '--dest', $Work)
-    Step A 'old --plc-name on build names --plc'      1 @('Removed - use --plc') @('build', $shark, '--plc-name', 'X')
-    Step A 'old --plc-name on activate names --plc'   1 @('use --plc') @('activate', $shark, '--target', 'umrt', '--plc-name', 'X')
-    Step A 'old --parse-only names check parse'       1 @('check parse') @('check', 'format', $shark, '--parse-only')
-    Step A 'unknown --shell'                          1 @("unknown --shell 'eclipse'") @('--shell', 'eclipse', 'build', $shark)
-    Step A 'sync without --project'                   1 @('needs --project') @('sync', 'code', $shark, '--no-config')
-    Step A 'sync with a missing project'              1 @('project not found') @('sync', 'code', $shark, '--project', "$Work\Nope")
+    Step A 'unknown command'                          1 @('unknown command') @('deploy', $sample)
+    Step A 'old --dest names --project'               1 @('Removed - sync: --project') @('sync', 'all', $sample, '--dest', $Work)
+    Step A 'old --plc-name on build names --plc'      1 @('Removed - use --plc') @('build', $sample, '--plc-name', 'X')
+    Step A 'old --plc-name on activate names --plc'   1 @('use --plc') @('activate', $sample, '--target', 'umrt', '--plc-name', 'X')
+    Step A 'old --parse-only names check parse'       1 @('check parse') @('check', 'format', $sample, '--parse-only')
+    Step A 'unknown --shell'                          1 @("unknown --shell 'eclipse'") @('--shell', 'eclipse', 'build', $sample)
+    Step A 'sync without --project'                   1 @('needs --project') @('sync', 'code', $sample, '--no-config')
+    Step A 'sync with a missing project'              1 @('project not found') @('sync', 'code', $sample, '--project', "$Work\Nope")
     Step A 'build with a missing project'             1 @('ERROR') @('build', "$Work\Nope.tsproj")
     Step A 'init needs --into'                        1 @('needs --into') @('init', $sample)
     Copy-Item $sample "$Work\src\bad-name" -Recurse
@@ -130,49 +130,50 @@ try {
 
     # ------------------------------------------------------------ B: read-only checks
     Step B 'doctor'                                   0 @('UmRT_Default', 'License:') @('doctor')
-    Step B 'check parse Shark'                        0 @('300 file(s) parsed OK', ', 0 failed') @('check', 'parse', $shark)
-    Step B 'check parse sample'                       0 @('9 file(s) parsed OK') @('check', 'parse', $sample)
+    Step B 'check parse sample'                       0 @('9 file(s) parsed OK', ', 0 failed') @('check', 'parse', $sample) @('DUPLICATE')
     Step B 'check format sample (clean)'              0 @('0 issue(s) found') @('check', 'format', $sample)
-    Step B 'check format Shark (reports, exit 0)'     0 @('[format-check] 38 issue(s) found') @('check', 'format', $shark)
     Step B 'check links sample'                       0 @('2 declared, 2 linked, 0 unlinked') @('check', 'links', $sample)
-    Step B 'check links Shark (51 unlinked -> 1)'     1 @('51 declared, 0 linked, 51 unlinked') @('check', 'links', $shark)
-    Step B 'check --ignore drops files'               0 @('parsed OK') @('check', 'parse', $shark, '--ignore', 'App/**') @('300 file(s)')
+    Step B 'check --ignore drops files'               0 @('7 file(s) parsed OK') @('check', 'parse', $sample, '--ignore', 'FB_Motor*.st')
+    Copy-Item $sample "$Work\src\nolinks" -Recurse; Remove-Item "$Work\src\nolinks\io-devices.xml"
+    Step B 'check links: unlinked %I/%Q -> exit 1'     1 @('2 declared, 0 linked, 2 unlinked', 'UNLINKED') @('check', 'links', "$Work\src\nolinks")
+    Copy-Item $sample "$Work\src\dup" -Recurse; Copy-Item "$Work\src\dup\FB_Motor.st" "$Work\src\dup\FB_Motor_old.st"
+    Step B 'check parse: one object in two files'     1 @('DUPLICATE FB_Motor: FB_Motor.st, FB_Motor_old.st') @('check', 'parse', "$Work\src\dup")
 
-    # ------------------------------------------------------------ C: Shark life cycle
-    Step C 'init Shark (sync all + build)'            0 @('BUILD PASSED') @('init', $shark, '--into', "$Work\tc") @('BUILD FAILED')
-    $tsproj = (Get-ChildItem $sharkSln -Recurse -Filter 'Shark.tsproj' | Select-Object -First 1).FullName
-    Check C 'init created Shark.sln and Shark.tsproj' ((Test-Path "$sharkSln\Shark.sln") -and $tsproj) "no project under $sharkSln"
-    Step C 'sync code again: no change'               0 @('Sync complete (0 created, 0 updated, 0 deleted, ', ' unchanged)') @('sync', 'code', $shark, '--project', $sharkSln)
-    Step C 'sync libs again: no change'               0 @('Library sync complete (0 added, 0 removed)') @('sync', 'libs', $shark, '--project', "$sharkSln\Shark.sln")
-    Step C 'sync io again: no change'                 0 @('IO sync complete (0 created, 0 deleted') @('sync', 'io', $shark, '--project', $tsproj)
-    Step C 'sync events again: nothing missing'       0 @('all declared classes already present') @('sync', 'events', $shark, '--project', $sharkSln)
-    Step C 'sync variants: no variants.xml'           0 @() @('sync', 'variants', $shark, '--project', $sharkSln) @('VARIANTS FAILED')
-    Step C 'check events against the project'         0 @(' 0 missing') @('check', 'events', $shark, '--project', $tsproj)
+    # ------------------------------------------------------------ C: life cycle
+    Step C 'init sample (sync all + build)'           0 @('BUILD PASSED') @('init', $sample, '--into', "$Work\tc") @('BUILD FAILED')
+    $tsproj = (Get-ChildItem $sampleSln -Recurse -Filter 'sample.tsproj' | Select-Object -First 1).FullName
+    Check C 'init created sample.sln and sample.tsproj' ((Test-Path "$sampleSln\sample.sln") -and $tsproj) "no project under $sampleSln"
+    Step C 'sync code again: no change'               0 @('Sync complete (0 created, 0 updated, 0 deleted, ', ' unchanged)') @('sync', 'code', $sample, '--project', $sampleSln)
+    Step C 'sync libs again: no change'               0 @('Library sync complete (0 added, 0 removed)') @('sync', 'libs', $sample, '--project', "$sampleSln\sample.sln")
+    Step C 'sync io again: no change'                 0 @('IO sync complete (0 created, 0 deleted') @('sync', 'io', $sample, '--project', $tsproj)
+    Step C 'sync events: no events.xml'               0 @() @('sync', 'events', $sample, '--project', $sampleSln) @('ERROR', 'FAILED')
+    Step C 'sync variants: no variants.xml'           0 @() @('sync', 'variants', $sample, '--project', $sampleSln) @('VARIANTS FAILED', 'ERROR')
+    Step C 'check events against the project'         0 @() @('check', 'events', $sample, '--project', $tsproj) @('MISSING', 'ERROR')
     Step C 'build --clean'                            0 @('BUILD PASSED') @('build', $tsproj, '--clean')
-    Step C 'build folder (finds the one .tsproj)'     0 @('BUILD PASSED') @('build', $sharkSln)
+    Step C 'build folder (finds the one .tsproj)'     0 @('BUILD PASSED') @('build', $sampleSln)
+    Step C 'build the .sln'                           0 @('BUILD PASSED') @('build', "$sampleSln\sample.sln")
     Step C 'build --variant on a project without'     1 @('the project has no variants') @('build', $tsproj, '--variant', 'MachineA')
-    $before = Snapshot $sharkSln
+    $before = Snapshot $sampleSln
     Step C 'export code'                              0 @('Code export complete') @('export', 'code', "$Work\exp\code", '--project', $tsproj)
     Step C 'export code again: refused'               1 @('--overwrite') @('export', 'code', "$Work\exp\code", '--project', $tsproj)
     Step C 'export code --overwrite'                  0 @('Code export complete') @('export', 'code', "$Work\exp\code", '--project', $tsproj, '--overwrite')
     Step C 'export libs'                              0 @('library reference(s)') @('export', 'libs', "$Work\exp\libs", '--project', $tsproj)
     Step C 'export io'                                0 @('Exported IO tree') @('export', 'io', "$Work\exp\io", '--project', $tsproj)
-    Step C 'export events'                            0 @('event class(es)') @('export', 'events', "$Work\exp\events", '--project', $tsproj)
+    Step C 'export events (project has none)'         0 @('No event classes found') @('export', 'events', "$Work\exp\events", '--project', $tsproj)
     Step C 'export links'                             0 @('Exported current variable links') @('export', 'links', "$Work\exp\links", '--project', $tsproj)
     Step C 'export object MAIN'                       0 @("Exported 'MAIN'") @('export', 'object', 'MAIN', "$Work\exp\object", '--project', $tsproj)
+    Step C 'export object FB_Motor'                   0 @("Exported 'FB_Motor'") @('export', 'object', 'FB_Motor', "$Work\exp\object", '--project', $tsproj)
     Step C 'export object: unknown name'              1 @('ERROR') @('export', 'object', 'FB_DoesNotExist', "$Work\exp\object2", '--project', $tsproj)
     Step C 'export all'                               0 @('Exported IO tree', 'library reference(s)') @('export', 'all', "$Work\exp\all", '--project', $tsproj)
-    $srcCount = @(Get-ChildItem $shark -Recurse -Filter *.st).Count
+    $srcCount = @(Get-ChildItem $sample -Recurse -Filter *.st).Count
     $expCount = @(Get-ChildItem "$Work\exp\all" -Recurse -Filter *.st).Count
     Check C "export all wrote every .st ($expCount of $srcCount)" ($expCount -eq $srcCount) "exported $expCount, source has $srcCount"
-    $diff = @(Compare-Object $before (Snapshot $sharkSln))
-    Check C 'project files unchanged by 8 exports' ($diff.Count -eq 0) ("changed: " + (($diff | ForEach-Object InputObject) -join ', '))
-    Step C 'round trip: sync the export back, no change' 0 @('Sync complete (0 created, 0 updated, 0 deleted, ') @('sync', 'code', "$Work\exp\all", '--project', $sharkSln)
+    $diff = @(Compare-Object $before (Snapshot $sampleSln))
+    Check C 'project files unchanged by 10 exports' ($diff.Count -eq 0) ("changed: " + (($diff | ForEach-Object InputObject) -join ', '))
+    Step C 'round trip: sync the export back, no change' 0 @('Sync complete (0 created, 0 updated, 0 deleted, ') @('sync', 'code', "$Work\exp\all", '--project', $sampleSln)
     Step C 'round trip: build after it'               0 @('BUILD PASSED') @('build', $tsproj)
 
     # ------------------------------------------------------------ D: errors, incremental, hook
-    $sampleSln = "$Work\tc\sample"
-    Step D 'init sample'                              0 @('BUILD PASSED') @('init', $sample, '--into', "$Work\tc")
     $motor = Join-Path $sample 'FB_Motor.st'
     $orig = [IO.File]::ReadAllBytes($motor)
     Edit $motor '// Main cyclic logic of the motor function block' "// Main cyclic logic of the motor function block`r`nnUndeclared := 1;"
@@ -207,8 +208,8 @@ try {
 
     # ------------------------------------------------------------ E: runtime (read-only)
     $other = if ($Running -eq 'MachineA') { 'MachineB' } else { 'MachineA' }
-    Step E 'activate preview on UmRT (no --yes)'      1 @('Target umrt', 'boot project now: VariantSample', 'NOT ACTIVATED') @('activate', "$st\VariantSample", '--target', 'umrt')
-    Step E 'activate preview on local (no --yes)'     1 @('Target local', 'NOT ACTIVATED') @('activate', "$st\VariantSample", '--target', 'local')
+    Step E 'activate preview on UmRT (no --yes)'      1 @('Target umrt', 'boot project now: VariantSample', 'NOT ACTIVATED') @('activate', $tsproj, '--target', 'umrt')
+    Step E 'activate preview on local (no --yes)'     1 @('Target local', 'NOT ACTIVATED') @('activate', $tsproj, '--target', 'local')
     Step E "verify $Running on UmRT (running)"        0 @('VERIFY PASSED') @('verify', '--target', 'umrt', '--expect', $expect, '--variant', $Running)
     Step E "verify $other on UmRT (must fail)"        1 @('VERIFY FAILED') @('verify', '--target', 'umrt', '--expect', $expect, '--variant', $other)
     Step E 'verify on local (Config, no PLC)'         1 @() @('verify', '--target', 'local', '--expect', $expect, '--variant', $Running, '--timeout', '5') @('VERIFY PASSED')

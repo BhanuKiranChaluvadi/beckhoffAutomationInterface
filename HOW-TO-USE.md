@@ -281,11 +281,11 @@ See [.stconfig.example](.stconfig.example).
    git config core.hooksPath githooks
    ```
 
-3. If your folders are not the default ones, set:
+3. Tell the hook which source folder and project folder to use:
 
    ```powershell
-   $env:BECKHOFF_ST_SOURCE   = "C:\work\ST\Shark"
-   $env:BECKHOFF_TWINCAT_DEST = "C:\work\TwinCAT"
+   $env:BECKHOFF_ST_SOURCE   = "C:\work\ST\Shark"     # required; without it the hook logs SKIPPED
+   $env:BECKHOFF_TWINCAT_DEST = "C:\work\TwinCAT"     # default: Documents\TwinCAT
    ```
 
 After each commit that changes `.st` files, the hook runs `sync all --incremental` in the
@@ -348,7 +348,7 @@ result. They work on copies in a temporary folder. They read `ST\` but never cha
 |---|---|---|
 | `e2e\variant-io-sample.ps1` | Per-variant I/O: init, sync, export, round trip, build of all variants | XAE |
 | `e2e\variant-sample.ps1` | Activate and verify each variant on UmRT, and verify that the wrong variant fails | XAE, UmRT with license |
-| `e2e\all-commands.ps1` | Every command: wrong command lines, all checks, Shark init/sync/build/export, compile error on the correct line, incremental sync, git hook, read-only runtime checks | XAE, UmRT (run `variant-sample.ps1` first) |
+| `e2e\all-commands.ps1` | Every command: wrong command lines, all checks (with generated failures), init/sync/build/export, compile error on the correct line, incremental sync, git hook, read-only runtime checks | XAE, UmRT (run `variant-sample.ps1` first) |
 
 ```powershell
 .\e2e\all-commands.ps1

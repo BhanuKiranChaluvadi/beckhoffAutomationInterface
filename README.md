@@ -89,19 +89,18 @@ workflow.
 ```
 beckhoffAutomationInterface/   # the C# tool (Program.cs, SyncPipeline.cs, Sync/, etc.)
 ST/                            # .st source trees, one subfolder per PLC project
-  Shark/                       # the real production project
-    App/                       # PROGRAMs, organized in whatever subfolders you like
-    Lib/                       # FUNCTION_BLOCKs, INTERFACEs, DUTs, GVLs
+  sample/                      # small self-contained demo — safe first project to try the tool on
+    *.st                       # PROGRAMs, FUNCTION_BLOCKs, INTERFACEs, DUTs, GVLs (any subfolders)
     libraries.xml              # PLC library references to sync (Tc2_Standard, etc.)
     io-devices.xml             # EtherCAT I/O hardware tree + PLC-variable links (optional)
-    events.xml                 # Event Classes to sync (see Known limitations below)
-  sample/                      # small self-contained demo — safe first project to try the tool on
+  VariantSample/               # two machine variants (variants.xml, expect.json)
+  VariantIoSample/             # per-variant I/O (Variants="..." in io-devices.xml)
 example/                       # reference material from Beckhoff/community samples
 docs/                          # design notes
 ```
 
 A `.st` file's path relative to its `ST/<Project>/` root is mirrored as a PLC
-folder in the TwinCAT project (e.g. `ST/Shark/App/Shark/PRG_MAIN.st` becomes
+folder in the TwinCAT project (e.g. `<source>/App/Shark/PRG_MAIN.st` becomes
 `Shark Project ▸ App ▸ Shark ▸ PRG_MAIN`).
 
 ## Running it
@@ -331,10 +330,9 @@ git config core.hooksPath githooks
 
 The hook (`githooks/post-commit`) is a fast no-op unless the commit touched
 `*.st` files, then launches `githooks/run-incremental-sync.ps1` hidden/
-detached. That script assumes the TwinCAT project already exists at
-`C:\Users\<you>\Documents\TwinCAT` with the ST source at `<repo>\ST\Shark` —
-override with `$env:BECKHOFF_TWINCAT_DEST` / `$env:BECKHOFF_ST_SOURCE` if
-different. It passes `--project <dest>\<source folder name>` (e.g.
+detached. Set `$env:BECKHOFF_ST_SOURCE` to your `.st` source folder (without it the
+script logs "SKIPPED"). The TwinCAT project must already exist under
+`$env:BECKHOFF_TWINCAT_DEST` (default `C:\Users\<you>\Documents\TwinCAT`). It passes `--project <dest>\<source folder name>` (e.g.
 `...\TwinCAT\Shark`), so the project must have been created with that name.
 A wrong path fails loudly ("project not found"); it never creates a project.
 
@@ -710,8 +708,8 @@ Build, run and check a project without touching XAE by hand. Two targets only:
 verify the other one (which must fail) — and compares every exit code with the expected one.
 [`e2e/variant-io-sample.ps1`](e2e/variant-io-sample.ps1) does the same for per-variant I/O.
 [`e2e/all-commands.ps1`](e2e/all-commands.ps1) runs **every** command on copies of the real
-fixtures (`ST/Shark`, `ST/sample`, `ST/VariantSample`): command-line errors, every check, the
-Shark init/sync/build/export life cycle including an export → sync round trip, a compile error
+fixtures (`ST/sample`, `ST/VariantSample`): command-line errors, every check (with generated
+failures), the init/sync/build/export life cycle including an export → sync round trip, a compile error
 mapped to its `.st` line, incremental sync, the git hook worker, and read-only runtime checks
 (it never activates). Run `variant-sample.ps1` first; each step's output is kept in
 `<work>\logs\`.

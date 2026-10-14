@@ -47,12 +47,11 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void RealShippedTemplates_ParseWithoutError()
+        public void RealTemplates_ParseWithoutError()
         {
-            // The templates actually shipped for ST/Shark (see io-devices.xml Task 3) --
-            // a lightweight regression check that hand-edits keep them well-formed.
-            string repoRoot = FindRepoRoot();
-            string plcDataTypesDir = Path.Combine(repoRoot, "ST", "Shark", "plc-data-types");
+            // Real TwinCAT-generated templates (EL3174/EL3214, from the Shark project) — a
+            // regression check that the loader reads real files, not only hand-made ones.
+            string plcDataTypesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "plc-data-types");
 
             foreach (string product in new[] { "EL3174", "EL3214" })
             {
@@ -61,14 +60,6 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.NotEmpty(template.DataTypes);
                 Assert.Equal(5, template.PlcDataTypes.Count);
             }
-        }
-
-        static string FindRepoRoot()
-        {
-            string dir = AppDomain.CurrentDomain.BaseDirectory;
-            while (dir != null && !Directory.Exists(Path.Combine(dir, "ST", "Shark")))
-                dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar));
-            return dir ?? throw new DirectoryNotFoundException("Could not locate repo root (ST/Shark) from " + AppDomain.CurrentDomain.BaseDirectory);
         }
     }
 }

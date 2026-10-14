@@ -3,9 +3,9 @@
 # to the developer's terminal (the hook launches this hidden/detached so `git commit`
 # returns immediately).
 #
-# Machine-specific: set $env:BECKHOFF_TWINCAT_DEST / $env:BECKHOFF_ST_SOURCE if your
-# TwinCAT project or ST source don't live at the defaults below (also used to point
-# this script at a disposable scratch project for testing, without editing the script).
+# Machine-specific: $env:BECKHOFF_ST_SOURCE (required: the .st source folder to sync) and
+# $env:BECKHOFF_TWINCAT_DEST (default below). Also used to point this script at a
+# disposable scratch project for testing, without editing the script.
 #
 # The project is <Dest>\<name>\<name>.sln, where <name> is the source folder's own name
 # (what `init` uses unless it was given --name). If the project was bootstrapped with a
@@ -17,13 +17,17 @@
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Exe = Join-Path $RepoRoot "beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe"
-$Source = if ($env:BECKHOFF_ST_SOURCE) { $env:BECKHOFF_ST_SOURCE } else { Join-Path $RepoRoot "ST\Shark" }
+$Source = $env:BECKHOFF_ST_SOURCE
 $Dest = if ($env:BECKHOFF_TWINCAT_DEST) { $env:BECKHOFF_TWINCAT_DEST } else { "C:\Users\$env:USERNAME\Documents\TwinCAT" }
 
 $LogDir = Join-Path $PSScriptRoot "logs"
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 $LogFile = Join-Path $LogDir ("{0:yyyy-MM-dd_HHmmss}.log" -f (Get-Date))
 
+if (-not $Source) {
+    "SKIPPED: set BECKHOFF_ST_SOURCE to the .st source folder to sync." | Out-File $LogFile
+    exit 0
+}
 if (-not (Test-Path $Exe)) {
     "SKIPPED: built exe not found at '$Exe' (build the project first)." | Out-File $LogFile
     exit 0
