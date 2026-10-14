@@ -22,6 +22,10 @@ namespace BeckhoffAutomationInterface.Sync
         public IReadOnlyList<XElement> DataTypes { get; }
         public IReadOnlyList<XElement> PlcDataTypes { get; }
 
+        /// <summary>"EL3214-0000-0017" -> "EL3214"; a name without a revision is returned as is.</summary>
+        internal static string WithoutRevision(string product) =>
+            System.Text.RegularExpressions.Regex.Replace(product ?? "", @"-\d{4}-\d{4}$", "");
+
         PlcDataTypeTemplate(List<XElement> dataTypes, List<XElement> plcDataTypes)
         {
             DataTypes = dataTypes;
@@ -29,10 +33,14 @@ namespace BeckhoffAutomationInterface.Sync
         }
 
         /// <summary>Returns null if no template file exists for this name (the caller
-        /// should treat that as "can't fulfil this request yet").</summary>
+        /// should treat that as "can't fulfil this request yet"). A product with a revision
+        /// ("EL3214-0000-0017") uses its own file when there is one, else the product's
+        /// ("EL3214.xml").</summary>
         public static PlcDataTypeTemplate Load(string templatesFolder, string name)
         {
             string path = Path.Combine(templatesFolder, name + ".xml");
+            if (!File.Exists(path))
+                path = Path.Combine(templatesFolder, WithoutRevision(name) + ".xml");
             if (!File.Exists(path))
                 return null;
 
