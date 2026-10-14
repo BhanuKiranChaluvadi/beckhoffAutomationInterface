@@ -89,9 +89,9 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] `ST/VariantSample`: `activate` + `verify` pass for both variants on `UmRT_Default`.
 
 ### Phase 5: CLI cleanup
-- [ ] Task 16: CLI spec (command table, option names, legacy → new map) — review with the user
-- [ ] Task 17: New parser for `build`/`activate`/`verify`/`doctor`
-- [ ] Task 18: New parser for `check` / `export`
+- [x] Task 16: CLI spec (command table, option names, legacy → new map) — review with the user
+- [x] Task 17: New parser for `build`/`activate`/`verify`/`doctor`
+- [x] Task 18: New parser for `check` / `export`
 - [ ] Task 19: New parser for `sync` / `init`; remove legacy flags
 - [ ] Task 20: Update README, CI guide, runner guide, `githooks/*.ps1`
 

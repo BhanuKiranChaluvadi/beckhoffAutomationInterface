@@ -117,167 +117,6 @@ namespace BeckhoffAutomationInterface
             return found;
         }
 
-        /// <summary>Translates the new `build &lt;path&gt; [--plc-name X]` subcommand syntax
-        /// into the equivalent legacy flag array (--tsproj/--plc-name/--build), so it reuses
-        /// the exact same, already-proven RunOptions/SyncPipeline path rather than duplicating
-        /// it. First slice of docs/ideas/cli-subcommand-redesign.md — purely additive, the
-        /// legacy flags below are untouched and still work exactly as before.</summary>
-        static string[] TranslateBuildSubcommand(string[] args)
-        {
-            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
-            {
-                Console.WriteLine("Usage: beckhoffAutomationInterface build <path-to-.tsproj-or-folder> [--plc-name <name>] [--clean] [--variant <name> | --all-variants]");
-                Console.WriteLine();
-                Console.WriteLine("Compiles an existing TwinCAT PLC project and reports pass/fail.");
-                Console.WriteLine("  <path>              A .tsproj file, or a folder containing exactly one.");
-                Console.WriteLine("  --plc-name <name>   The real PLC project name inside TIPC, if it differs");
-                Console.WriteLine("                      from the .tsproj file's own name.");
-                Console.WriteLine("  --clean             Clean the solution before the build (no stale results).");
-                Console.WriteLine("  --variant <name>    Build only this project variant (clean build).");
-                Console.WriteLine("  --all-variants      Build every project variant (default when the project has variants).");
-                Console.WriteLine();
-                Console.WriteLine("Exit code: 0 = build passed, 1 = build failed or timed out.");
-                Environment.Exit(0);
-            }
-
-            string path = null;
-            string plcName = null;
-            bool clean = false;
-            string variant = null;
-            bool allVariants = false;
-            for (int i = 1; i < args.Length; i++)
-            {
-                if (args[i] == "--plc-name" && i + 1 < args.Length)
-                {
-                    plcName = args[++i];
-                }
-                else if (args[i] == "--clean")
-                {
-                    clean = true;
-                }
-                else if (args[i] == "--variant" && i + 1 < args.Length)
-                {
-                    variant = args[++i];
-                }
-                else if (args[i] == "--all-variants")
-                {
-                    allVariants = true;
-                }
-                else if (path == null && !args[i].StartsWith("--"))
-                {
-                    path = args[i];
-                }
-                else
-                {
-                    Console.Error.WriteLine("ERROR: unrecognized argument to 'build': {0}", args[i]);
-                    Environment.Exit(1);
-                }
-            }
-
-            if (path == null)
-            {
-                Console.Error.WriteLine("ERROR: 'build' requires a path to the PLC project.");
-                Console.Error.WriteLine("Usage: beckhoffAutomationInterface build <path-to-.tsproj-or-folder> [--plc-name <name>]");
-                Environment.Exit(1);
-            }
-
-            string tsprojPath;
-            try
-            {
-                tsprojPath = ProjectLocator.ResolveTsprojPath(path);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine("ERROR: {0}", ex.Message);
-                Environment.Exit(1);
-                return null; // unreachable, satisfies the compiler
-            }
-
-            string resolvedPlcName = ProjectLocator.ResolvePlcName(tsprojPath, plcName);
-            var result = new List<string> { "--tsproj", tsprojPath, "--plc-name", resolvedPlcName, "--build" };
-            if (clean)
-                result.Add("--clean");
-            if (variant != null)
-                result.AddRange(new[] { "--variant", variant });
-            if (allVariants)
-                result.Add("--all-variants");
-            return result.ToArray();
-        }
-
-        /// <summary>Translates the new `check &lt;mode&gt; &lt;source-path&gt; [--project X]`
-        /// subcommand syntax into the equivalent legacy flags (--source/--parse-only,
-        /// --format-check, --check-links, --check-events/--tsproj) — same additive,
-        /// zero-duplication approach as TranslateBuildSubcommand. Second slice of
-        /// docs/ideas/cli-subcommand-redesign.md.</summary>
-        static string[] TranslateCheckSubcommand(string[] args)
-        {
-            if (args.Length < 2)
-            {
-                Console.Error.WriteLine("ERROR: 'check' requires a mode: parse|format|links|events.");
-                Environment.Exit(1);
-            }
-            string mode = args[1];
-
-            string sourcePath = null;
-            string projectPath = null;
-            for (int i = 2; i < args.Length; i++)
-            {
-                if (args[i] == "--project" && i + 1 < args.Length)
-                {
-                    projectPath = args[++i];
-                }
-                else if (sourcePath == null && !args[i].StartsWith("--"))
-                {
-                    sourcePath = args[i];
-                }
-                else
-                {
-                    Console.Error.WriteLine("ERROR: unrecognized argument to 'check {0}': {1}", mode, args[i]);
-                    Environment.Exit(1);
-                }
-            }
-
-            if (sourcePath == null)
-            {
-                Console.Error.WriteLine("ERROR: 'check {0}' requires a path to the .st source folder.", mode);
-                Console.Error.WriteLine("Usage: beckhoffAutomationInterface check {0} <source-path>{1}", mode,
-                    mode == "events" ? " --project <path-to-tsproj-or-folder>" : "");
-                Environment.Exit(1);
-            }
-
-            switch (mode)
-            {
-                case "parse":
-                    return new[] { "--source", sourcePath, "--parse-only" };
-                case "format":
-                    return new[] { "--source", sourcePath, "--format-check" };
-                case "links":
-                    return new[] { "--source", sourcePath, "--check-links" };
-                case "events":
-                    if (projectPath == null)
-                    {
-                        Console.Error.WriteLine("ERROR: 'check events' requires --project <path-to-tsproj-or-folder>.");
-                        Environment.Exit(1);
-                    }
-                    string tsprojPath;
-                    try
-                    {
-                        tsprojPath = ProjectLocator.ResolveTsprojPath(projectPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.Error.WriteLine("ERROR: {0}", ex.Message);
-                        Environment.Exit(1);
-                        return null; // unreachable, satisfies the compiler
-                    }
-                    return new[] { "--source", sourcePath, "--tsproj", tsprojPath, "--check-events" };
-                default:
-                    Console.Error.WriteLine("ERROR: unknown 'check' mode '{0}' (expected parse|format|links|events).", mode);
-                    Environment.Exit(1);
-                    return null; // unreachable, satisfies the compiler
-            }
-        }
-
         /// <summary>Maps a `sync` subcommand mode to its legacy stage flag; null for "all"
         /// since no stage flag means SyncStages.All already (RunOptions' existing default).</summary>
         static readonly Dictionary<string, string> SyncModeToStageFlag = new Dictionary<string, string>
@@ -332,142 +171,6 @@ namespace BeckhoffAutomationInterface
             string stageFlag = SyncModeToStageFlag[mode];
             if (stageFlag != null)
                 result.Add(stageFlag);
-            return result.ToArray();
-        }
-
-        /// <summary>Maps an `export` subcommand mode to its legacy reverse-export flag.</summary>
-        static readonly Dictionary<string, string> ExportModeToFlag = new Dictionary<string, string>
-        {
-            ["code"] = "--export-code",
-            ["libs"] = "--export-libs",
-            ["io"] = "--export-io",
-            ["events"] = "--export-events",
-            ["all"] = "--export-all",
-            ["links"] = "--export-links",
-        };
-
-        /// <summary>Translates the new `export &lt;mode&gt; &lt;source-path&gt; --project X
-        /// [--plc-name Y] [--overwrite]` subcommand syntax into the equivalent legacy
-        /// --source/--tsproj/--plc-name/--export-*/--overwrite flags, PLUS the single-object
-        /// `export object &lt;ObjectName&gt; &lt;source-path&gt; --project X` shape (a different
-        /// positional layout — object name AND source path are both positional — since it
-        /// maps to legacy `--export &lt;name&gt;`, not one of the whole-project --export-* flags).
-        /// --plc-name is resolved the same way `build` does (ProjectLocator.ResolvePlcName)
-        /// rather than left to RunOptions' own default, which — with --tsproj but no --name —
-        /// falls back to the SOURCE folder's directory name, not the .tsproj's; leaving it
-        /// unresolved here would silently target the wrong PLC project. Fourth slice of
-        /// docs/ideas/cli-subcommand-redesign.md.</summary>
-        static string[] TranslateExportSubcommand(string[] args)
-        {
-            if (args.Length < 2)
-            {
-                Console.Error.WriteLine("ERROR: 'export' requires a mode: object|code|libs|io|events|all|links.");
-                Environment.Exit(1);
-            }
-            string mode = args[1];
-
-            if (mode == "object")
-            {
-                if (args.Length < 3)
-                {
-                    Console.Error.WriteLine("ERROR: 'export object' requires <ObjectName> <source-path> --project <path-to-tsproj-or-folder>.");
-                    Environment.Exit(1);
-                }
-                string objectName = args[2];
-                string objSourcePath = null;
-                string objProjectPath = null;
-                string objPlcName = null;
-                var objPassthrough = new List<string>();
-                for (int i = 3; i < args.Length; i++)
-                {
-                    if (args[i] == "--project" && i + 1 < args.Length)
-                        objProjectPath = args[++i];
-                    else if (args[i] == "--plc-name" && i + 1 < args.Length)
-                        objPlcName = args[++i];
-                    else if (objSourcePath == null && !args[i].StartsWith("--"))
-                        objSourcePath = args[i];
-                    else
-                        objPassthrough.Add(args[i]);
-                }
-
-                if (objSourcePath == null)
-                {
-                    Console.Error.WriteLine("ERROR: 'export object' requires a path to the .st source destination folder.");
-                    Environment.Exit(1);
-                }
-                if (objProjectPath == null)
-                {
-                    Console.Error.WriteLine("ERROR: 'export object' requires --project <path-to-tsproj-or-folder>.");
-                    Environment.Exit(1);
-                }
-
-                string objTsprojPath;
-                try
-                {
-                    objTsprojPath = ProjectLocator.ResolveTsprojPath(objProjectPath);
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine("ERROR: {0}", ex.Message);
-                    Environment.Exit(1);
-                    return null; // unreachable, satisfies the compiler
-                }
-                string objResolvedPlcName = ProjectLocator.ResolvePlcName(objTsprojPath, objPlcName);
-
-                var objResult = new List<string> { "--source", objSourcePath, "--tsproj", objTsprojPath, "--plc-name", objResolvedPlcName, "--export", objectName };
-                objResult.AddRange(objPassthrough);
-                return objResult.ToArray();
-            }
-
-            if (!ExportModeToFlag.ContainsKey(mode))
-            {
-                Console.Error.WriteLine("ERROR: unknown 'export' mode '{0}' (expected object|code|libs|io|events|all|links).", mode);
-                Environment.Exit(1);
-            }
-
-            string sourcePath = null;
-            string projectPath = null;
-            string plcName = null;
-            var passthrough = new List<string>();
-            for (int i = 2; i < args.Length; i++)
-            {
-                if (args[i] == "--project" && i + 1 < args.Length)
-                    projectPath = args[++i];
-                else if (args[i] == "--plc-name" && i + 1 < args.Length)
-                    plcName = args[++i];
-                else if (sourcePath == null && !args[i].StartsWith("--"))
-                    sourcePath = args[i];
-                else
-                    passthrough.Add(args[i]);
-            }
-
-            if (sourcePath == null)
-            {
-                Console.Error.WriteLine("ERROR: 'export {0}' requires a path to the .st source destination folder.", mode);
-                Environment.Exit(1);
-            }
-            if (projectPath == null)
-            {
-                Console.Error.WriteLine("ERROR: 'export {0}' requires --project <path-to-tsproj-or-folder>.", mode);
-                Environment.Exit(1);
-            }
-
-            string tsprojPath;
-            try
-            {
-                tsprojPath = ProjectLocator.ResolveTsprojPath(projectPath);
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine("ERROR: {0}", ex.Message);
-                Environment.Exit(1);
-                return null; // unreachable, satisfies the compiler
-            }
-            string resolvedPlcName = ProjectLocator.ResolvePlcName(tsprojPath, plcName);
-
-            var result = new List<string> { "--source", sourcePath, "--tsproj", tsprojPath, "--plc-name", resolvedPlcName };
-            result.AddRange(passthrough);
-            result.Add(ExportModeToFlag[mode]);
             return result.ToArray();
         }
 
@@ -566,6 +269,29 @@ namespace BeckhoffAutomationInterface
             return value;
         }
 
+        /// <summary>Parses a subcommand with Cli.CommandLine; prints the error and the command's
+        /// usage and exits 1 on a command-line problem; prints usage and exits 0 on --help.</summary>
+        static RunOptions ParseOrExit(string[] args, string shell)
+        {
+            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
+            {
+                Console.WriteLine("Usage: beckhoffAutomationInterface " + Cli.CommandLine.UsageOf(args[0]));
+                Environment.Exit(0);
+            }
+            try
+            {
+                return Cli.CommandLine.Parse(args, shell);
+            }
+            catch (Cli.UsageException ex)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                if (ex.Usage != null)
+                    Console.Error.WriteLine("Usage: beckhoffAutomationInterface " + ex.Usage);
+                Environment.Exit(1);
+                return null; // unreachable
+            }
+        }
+
         [STAThread]
         static void Main(string[] args)
         {
@@ -583,6 +309,7 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
+            RunOptions options = null;
             switch (args[0])
             {
                 // Runtime commands: new CLI style, no legacy-flag translation (see Runtime/).
@@ -596,16 +323,12 @@ namespace BeckhoffAutomationInterface
                     Environment.Exit(Runtime.Doctor.Run());
                     break;
                 case "build":
-                    args = TranslateBuildSubcommand(args);
-                    break;
                 case "check":
-                    args = TranslateCheckSubcommand(args);
+                case "export":
+                    options = ParseOrExit(args, shell);
                     break;
                 case "sync":
                     args = TranslateSyncSubcommand(args);
-                    break;
-                case "export":
-                    args = TranslateExportSubcommand(args);
                     break;
                 case "init":
                     args = TranslateInitSubcommand(args);
@@ -618,10 +341,12 @@ namespace BeckhoffAutomationInterface
                     break;
             }
 
-            if (shell != null)
-                args = args.Concat(new[] { "--shell", shell }).ToArray();
-
-            RunOptions options = RunOptions.Parse(args);
+            if (options == null)
+            {
+                if (shell != null)
+                    args = args.Concat(new[] { "--shell", shell }).ToArray();
+                options = RunOptions.Parse(args);
+            }
             if (options.ConfigFileLoaded)
                 Console.WriteLine("{0}: Loaded defaults from '.stconfig' (pass --no-config to ignore it).", Now());
             Console.WriteLine("{0}: Source='{1}'  Dest='{2}'  Project='{3}'", Now(), options.SourceFolder, options.DestinationFolder, options.ProjectName);

@@ -500,7 +500,7 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 
 **Acceptance criteria:**
 - [x] Spec covers every command and option. No two options mean the same thing. (Draft in `docs/ideas/cli-subcommand-redesign.md`, 2026-10-14)
-- [ ] The user approves the spec
+- [x] The user approves the spec (2026-10-14: "continue" after the draft; one deviation: no `plc=` in .stconfig — the PLC name stays command-line only, as the original design required)
 
 **Verification:** Review only.
 **Dependencies:** Checkpoint 4 (new commands are known)
@@ -511,16 +511,16 @@ and `activate` now attach a temporary copy of the project folder (without `_Boot
 **Description:** These commands produce their options directly, with no translation to legacy flags.
 
 **Acceptance criteria:**
-- [ ] The four commands follow the spec. `--help` per command.
+- [x] The four commands follow the spec. `--help` per command. (activate/verify/doctor were new-style already; build moved to `Cli/CommandLine.cs`)
 
-**Verification:** Unit tests per command (move the relevant `RunOptionsTests`)
+**Verification:** Unit tests per command (`CommandLineTests`); real runs: `build --help`, `build --plc-name` rejected, `build --variant MachineB`
 **Dependencies:** Task 16
 **Files likely touched:** new `Cli/*.cs`, `Program.cs`, tests
 **Scope:** M
 
 ## Task 18: New parser for `check` and `export`
 **Acceptance criteria:**
-- [ ] Both commands follow the spec. The old translation methods for them are deleted.
+- [x] Both commands follow the spec. The old translation methods for them are deleted. (real runs: `check parse`, `check events` without --project rejected, `export code`)
 
 **Verification:** Unit tests
 **Dependencies:** Task 17

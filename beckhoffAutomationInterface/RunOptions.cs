@@ -251,7 +251,7 @@ namespace BeckhoffAutomationInterface
         /// <summary>--all-variants: build every project variant (also the default).</summary>
         public bool AllVariants { get; }
 
-        RunOptions(string sourceFolder, string destinationFolder, string projectName,
+        internal RunOptions(string sourceFolder, string destinationFolder, string projectName,
             SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants)
         {
             SourceFolder = sourceFolder;
