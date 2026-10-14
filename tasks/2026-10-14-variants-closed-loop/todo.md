@@ -447,17 +447,37 @@ project is attached read-only and never saved) and says so. (2) The hint checks 
 license: expired → license; valid → "an I/O device the target cannot start (e.g. EtherCAT on UmRT)".
 
 **Acceptance criteria:**
-- [ ] Spike project (enabled EtherCAT master) activates on UmRT, PLC reaches Run, `verify` passes
-- [ ] The `.tsproj` on disk is unchanged by the activation
-- [ ] With a valid license, the Config hint no longer blames the license
+- [x] Spike project (enabled EtherCAT master) activates on UmRT, PLC reaches Run, `verify` passes (2026-10-14)
+- [x] The `.tsproj` on disk is unchanged by the activation — **it was NOT at first** (TwinCAT saves by itself); fixed by Task 15c
+- [x] With a valid license, the Config hint no longer blames the license
 
 **Verification:**
-- [ ] Unit test: hint text for expired / valid / no license
-- [ ] Manual: the spike project on UmRT
+- [x] Unit test: hint text for expired / valid / no license (`ConfigModeHintTests`)
+- [x] Manual: the spike project on UmRT; `verify --target local` now says "No license file was found"
 
 **Dependencies:** Tasks 13, 15
 **Files likely touched:** `Runtime/RuntimeCommands.cs`, `Runtime/Doctor.cs`, tests
 **Scope:** S
+
+## Task 15c: Adopted projects are never written (shadow copy)
+**Description:** Found in Task 15b (2026-10-14). The "read-only attach" was not read-only: TwinCAT
+saves the project by itself during a build that switches variants (`TcProjectVariant`, `TmcHash`)
+and during activation (`TargetNetId`, disabled devices, autostart). `build <path>`, reverse export
+and `activate` now attach a temporary copy of the project folder (without `_Boot`,
+`_CompileInfo`, `.vs`), map error paths back, and delete the copy after the shell closes.
+
+**Acceptance criteria:**
+- [x] After build (both variants), a failing build, activate and verify: 0 project files changed, 0 new
+- [x] Error locations point at the original project, not the copy
+- [x] No shadow folder is left in TEMP
+
+**Verification:**
+- [x] Unit tests (`ProjectShadowCopyTests`): what is copied/skipped, original untouched, path mapping, cleanup
+- [x] Manual (2026-10-14): file hashes of the spike project before/after the whole sequence — identical
+
+**Dependencies:** Task 15b
+**Files touched:** new `ProjectShadowCopy.cs`, `TwinCatProjectOpener.cs`, `TwinCatSession.cs`, `SyncPipeline.cs`, `Runtime/RuntimeCommands.cs`, tests
+**Scope:** M
 
 ### Checkpoint 4: Closed loop
 - [x] End-to-end script `e2e/variant-sample.ps1`, fresh run 2026-10-14: **E2E PASSED, all 10 steps as expected**

@@ -95,7 +95,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
             using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
             {
-                if (!WaitForPlcRun(netId, plc, timeoutS))
+                if (!WaitForPlcRun(target, netId, plc, timeoutS))
                     return 1;
 
                 List<CheckResult> results = ExpectationChecker.Check(expectations, plc.TryRead, Thread.Sleep);
@@ -170,77 +170,114 @@ namespace BeckhoffAutomationInterface.Runtime
             }
 
             string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc-name"));
-            using (VisualStudioSession vs = VisualStudioSession.Start(shellName))
+            ProjectShadowCopy shadow = null;
+            try
             {
-                (EnvDTE.Project _, Interop.TCatSysManager.ITcSysManager sys) = TwinCatProjectOpener.OpenExistingReadOnly(vs.Dte, tsprojPath);
-                var sys14 = (Interop.TCatSysManager.ITcSysManager14)sys;
-                string plcItem = "TIPC^" + plcName;
+                using (VisualStudioSession vs = VisualStudioSession.Start(shellName))
+                {
+                    // A shadow copy: TwinCAT saves the project during build and activation by itself.
+                    var opened = TwinCatProjectOpener.OpenExistingReadOnly(vs.Dte, tsprojPath);
+                    shadow = opened.Shadow;
+                    Interop.TCatSysManager.ITcSysManager sys = opened.SysManager;
+                    var sys14 = (Interop.TCatSysManager.ITcSysManager14)sys;
+                    string plcItem = "TIPC^" + plcName;
 
-                // Exactly one variant runs on a target.
-                List<string> selected;
-                try
-                {
-                    selected = Sync.VariantBuildPlan.Select(Sync.VariantSyncEngine.ProjectVariants(sys), a.Get("--variant"), false);
-                    if (selected.Count > 1)
-                        throw new ArgumentException(string.Format("the project has variants ({0}); choose one with --variant.", string.Join(", ", selected)));
-                }
-                catch (ArgumentException ex)
-                {
-                    Console.WriteLine("{0}: ACTIVATE FAILED — {1}", Now(), ex.Message);
-                    return 1;
-                }
-                if (selected.Count == 1)
-                {
-                    if (!Sync.VariantSyncEngine.DefinesEnabled(sys, plcItem))
+                    // Exactly one variant runs on a target.
+                    List<string> selected;
+                    try
                     {
-                        Console.WriteLine("{0}: ACTIVATE FAILED — variant defines are off for '{1}'. Run 'sync variants' first.", Now(), plcItem);
+                        selected = Sync.VariantBuildPlan.Select(Sync.VariantSyncEngine.ProjectVariants(sys), a.Get("--variant"), false);
+                        if (selected.Count > 1)
+                            throw new ArgumentException(string.Format("the project has variants ({0}); choose one with --variant.", string.Join(", ", selected)));
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        Console.WriteLine("{0}: ACTIVATE FAILED — {1}", Now(), ex.Message);
                         return 1;
                     }
-                    sys14.CurrentProjectVariant = selected[0];
-                    Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
-                }
+                    if (selected.Count == 1)
+                    {
+                        if (!Sync.VariantSyncEngine.DefinesEnabled(sys, plcItem))
+                        {
+                            Console.WriteLine("{0}: ACTIVATE FAILED — variant defines are off for '{1}'. Run 'sync variants' first.", Now(), plcItem);
+                            return 1;
+                        }
+                        sys14.CurrentProjectVariant = selected[0];
+                        Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
+                    }
 
-                sys14.SetTargetNetId(netId);
-                Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
-                // The PLC must start by itself after the restart, or nothing can be verified.
-                sys.LookupTreeItem(plcItem).ConsumeXml(
-                    "<TreeItem><PlcProjectDef><BootProjectAutostart>true</BootProjectAutostart></PlcProjectDef></TreeItem>");
+                    sys14.SetTargetNetId(netId);
+                    Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
 
-                Sync.BuildReport build;
-                try
-                {
-                    build = Sync.BuildRunner.Build(vs.Dte, clean: true);
-                }
-                catch (Sync.BuildTimeoutException ex)
-                {
-                    Console.WriteLine("{0}: ACTIVATE FAILED — build timed out: {1}", Now(), ex.Message);
-                    return 1;
-                }
-                foreach (string message in build.PragmaMessages)
-                    Console.WriteLine("    [PLC MESSAGE] {0}", message);
-                if (!build.Success)
-                {
-                    Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
-                    foreach (Sync.BuildError e in build.Errors)
-                        Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, e.FileName, e.Line);
-                    return 1;
-                }
-                Console.WriteLine("{0}: Build passed.", Now());
+                    if (target == RuntimeTargets.UmRt)
+                    {
+                        // UmRT has no EtherCAT adapter: an enabled master keeps TwinCAT in Config.
+                        // Disable the I/O devices for this activation only — the project is attached
+                        // read-only and never saved, so the files on disk do not change.
+                        int disabled = DisableIoDevices(sys);
+                        if (disabled > 0)
+                            Console.WriteLine("{0}: UmRT has no EtherCAT adapter: {1} I/O device(s) disabled for this activation (project not saved).", Now(), disabled);
+                    }
+                    // The PLC must start by itself after the restart, or nothing can be verified.
+                    sys.LookupTreeItem(plcItem).ConsumeXml(
+                        "<TreeItem><PlcProjectDef><BootProjectAutostart>true</BootProjectAutostart></PlcProjectDef></TreeItem>");
 
-                sys.ActivateConfiguration();
-                Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
-                sys.StartRestartTwinCAT();
-                Console.WriteLine("{0}: TwinCAT restart requested.", Now());
+                    Sync.BuildReport build;
+                    try
+                    {
+                        build = Sync.BuildRunner.Build(vs.Dte, clean: true);
+                    }
+                    catch (Sync.BuildTimeoutException ex)
+                    {
+                        Console.WriteLine("{0}: ACTIVATE FAILED — build timed out: {1}", Now(), ex.Message);
+                        return 1;
+                    }
+                    foreach (string message in build.PragmaMessages)
+                        Console.WriteLine("    [PLC MESSAGE] {0}", message);
+                    if (!build.Success)
+                    {
+                        Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
+                        foreach (Sync.BuildError e in build.Errors)
+                            Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, shadow.ToOriginalPath(e.FileName), e.Line);
+                        return 1;
+                    }
+                    Console.WriteLine("{0}: Build passed.", Now());
+
+                    sys.ActivateConfiguration();
+                    Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
+                    sys.StartRestartTwinCAT();
+                    Console.WriteLine("{0}: TwinCAT restart requested.", Now());
+                }
+            }
+            finally
+            {
+                shadow?.Dispose(); // after the shell is closed
             }
 
             int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
             using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
             {
-                if (!WaitForPlcRun(netId, plc, timeoutS))
+                if (!WaitForPlcRun(target, netId, plc, timeoutS))
                     return 1;
             }
             Console.WriteLine("{0}: ACTIVATED — boot project now: {1}", Now(), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
             return 0;
+        }
+
+        static int DisableIoDevices(Interop.TCatSysManager.ITcSysManager sys)
+        {
+            Interop.TCatSysManager.ITcSmTreeItem io = sys.LookupTreeItem("TIID");
+            int count = 0;
+            for (int i = 1; i <= io.ChildCount; i++)
+            {
+                Interop.TCatSysManager.ITcSmTreeItem device = io.Child[i];
+                if (device.Disabled == Interop.TCatSysManager.DISABLED_STATE.SMDS_NOT_DISABLED)
+                {
+                    device.Disabled = Interop.TCatSysManager.DISABLED_STATE.SMDS_DISABLED;
+                    count++;
+                }
+            }
+            return count;
         }
 
         static string TwinCatState(string netId)
@@ -252,9 +289,22 @@ namespace BeckhoffAutomationInterface.Runtime
             }
         }
 
-        /// <summary>Waits for the PLC (port 851) to report Run. On timeout, names the likely
-        /// cause: TwinCAT left in Config mode usually means an expired (trial) license.</summary>
-        static bool WaitForPlcRun(string netId, AdsClient plc, int timeoutS)
+        /// <summary>Why TwinCAT may stay in Config mode, based on the target's license (pure, unit-tested).
+        /// licenseExpiry: null = no license file; DateTime.MaxValue = no expiry.</summary>
+        internal static string ConfigModeHint(DateTime? licenseExpiry, DateTime now)
+        {
+            if (licenseExpiry == null)
+                return "No license file was found on the target. Create a 7-day trial license in XAE (SYSTEM > License).";
+            if (licenseExpiry.Value <= now)
+                return string.Format("The license expired {0:yyyy-MM-dd HH:mm}. Renew it in XAE (SYSTEM > License > 7 Days Trial License).", licenseExpiry.Value);
+            return (licenseExpiry.Value == DateTime.MaxValue ? "The license has no expiry" : string.Format("The license is valid until {0:yyyy-MM-dd}", licenseExpiry.Value))
+                + ", so the likely cause is a device the target cannot start (for example an EtherCAT master on UmRT, which"
+                + " has no EtherCAT adapter) or another configuration error. Check the target's TwinCAT event log.";
+        }
+
+        /// <summary>Waits for the PLC (port 851) to report Run. On timeout, says why TwinCAT may
+        /// have stayed in Config mode (see ConfigModeHint).</summary>
+        static bool WaitForPlcRun(string target, string netId, AdsClient plc, int timeoutS)
         {
             var clock = Stopwatch.StartNew();
             ushort plcState = 0;
@@ -277,8 +327,8 @@ namespace BeckhoffAutomationInterface.Runtime
                 string plcText = plcErr == 0 ? AdsClient.StateName(plcState) : "not reachable (ADS error " + plcErr + ")";
                 Console.WriteLine("{0}: VERIFY FAILED — PLC not in Run after {1} s. TwinCAT: {2}. PLC: {3}.", Now(), timeoutS, sysText, plcText);
                 if (sysErr == 0 && sysState == AdsClient.StateConfig)
-                    Console.WriteLine("    TwinCAT stays in Config mode: the runtime did not start. The usual cause is an expired" +
-                                      " license (7-day trial) — run 'doctor' to see the expiry date.");
+                    Console.WriteLine("    TwinCAT stays in Config mode: the runtime did not start. " +
+                                      ConfigModeHint(RuntimeTargets.LicenseExpiry(target), DateTime.Now));
             }
             return false;
         }

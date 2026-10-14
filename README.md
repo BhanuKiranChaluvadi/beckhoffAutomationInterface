@@ -671,17 +671,24 @@ Build, run and check a project without touching XAE by hand. Two targets only:
 ```
 
 - **`activate` replaces the target's boot project.** Without `--yes` it prints what is on the
-  target now and stops. With `--yes`: attach read-only (never saved) → select the variant →
-  set the target → boot project autostart → clean + build → activate → restart → wait for the
-  PLC to reach Run. A failed build stops before activation, so the running program stays.
+  target now and stops. With `--yes`: select the variant → set the target → boot project
+  autostart → clean + build → activate → restart → wait for the PLC to reach Run. A failed build
+  stops before activation, so the running program stays.
+- **The project's own files are never written.** `build <path>` and `activate` work on a
+  temporary **shadow copy** of the project folder (deleted afterwards), because TwinCAT saves the
+  project by itself during a variant build and during activation. Error locations are reported
+  in the original project.
+- **UmRT has no EtherCAT adapter.** With `--target umrt`, `activate` disables the I/O devices in
+  the shadow copy, so the PLC logic runs and can be verified. Real I/O needs the real machine.
 - **`expect.json`** lists, per variant, the live values that prove the right program runs
   (example: [`ST/VariantSample/expect.json`](ST/VariantSample/expect.json)):
   - `"equals"` — a value (strings, BOOL, numbers; `"tolerance"` for REAL/LREAL)
   - `"increases"` — a counter that must move (read twice, 0.5 s apart)
   - `"absentOrZero"` — code that must not run: not linked into the program, or 0
-- **If the PLC never reaches Run** and TwinCAT stays in Config mode, the usual cause is an
-  expired 7-day trial license. `verify`/`activate` say so; `doctor` shows the expiry date.
-  The trial license must be renewed in XAE by a person (it asks for a security code).
+- **If the PLC never reaches Run** and TwinCAT stays in Config mode, `verify`/`activate` check the
+  target's license: missing or expired → that is the cause; valid → a device the target cannot
+  start (or another configuration error). `doctor` shows the expiry date. A 7-day trial license
+  must be renewed in XAE by a person (it asks for a security code).
 
 **End-to-end check:** [`e2e/variant-sample.ps1`](e2e/variant-sample.ps1) runs the whole loop on
 `ST/VariantSample` — init, build all variants, then for each variant activate, verify it, and

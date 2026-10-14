@@ -23,6 +23,10 @@ namespace BeckhoffAutomationInterface
         public EnvDTE.Project Project { get; private set; }
         public ITcSysManager SysManager { get; private set; }
 
+        /// <summary>Set when an adopted project is open: the temp copy that is actually attached
+        /// (see TwinCatProjectOpener.OpenExistingReadOnly). Null for a tool-owned project.</summary>
+        public ProjectShadowCopy Shadow { get; private set; }
+
         public bool IsOpen => Vs != null;
         public EnvDTE80.DTE2 Dte => Vs.Dte;
 
@@ -58,7 +62,9 @@ namespace BeckhoffAutomationInterface
                 // export AND a plain --tsproj + --build (CI compiling an arbitrary
                 // pre-existing project with no .sln, e.g. one hosted natively on GitHub
                 // rather than bootstrapped by this tool).
-                (Project, SysManager) = TwinCatProjectOpener.OpenExistingReadOnly(Vs.Dte, _options.TsprojFilePath);
+                ProjectShadowCopy shadow;
+                (Project, SysManager, shadow) = TwinCatProjectOpener.OpenExistingReadOnly(Vs.Dte, _options.TsprojFilePath);
+                Shadow = shadow;
                 _solutionSavedAs = true; // never save — this project is read-only, adopted as-is
                 return;
             }
@@ -84,6 +90,8 @@ namespace BeckhoffAutomationInterface
                 return;
             Vs.Dispose();
             Vs = null;
+            Shadow?.Dispose(); // after the shell is gone, so no file is held
+            Shadow = null;
             Project = null;
             SysManager = null;
         }

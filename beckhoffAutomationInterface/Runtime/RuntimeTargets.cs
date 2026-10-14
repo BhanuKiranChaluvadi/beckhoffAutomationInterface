@@ -51,6 +51,33 @@ namespace BeckhoffAutomationInterface.Runtime
         public static string BootFolder(string target) =>
             Normalize(target) == UmRt ? Path.Combine(UmRtFolder, "Boot") : Path.Combine(TwinCatData, "Boot");
 
+        /// <summary>Folders that hold the target's license files (*.tclrs).</summary>
+        public static IReadOnlyList<string> LicenseFolders(string target)
+        {
+            if (Normalize(target) == UmRt)
+                return new[] { Path.Combine(UmRtFolder, "Target", "License") };
+            return new[]
+            {
+                Path.Combine(TwinCatData, "Target", "License"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Beckhoff", "TwinCAT", "3.1", "Target", "License"),
+            };
+        }
+
+        /// <summary>Latest license expiry on the target: null = no license file; DateTime.MaxValue =
+        /// a license without expiry.</summary>
+        public static DateTime? LicenseExpiry(string target)
+        {
+            DateTime? latest = null;
+            foreach (string folder in LicenseFolders(target).Where(Directory.Exists))
+                foreach (string file in Directory.GetFiles(folder, "*.tclrs"))
+                {
+                    DateTime expiry = Doctor.LicenseExpiry(File.ReadAllText(file)) ?? DateTime.MaxValue;
+                    if (latest == null || expiry > latest)
+                        latest = expiry;
+                }
+            return latest;
+        }
+
         /// <summary>"name (created …)" of the boot project on the target, or null when there is none.</summary>
         public static string CurrentBootProject(string target)
         {

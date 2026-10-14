@@ -67,11 +67,22 @@ namespace BeckhoffAutomationInterface
         /// never written to. CALLERS MUST NEVER call Project.Save()/dte.Solution.SaveAs()
         /// anywhere on this path; TwinCatSession.EnsureOpen enforces this by skipping its
         /// usual save-as step whenever ExistingTsprojPath is set.
+        ///
+        /// SHADOW COPY (2026-10-14): never calling Save is NOT enough — TwinCAT saves the
+        /// project by itself during a build that switches variants and during activation
+        /// (measured: TcProjectVariant, TmcHash, TargetNetId, disabled devices were written).
+        /// So the project folder is copied to a temp folder and the COPY is attached; the
+        /// adopted files stay byte-identical. The caller owns the returned shadow copy and
+        /// disposes it (deletes the copy) after the shell is closed.
         /// </summary>
-        public static (EnvDTE.Project Project, ITcSysManager SysManager) OpenExistingReadOnly(EnvDTE80.DTE2 dte, string tsprojPath)
+        public static (EnvDTE.Project Project, ITcSysManager SysManager, ProjectShadowCopy Shadow) OpenExistingReadOnly(EnvDTE80.DTE2 dte, string tsprojPath)
         {
             if (!File.Exists(tsprojPath))
                 throw new FileNotFoundException($"tsproj not found: {tsprojPath}", tsprojPath);
+
+            ProjectShadowCopy shadow = ProjectShadowCopy.Create(tsprojPath);
+            Console.WriteLine("{0}: Working on a shadow copy (the project's own files are never written): '{1}'", Now(), shadow.ShadowDir);
+            tsprojPath = shadow.TsprojPath;
 
             string tempSolutionDir = Path.Combine(Path.GetTempPath(), "bai_reverse_export_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempSolutionDir);
@@ -80,7 +91,7 @@ namespace BeckhoffAutomationInterface
             dte.Solution.Create(tempSolutionDir, "ReverseExportSession");
             EnvDTE.Project project = dte.Solution.AddFromFile(tsprojPath, true);
             var sysManager = (ITcSysManager)project.Object;
-            return (project, sysManager);
+            return (project, sysManager, shadow);
         }
 
         static (EnvDTE.Project, ITcSysManager) BootstrapNew(EnvDTE80.DTE2 dte, RunOptions options)

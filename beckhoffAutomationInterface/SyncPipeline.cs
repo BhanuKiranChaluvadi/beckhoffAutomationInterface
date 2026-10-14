@@ -615,6 +615,9 @@ namespace BeckhoffAutomationInterface
                 return result; // Main's using will force-close VS (dialog is still up)
             }
 
+            if (_session.Shadow != null) // report locations in the adopted project, not in its temp copy
+                foreach (BuildError e in buildReport.Errors.Concat(buildReport.Warnings))
+                    e.FileName = _session.Shadow.ToOriginalPath(e.FileName);
             foreach (string message in buildReport.PragmaMessages)
                 Console.WriteLine("    [PLC MESSAGE] {0}", message);
             result.Passed = buildReport.Success;

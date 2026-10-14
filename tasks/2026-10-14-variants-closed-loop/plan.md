@@ -82,7 +82,8 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [x] Task 13: `activate` command
 - [x] Task 14: `verify` command
 - [x] Task 15: `doctor` command
-- [ ] Task 15b: UmRT activation disables I/O; Config hint checks the license (found in Task 8)
+- [x] Task 15b: UmRT activation disables I/O; Config hint checks the license (found in Task 8)
+- [x] Task 15c: adopted projects are never written — shadow copy (found in Task 15b)
 
 ### Checkpoint 4: Closed loop
 - [x] `ST/VariantSample`: `activate` + `verify` pass for both variants on `UmRT_Default`.
