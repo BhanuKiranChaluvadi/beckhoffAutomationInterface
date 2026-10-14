@@ -193,15 +193,15 @@ Parse it into a model. Validate: unique names, every group member is a declared 
 names are valid PLC identifiers (they become defines). Produce the `ProjectVariantConfig` XML string.
 
 **Acceptance criteria:**
-- [ ] Valid file → model + correct `ProjectVariantConfig` XML (same shape as the prototype)
-- [ ] Invalid file → one error per problem, with line numbers
-- [ ] No `variants.xml` → no variant behaviour (current projects unchanged)
+- [x] Valid file → model + correct `ProjectVariantConfig` XML (byte-identical to the prototype's string)
+- [x] Invalid file → one error per problem, with line numbers
+- [x] No `variants.xml` → no variant behaviour (current projects unchanged)
 
 **Verification:**
-- [ ] Unit tests: valid, duplicate variant, unknown member, bad identifier, missing file
+- [x] Unit tests: valid, duplicate variant, unknown member, bad identifier, missing file (`VariantManifestTests`, 15 tests)
 
 **Dependencies:** Task 0
-**Files likely touched:** new `Sync/VariantManifestParser.cs`, new `VariantManifestParserTests.cs`
+**Files touched:** new `Sync/VariantManifest.cs` (model + parser + ProjectVariantConfig XML), new `VariantManifestTests.cs`
 **Scope:** S
 
 ## Task 6: `sync variants` stage

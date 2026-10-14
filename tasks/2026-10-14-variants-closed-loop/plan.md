@@ -60,7 +60,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [ ] Manual: `build` passes on the XAE-only bench/CI PC (the `TODO.md` crash is gone).
 
 ### Phase 2: Variant builds
-- [ ] Task 5: `variants.xml` manifest + parser
+- [x] Task 5: `variants.xml` manifest + parser
 - [ ] Task 6: `sync variants` stage (apply variants, groups, implicit defines)
 - [ ] Task 7: `build --variant` / `--all-variants` with per-variant report
 
