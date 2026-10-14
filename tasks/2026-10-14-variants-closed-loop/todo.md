@@ -385,13 +385,15 @@ that is on the target now (ADS or `CurrentProjectInfo.json` for a local UmRT). W
 stop here. With `--yes`: `ActivateConfiguration`, `StartRestartTwinCAT`.
 
 **Acceptance criteria:**
-- [ ] Without `--yes`, nothing changes on the target, and the current boot project is printed
-- [ ] With `--yes`, the target boot project becomes the selected variant
-- [ ] A build failure stops before activation
+- [x] Without `--yes`, nothing changes on the target, and the current boot project is printed (no shell started, 0 s)
+- [x] With `--yes`, the target boot project becomes the selected variant, and the PLC reaches Run
+- [x] A build failure stops before activation (boot project timestamp unchanged; the old variant keeps running)
 
 **Verification:**
-- [ ] Unit test: target name → AMS Net ID resolution (`umrt`, `local`, unknown name rejected, no default target)
-- [ ] Manual: `UmRT_Default`. Back up its `Boot` folder first.
+- [x] Unit test: target name → AMS Net ID resolution (`umrt`, `local`, unknown name rejected, no default target)
+- [x] Manual: `UmRT_Default` (boot folder backed up earlier in `BeckhoffLib/Experiments/VariantDemo/.umrt-backup`). 2026-10-14:
+      activate A → verify A 6/6 OK, verify B 6/6 FAIL; activate B → verify B 6/6 OK, verify A 6/6 FAIL;
+      no `--variant` on a variant project → refused; compile error → "nothing was activated", B still runs
 
 **Dependencies:** Tasks 7, 12
 **Files likely touched:** new `Runtime/Activator.cs`, `Program.cs` (new command), tests

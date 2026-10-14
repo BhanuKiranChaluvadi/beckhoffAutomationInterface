@@ -79,7 +79,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 
 ### Phase 4: Closed loop
 - [x] Task 12: ADS client + `expect.json` parser
-- [ ] Task 13: `activate` command
+- [x] Task 13: `activate` command
 - [x] Task 14: `verify` command
 - [ ] Task 15: `doctor` command
 

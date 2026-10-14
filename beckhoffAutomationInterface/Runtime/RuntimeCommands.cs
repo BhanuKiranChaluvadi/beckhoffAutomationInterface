@@ -129,6 +129,129 @@ namespace BeckhoffAutomationInterface.Runtime
             throw new ArgumentException(string.Format("choose --variant: expect.json lists {0}.", string.Join(", ", file.Keys)));
         }
 
+        // ------------------------------------------------------------------ activate
+
+        const string ActivateUsage =
+            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc-name <name>] [--yes]";
+
+        /// <summary>
+        /// Builds one variant and activates it on the target, then waits for the PLC to run.
+        /// Activation REPLACES the target's boot project, so without --yes it only reports what is
+        /// on the target now and changes nothing (no shell is started). The project is attached
+        /// read-only and never saved. Steps proven by the VariantDemo prototype (2026-10-14).
+        /// </summary>
+        public static int Activate(string[] args, string shellName)
+        {
+            CommandArgs a;
+            string target, netId, tsprojPath;
+            try
+            {
+                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc-name", "--timeout" }, new[] { "--yes" });
+                if (a.Positional == null || a.Get("--target") == null)
+                    throw new ArgumentException("'activate' needs a project path and --target umrt|local.");
+                target = RuntimeTargets.Normalize(a.Get("--target"));
+                netId = RuntimeTargets.NetId(target);
+                tsprojPath = ProjectLocator.ResolveTsprojPath(a.Positional);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is FormatException
+                                       || ex is System.IO.IOException)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                Console.Error.WriteLine(ActivateUsage);
+                return 1;
+            }
+
+            Console.WriteLine("{0}: Target {1} ({2}): TwinCAT {3}; boot project now: {4}", Now(), target, netId,
+                TwinCatState(netId), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
+            if (!a.Has("--yes"))
+            {
+                Console.WriteLine("{0}: NOT ACTIVATED — activation replaces that boot project. Run again with --yes to do it.", Now());
+                return 1;
+            }
+
+            string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc-name"));
+            using (VisualStudioSession vs = VisualStudioSession.Start(shellName))
+            {
+                (EnvDTE.Project _, Interop.TCatSysManager.ITcSysManager sys) = TwinCatProjectOpener.OpenExistingReadOnly(vs.Dte, tsprojPath);
+                var sys14 = (Interop.TCatSysManager.ITcSysManager14)sys;
+                string plcItem = "TIPC^" + plcName;
+
+                // Exactly one variant runs on a target.
+                List<string> selected;
+                try
+                {
+                    selected = Sync.VariantBuildPlan.Select(Sync.VariantSyncEngine.ProjectVariants(sys), a.Get("--variant"), false);
+                    if (selected.Count > 1)
+                        throw new ArgumentException(string.Format("the project has variants ({0}); choose one with --variant.", string.Join(", ", selected)));
+                }
+                catch (ArgumentException ex)
+                {
+                    Console.WriteLine("{0}: ACTIVATE FAILED — {1}", Now(), ex.Message);
+                    return 1;
+                }
+                if (selected.Count == 1)
+                {
+                    if (!Sync.VariantSyncEngine.DefinesEnabled(sys, plcItem))
+                    {
+                        Console.WriteLine("{0}: ACTIVATE FAILED — variant defines are off for '{1}'. Run 'sync variants' first.", Now(), plcItem);
+                        return 1;
+                    }
+                    sys14.CurrentProjectVariant = selected[0];
+                    Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
+                }
+
+                sys14.SetTargetNetId(netId);
+                Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
+                // The PLC must start by itself after the restart, or nothing can be verified.
+                sys.LookupTreeItem(plcItem).ConsumeXml(
+                    "<TreeItem><PlcProjectDef><BootProjectAutostart>true</BootProjectAutostart></PlcProjectDef></TreeItem>");
+
+                Sync.BuildReport build;
+                try
+                {
+                    build = Sync.BuildRunner.Build(vs.Dte, clean: true);
+                }
+                catch (Sync.BuildTimeoutException ex)
+                {
+                    Console.WriteLine("{0}: ACTIVATE FAILED — build timed out: {1}", Now(), ex.Message);
+                    return 1;
+                }
+                foreach (string message in build.PragmaMessages)
+                    Console.WriteLine("    [PLC MESSAGE] {0}", message);
+                if (!build.Success)
+                {
+                    Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
+                    foreach (Sync.BuildError e in build.Errors)
+                        Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, e.FileName, e.Line);
+                    return 1;
+                }
+                Console.WriteLine("{0}: Build passed.", Now());
+
+                sys.ActivateConfiguration();
+                Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
+                sys.StartRestartTwinCAT();
+                Console.WriteLine("{0}: TwinCAT restart requested.", Now());
+            }
+
+            int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
+            using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
+            {
+                if (!WaitForPlcRun(netId, plc, timeoutS))
+                    return 1;
+            }
+            Console.WriteLine("{0}: ACTIVATED — boot project now: {1}", Now(), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
+            return 0;
+        }
+
+        static string TwinCatState(string netId)
+        {
+            using (var system = new AdsClient(netId, AdsClient.PortSystemService))
+            {
+                int err = system.TryReadState(out ushort state);
+                return err == 0 ? AdsClient.StateName(state) : "not reachable (ADS error " + err + ")";
+            }
+        }
+
         /// <summary>Waits for the PLC (port 851) to report Run. On timeout, names the likely
         /// cause: TwinCAT left in Config mode usually means an expired (trial) license.</summary>
         static bool WaitForPlcRun(string netId, AdsClient plc, int timeoutS)
