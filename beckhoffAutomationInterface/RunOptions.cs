@@ -251,8 +251,12 @@ namespace BeckhoffAutomationInterface
         /// <summary>--all-variants: build every project variant (also the default).</summary>
         public bool AllVariants { get; }
 
+        /// <summary>--define NAME (build only): extra PLC compiler defines for this build, added
+        /// after the variant is selected (see Sync/CompilerDefines). Empty when none.</summary>
+        public IReadOnlyList<string> Defines { get; }
+
         internal RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -279,6 +283,7 @@ namespace BeckhoffAutomationInterface
             SourceFolderExplicit = sourceFolderExplicit;
             Variant = variant;
             AllVariants = allVariants;
+            Defines = defines ?? new string[0];
         }
 
         static readonly System.Text.RegularExpressions.Regex PlcIdentifier =

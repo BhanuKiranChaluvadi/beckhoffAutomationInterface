@@ -665,6 +665,13 @@ namespace BeckhoffAutomationInterface
         VariantBuildResult BuildOnce(bool clean, string variant = null)
         {
             var result = new VariantBuildResult { Variant = variant };
+            if (_options.Defines.Count > 0)
+            {
+                // After the variant is selected: TwinCAT keeps the variant's defines in the same field.
+                string defines = null;
+                RetryOnBusy(() => defines = CompilerDefines.Add(_session.SysManager, _options.ProjectRootPath, _options.Defines), "adding compiler defines");
+                Console.WriteLine("{0}: Compiler defines for this build: {1}", Now(), defines);
+            }
             BuildReport buildReport = null;
             try
             {

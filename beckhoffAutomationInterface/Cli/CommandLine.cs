@@ -22,7 +22,7 @@ namespace BeckhoffAutomationInterface.Cli
     static class CommandLine
     {
         public const string BuildUsage =
-            "build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants]";
+            "build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants] [--define <NAME>]...";
         public const string CheckUsage =
             "check parse|format|links <source> [--ignore <glob>]...\n  check events <source> --project <project>";
         public const string SyncUsage =
@@ -134,8 +134,11 @@ namespace BeckhoffAutomationInterface.Cli
 
         static RunOptions ParseBuild(string[] args, string shell, string cwd)
         {
-            Args a = Args.Read(args, 1, BuildUsage, new[] { "--plc", "--variant" }, new[] { "--clean", "--all-variants" });
+            Args a = Args.Read(args, 1, BuildUsage, new[] { "--plc", "--variant", "--define" }, new[] { "--clean", "--all-variants" });
             string project = a.Positionals.Count == 1 ? a.Positionals[0] : throw new UsageException("'build' needs exactly one <project>.", BuildUsage);
+            string defineProblem = Sync.CompilerDefines.Problem(a.GetAll("--define"));
+            if (defineProblem != null)
+                throw new UsageException(defineProblem, BuildUsage);
             Config config = Config.Load(a, null, cwd);
             string tsproj = ResolveTsproj(project, BuildUsage);
             return Make(config, shell, a,
@@ -278,7 +281,8 @@ namespace BeckhoffAutomationInterface.Cli
                 clean: a.Has("--clean") || config.Clean,
                 sourceFolderExplicit: sourceFolder != null || config.Source != null,
                 variant: a.Get("--variant"),
-                allVariants: a.Has("--all-variants"));
+                allVariants: a.Has("--all-variants"),
+                defines: a.GetAll("--define"));
         }
 
         static string SingleSource(Args a, string command, string usage)

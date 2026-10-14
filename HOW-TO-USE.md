@@ -217,6 +217,10 @@ bai activate C:\work\TwinCAT\Shark --target umrt --variant SAS --yes
 
 The tool compiles the variant, activates it, starts TwinCAT, and waits until the PLC is in Run.
 On `umrt`, the tool disables the EtherCAT devices, because UmRT has no EtherCAT adapter.
+To start the PLC in simulation for such a test run, add `--define SIMULATION`: the tool adds
+this PLC compiler define for this build only (the code tests `{IF defined (SIMULATION)}`).
+`build` takes `--define` too. `sync` and `init` do not: they save the project, and a test
+define must never be saved into it.
 Your project files do not change. The tool works on a temporary copy.
 
 ### 10.2 Verify
@@ -366,12 +370,12 @@ Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 | `bai doctor` | No |
 | `bai init <source> --into <folder> [--name N]` | Yes |
 | `bai sync code\|libs\|io\|events\|variants\|all <source> --project <p> [--incremental] [--clean] [--confirm-delete] [--confirm-delete-io] [--variant V]` | Yes (`events`: no) |
-| `bai build <project> [--plc N] [--clean] [--variant V \| --all-variants]` | Yes |
+| `bai build <project> [--plc N] [--clean] [--variant V \| --all-variants] [--define NAME]...` | Yes |
 | `bai check parse\|format\|links <source>` | No |
 | `bai check events <source> --project <p>` | No |
 | `bai export code\|libs\|io\|events\|links\|all <source> --project <p> [--plc N] [--overwrite]` | Yes (`events`: no) |
 | `bai export object <Name> <source> --project <p> [--plc N]` | Yes |
-| `bai activate <project> --target umrt\|local [--variant V] [--plc N] [--yes]` | Yes (only with `--yes`) |
+| `bai activate <project> --target umrt\|local [--variant V] [--plc N] [--define NAME]... [--yes]` | Yes (only with `--yes`) |
 | `bai verify --target umrt\|local --expect <expect.json> [--variant V] [--timeout S]` | No |
 
 For each command that opens TwinCAT: `--shell xae|vs2022`.

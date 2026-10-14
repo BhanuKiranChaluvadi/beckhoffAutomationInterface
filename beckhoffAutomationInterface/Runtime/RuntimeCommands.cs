@@ -12,7 +12,7 @@ namespace BeckhoffAutomationInterface.Runtime
     sealed class CommandArgs
     {
         public string Positional { get; private set; }
-        readonly Dictionary<string, string> _options = new Dictionary<string, string>(StringComparer.Ordinal);
+        readonly Dictionary<string, List<string>> _options = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         readonly HashSet<string> _switches = new HashSet<string>(StringComparer.Ordinal);
 
         public static CommandArgs Parse(string[] args, IEnumerable<string> optionNames, IEnumerable<string> switchNames)
@@ -27,7 +27,11 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     if (i + 1 >= args.Length)
                         throw new ArgumentException(a + " needs a value.");
-                    result._options[a] = args[++i];
+                {
+                    if (!result._options.TryGetValue(a, out List<string> values))
+                        result._options[a] = values = new List<string>();
+                    values.Add(args[++i]);
+                }
                 }
                 else if (switches.Contains(a))
                     result._switches.Add(a);
@@ -41,7 +45,8 @@ namespace BeckhoffAutomationInterface.Runtime
             return result;
         }
 
-        public string Get(string option) => _options.TryGetValue(option, out string v) ? v : null;
+        public string Get(string option) => _options.TryGetValue(option, out List<string> v) ? v[v.Count - 1] : null;
+        public IReadOnlyList<string> GetAll(string option) => _options.TryGetValue(option, out List<string> v) ? v : new List<string>();
         public bool Has(string flag) => _switches.Contains(flag);
     }
 
@@ -137,7 +142,7 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ activate
 
         internal const string ActivateUsage =
-            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc <name>] [--timeout <s>] [--yes]";
+            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
 
         /// <summary>
         /// Builds one variant and activates it on the target, then waits for the PLC to run.
@@ -151,9 +156,12 @@ namespace BeckhoffAutomationInterface.Runtime
             string target, netId, tsprojPath;
             try
             {
-                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout" }, new[] { "--yes" });
+                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout", "--define" }, new[] { "--yes" });
                 if (a.Positional == null || a.Get("--target") == null)
                     throw new ArgumentException("'activate' needs a project path and --target umrt|local.");
+                string defineProblem = Sync.CompilerDefines.Problem(a.GetAll("--define"));
+                if (defineProblem != null)
+                    throw new ArgumentException(defineProblem);
                 target = RuntimeTargets.Normalize(a.Get("--target"));
                 netId = RuntimeTargets.NetId(target);
                 tsprojPath = ProjectLocator.ResolveTsprojPath(a.Positional);
@@ -210,6 +218,9 @@ namespace BeckhoffAutomationInterface.Runtime
                         sys14.CurrentProjectVariant = selected[0];
                         Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
                     }
+                    if (a.GetAll("--define").Count > 0)
+                        Console.WriteLine("{0}: Compiler defines for this activation: {1}", Now(),
+                            Sync.CompilerDefines.Add(sys, string.Format("TIPC^{0}^{0} Project", plcName), a.GetAll("--define")));
 
                     sys14.SetTargetNetId(netId);
                     Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
