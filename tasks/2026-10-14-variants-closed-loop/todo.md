@@ -100,12 +100,12 @@ interactive XAE still asks. Keep `DialogAutoDismisser` as a safety net. Known pr
 the build. Later, Task 7 always cleans when it switches variants.
 
 **Acceptance criteria:**
-- [ ] `build --clean` runs Clean and then Build. The log shows both.
-- [ ] Without `--clean`, behaviour is unchanged
+- [x] `build --clean` runs Clean and then Build. The log shows both, in that order.
+- [x] Without `--clean`, behaviour is unchanged
 
 **Verification:**
-- [ ] Unit test: option parsing
-- [ ] Manual: scratch project — add an error, build (fails), fix it, `build --clean` (passes)
+- [x] Unit test: option parsing (`CleanOptionTests`, incl. `.stconfig clean=true`)
+- [x] Manual: scratch project — add an error, build (fails), fix it, `build --clean` (passes) (2026-10-14)
 
 **Dependencies:** Task 0
 **Files likely touched:** `Sync/BuildRunner.cs`, `SyncPipeline.cs`, `RunOptions.cs`, tests
@@ -126,6 +126,42 @@ output pane and print its error lines (`file(line) : error: text`). Map them thr
 
 **Dependencies:** Task 0
 **Files likely touched:** `Sync/BuildRunner.cs`, new `Sync/BuildOutputParser.cs`, tests
+**Scope:** S
+
+## Task 4b: `build <path>` maps errors to `.st` files of the current directory
+**Description:** Found during Task 3 (2026-10-14). `build <tsproj>` leaves the source folder at
+its default `.`, so `ErrorLocationResolver` parses the **current directory** and maps a PLC error
+to an unrelated file (a `MAIN.TcPOU` error was shown as `Experiments/VariantDemo/src/MAIN.st:9`
+because the tool ran from another repo). For `build`, map errors only when a source folder is
+given explicitly (`.stconfig source=` or a future `--source`); otherwise print the raw TwinCAT
+location.
+
+**Acceptance criteria:**
+- [ ] `build <tsproj>` from an unrelated directory prints the raw `.TcPOU` location, never a foreign `.st` path
+- [ ] With an explicit source folder, mapping works as today
+
+**Verification:**
+- [ ] Unit test: "no explicit source" → no provenance index used
+- [ ] Manual: repeat the Task 3 error injection from another directory
+
+**Dependencies:** Task 0
+**Files likely touched:** `SyncPipeline.cs` (`TryBuildProvenanceIndex`), `RunOptions.cs` (know whether source was explicit), tests
+**Scope:** S
+
+## Task 4c: Failed build exits with `-1`, not the documented `1`
+**Description:** Found during Task 3. A failed `build` returned exit code `-1`. README and the CI
+guide promise `1` ("CI contract: build failure = exit code 1"). Find where `-1` comes from and
+make every failure path return `1`.
+
+**Acceptance criteria:**
+- [ ] Build failure → exit code 1; build timeout → exit code 1; success → 0
+
+**Verification:**
+- [ ] Manual: the Task 3 error injection, check `$LASTEXITCODE`
+- [ ] Unit test if the exit-code decision can be isolated
+
+**Dependencies:** Task 0
+**Files likely touched:** `Program.cs`, `SyncPipeline.cs`
 **Scope:** S
 
 ### Checkpoint 1: Fixes

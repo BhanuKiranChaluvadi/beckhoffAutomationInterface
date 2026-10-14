@@ -52,6 +52,8 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 - [ ] Task 2a: TwinCAT silent mode — no Yes/No prompts, previous setting restored (user request)
 - [ ] Task 3: Clean before build (`--clean`)
 - [ ] Task 4: Build-output-pane fallback for empty error texts
+- [ ] Task 4b: `build <path>` must not map errors to `.st` files of the current directory (found in Task 3)
+- [ ] Task 4c: failed build exits `-1`, contract says `1` (found in Task 3)
 
 ### Checkpoint 1: Fixes
 - [ ] 169+ unit tests pass. `build` passes on this PC with `--shell xae` and `--shell vs2022`.

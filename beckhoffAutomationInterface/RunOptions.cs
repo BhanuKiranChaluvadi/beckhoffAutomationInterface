@@ -232,8 +232,11 @@ namespace BeckhoffAutomationInterface
         /// (XAE preferred). See DteShellResolver.</summary>
         public string Shell { get; }
 
+        /// <summary>Clean the solution before the build stage (--clean / .stconfig "clean").</summary>
+        public bool Clean { get; }
+
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -256,6 +259,7 @@ namespace BeckhoffAutomationInterface
             ExistingTsprojPath = existingTsprojPath;
             ConfigFileLoaded = configFileLoaded;
             Shell = shell;
+            Clean = clean;
         }
 
         /// <summary>
@@ -360,7 +364,8 @@ namespace BeckhoffAutomationInterface
                 existingTsprojPath: GetOption(args, "--tsproj"),
                 configFileLoaded: configFileLoaded,
                 // Not safety-gated: picking a shell never changes a project.
-                shell: GetOption(args, "--shell") ?? config.GetString("shell"));
+                shell: GetOption(args, "--shell") ?? config.GetString("shell"),
+                clean: args.Contains("--clean") || config.GetBool("clean"));
         }
 
         static string GetOption(string[] args, params string[] flags)

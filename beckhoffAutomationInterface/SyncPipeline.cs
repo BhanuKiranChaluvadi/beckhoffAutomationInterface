@@ -500,11 +500,10 @@ namespace BeckhoffAutomationInterface
         /// locations print raw, clearly labeled — never silently dropped.</summary>
         void RunBuild()
         {
-            Console.WriteLine("{0}: Building solution...", Now());
             BuildReport buildReport = null;
             try
             {
-                RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte), "building solution");
+                RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte, _options.Clean), "building solution");
             }
             catch (BuildTimeoutException ex)
             {

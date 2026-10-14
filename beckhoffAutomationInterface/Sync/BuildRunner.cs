@@ -57,39 +57,21 @@ namespace BeckhoffAutomationInterface.Sync
         const int DefaultBuildTimeoutMs = 5 * 60 * 1000; // 5 minutes
         const int PollIntervalMs = 2000;
 
-        public static BuildReport Build(EnvDTE80.DTE2 dte, int timeoutMs = DefaultBuildTimeoutMs)
+        public static BuildReport Build(EnvDTE80.DTE2 dte, bool clean = false, int timeoutMs = DefaultBuildTimeoutMs)
         {
-            // Kick off the build asynchronously so our side never blocks on a modal
-            // dialog; we drive completion ourselves via polling below.
-            dte.Solution.SolutionBuild.Build(false);
-
-            int elapsed = 0;
-            bool done = false;
-            while (elapsed < timeoutMs)
+            if (clean)
             {
-                try
-                {
-                    if ((int)dte.Solution.SolutionBuild.BuildState == VsBuildStateDone)
-                    {
-                        done = true;
-                        break;
-                    }
-                }
-                catch (COMException)
-                {
-                    // VS is momentarily busy (often because a modal dialog is up);
-                    // keep counting toward the timeout rather than failing hard.
-                }
-
-                Thread.Sleep(PollIntervalMs);
-                elapsed += PollIntervalMs;
+                // Same asynchronous start + polled wait as the build, for the same reason.
+                Console.WriteLine("{0}: Cleaning solution...", Clock.Now());
+                dte.Solution.SolutionBuild.Clean(false);
+                WaitUntilDone(dte, timeoutMs, "Clean");
             }
 
-            if (!done)
-                throw new BuildTimeoutException(
-                    string.Format("Build did not finish within {0} minute(s). A modal Visual Studio dialog " +
-                        "(e.g. TwinCAT's 'needs sync master') is likely blocking it \u2014 an unlinked EtherCAT " +
-                        "master requires at least one variable linked to a task variable.", timeoutMs / 60000));
+            // Kick off the build asynchronously so our side never blocks on a modal
+            // dialog; we drive completion ourselves via polling below.
+            Console.WriteLine("{0}: Building solution...", Clock.Now());
+            dte.Solution.SolutionBuild.Build(false);
+            WaitUntilDone(dte, timeoutMs, "Build");
 
             var report = new BuildReport();
             // Authoritative pass/fail: number of projects that failed to build. TwinCAT PLC
@@ -123,6 +105,34 @@ namespace BeckhoffAutomationInterface.Sync
                     report.Warnings.Add(buildError);
             }
             return report;
+        }
+
+        /// <summary>Polls SolutionBuild.BuildState until the running clean/build is done, so
+        /// a modal dialog can never hang the process: past timeoutMs it throws.</summary>
+        static void WaitUntilDone(EnvDTE80.DTE2 dte, int timeoutMs, string step)
+        {
+            int elapsed = 0;
+            while (elapsed < timeoutMs)
+            {
+                try
+                {
+                    if ((int)dte.Solution.SolutionBuild.BuildState == VsBuildStateDone)
+                        return;
+                }
+                catch (COMException)
+                {
+                    // VS is momentarily busy (often because a modal dialog is up);
+                    // keep counting toward the timeout rather than failing hard.
+                }
+
+                Thread.Sleep(PollIntervalMs);
+                elapsed += PollIntervalMs;
+            }
+
+            throw new BuildTimeoutException(
+                string.Format("{0} did not finish within {1} minute(s). A modal Visual Studio dialog " +
+                    "(e.g. TwinCAT's 'needs sync master') is likely blocking it — an unlinked EtherCAT " +
+                    "master requires at least one variable linked to a task variable.", step, timeoutMs / 60000));
         }
     }
 }
