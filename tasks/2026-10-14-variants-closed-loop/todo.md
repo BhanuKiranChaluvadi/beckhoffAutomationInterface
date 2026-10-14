@@ -122,8 +122,10 @@ output pane and print its error lines (`file(line) : error: text`). Map them thr
 
 **Verification:**
 - [x] Unit test: parse sample output-pane lines (`BuildOutputParserTests`, real 4026 output)
-- [ ] Manual: hide the XAE window in a scratch run; the errors still print with text
-      (NOT DONE: the tool always shows the window, so this path needs a hidden-window run. Regression check done 2026-10-14: a normal failed build still prints both error texts.)
+- [x] Manual: hide the XAE window in a scratch run; the errors still print with text
+      (2026-10-14: scratch harness called `BuildRunner.Build` with `MainWindow.Visible = false` on a build
+      with an injected error. Result: 2 errors with full text from the output pane, e.g.
+      `C0046: Identifier 'nUndeclaredVar' not defined (…\MAIN.TcPOU:11)`. The pane IS readable while hidden.)
 
 **Dependencies:** Task 0
 **Files likely touched:** `Sync/BuildRunner.cs`, new `Sync/BuildOutputParser.cs`, tests
