@@ -144,6 +144,9 @@ compiles only, without syncing anything first.
 | `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
 | `sync variants <path>` | `variants.xml` → TwinCAT project variants and groups; switches on the PLC's variant defines (see [Machine variants](#machine-variants)). No manifest = nothing to do. | opens VS |
 | `sync all <path>` | Every stage above, in order, then build. | opens VS |
+| `activate <path> --target umrt\|local [--variant V] --yes` | Build one variant and activate it on UmRT_Default or this PC's runtime, then wait for the PLC to reach Run. Without `--yes` it only shows the target's current boot project (changes nothing). See [Closed loop on a runtime](#closed-loop-on-a-runtime). | opens VS (only with `--yes`) |
+| `verify --target umrt\|local --expect <expect.json> [--variant V]` | Read live PLC values over ADS and compare them with `expect.json`. Exit 0 = all as expected. | no VS |
+| `doctor` | Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state, boot projects, license expiry. | no VS |
 | `build <path> [--plc-name X] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
 Stage execution order for `sync all`: variants → code → libs → io-tree → `.tsproj`
@@ -655,6 +658,30 @@ manifests (example: [`ST/VariantSample`](ST/VariantSample)):
   and exits 1 if any variant fails.
 - Each build prints the PLC's message pragmas, e.g. `{warning 'VARIANT CHECK: MachineA'}`, as
   `[PLC MESSAGE]` lines, so the log shows which branch was compiled.
+
+## Closed loop on a runtime
+
+Build, run and check a project without touching XAE by hand. Two targets only:
+`umrt` (the User Mode Runtime `UmRT_Default` on this PC) and `local` (this PC's own runtime).
+
+```powershell
+.\beckhoffAutomationInterface.exe doctor                                             # state + license expiry
+.\beckhoffAutomationInterface.exe activate C:\p\VariantSample --target umrt --variant MachineA --yes
+.\beckhoffAutomationInterface.exe verify --target umrt --expect ST\VariantSample\expect.json --variant MachineA
+```
+
+- **`activate` replaces the target's boot project.** Without `--yes` it prints what is on the
+  target now and stops. With `--yes`: attach read-only (never saved) → select the variant →
+  set the target → boot project autostart → clean + build → activate → restart → wait for the
+  PLC to reach Run. A failed build stops before activation, so the running program stays.
+- **`expect.json`** lists, per variant, the live values that prove the right program runs
+  (example: [`ST/VariantSample/expect.json`](ST/VariantSample/expect.json)):
+  - `"equals"` — a value (strings, BOOL, numbers; `"tolerance"` for REAL/LREAL)
+  - `"increases"` — a counter that must move (read twice, 0.5 s apart)
+  - `"absentOrZero"` — code that must not run: not linked into the program, or 0
+- **If the PLC never reaches Run** and TwinCAT stays in Config mode, the usual cause is an
+  expired 7-day trial license. `verify`/`activate` say so; `doctor` shows the expiry date.
+  The trial license must be renewed in XAE by a person (it asks for a security code).
 
 ## Manifests (config data, not `.st` source)
 
