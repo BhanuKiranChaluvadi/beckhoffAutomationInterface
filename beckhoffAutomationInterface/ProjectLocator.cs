@@ -47,7 +47,7 @@ namespace BeckhoffAutomationInterface
 
         /// <summary>The PLC project's real name inside TIPC, defaulting to the .tsproj
         /// file's own base name when no override is given — matches the legacy
-        /// --tsproj/--plc-name pairing's existing default (RunOptions.PlcProjectName).</summary>
+        /// --project/--plc pairing's existing default (RunOptions.PlcProjectName).</summary>
         public static string ResolvePlcName(string tsprojPath, string plcNameOverride)
         {
             if (!string.IsNullOrEmpty(plcNameOverride))

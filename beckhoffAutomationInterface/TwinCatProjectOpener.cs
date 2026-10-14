@@ -26,7 +26,7 @@ namespace BeckhoffAutomationInterface
             // fall into the bootstrap-a-new-project path (see RunOptions.Init).
             if (!options.Init)
                 throw new InvalidOperationException(
-                    $"Solution '{options.SolutionFilePath}' does not exist and --init was not given.");
+                    $"Solution '{options.SolutionFilePath}' does not exist. Create it with 'init <source> --into <folder>'.");
 
             return BootstrapNew(dte, options);
         }

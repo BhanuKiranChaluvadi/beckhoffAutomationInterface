@@ -212,7 +212,7 @@ namespace BeckhoffAutomationInterface
         /// &lt;PlcProjectName&gt; Project^...). For a project this tool bootstrapped itself
         /// (--init), this always equals ProjectName (the XAE/.tsproj name), since
         /// TwinCatProjectOpener.BootstrapNew creates both with the same name. For an
-        /// ARBITRARY pre-existing project being reverse-exported (see --plc-name), the PLC
+        /// ARBITRARY pre-existing project being reverse-exported (see --plc), the PLC
         /// project can have a different name than the .tsproj file itself — confirmed live
         /// against PLC_NFL_SHARK_V2, whose .tsproj is "PLC_NFL_SHARK" but whose PLC project
         /// (TIPC^PLC_NFL_prj) is "PLC_NFL_prj". Defaults to ProjectName when not given, so

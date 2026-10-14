@@ -106,5 +106,16 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<System.ArgumentException>(() =>
                 CommandArgs.Parse(new[] { "verify", arg }, new[] { "--target" }, new string[0]));
         }
+
+        [Fact]
+        public void ActivateTakesPlc_TheOldPlcNameNamesIt()
+        {
+            string[] options = { "--target", "--variant", "--plc", "--timeout" };
+
+            Assert.Equal("P", CommandArgs.Parse(new[] { "activate", "x.tsproj", "--plc", "P" }, options, new[] { "--yes" }).Get("--plc"));
+            var ex = Assert.Throws<System.ArgumentException>(() =>
+                CommandArgs.Parse(new[] { "activate", "x.tsproj", "--plc-name", "P" }, options, new[] { "--yes" }));
+            Assert.Contains("use --plc", ex.Message);
+        }
     }
 }

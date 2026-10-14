@@ -33,6 +33,8 @@ namespace BeckhoffAutomationInterface.Runtime
                     result._switches.Add(a);
                 else if (!a.StartsWith("--") && result.Positional == null)
                     result.Positional = a;
+                else if (a == "--plc-name")
+                    throw new ArgumentException("unrecognized argument: --plc-name. Removed - use --plc");
                 else
                     throw new ArgumentException("unrecognized argument: " + a);
             }
@@ -47,6 +49,9 @@ namespace BeckhoffAutomationInterface.Runtime
     {
         // ------------------------------------------------------------------ verify
 
+        internal const string VerifyUsage =
+            "Usage: beckhoffAutomationInterface verify --target umrt|local --expect <expect.json> [--variant <name>] [--timeout <s>]";
+
         public static int Verify(string[] args)
         {
             CommandArgs a;
@@ -59,7 +64,7 @@ namespace BeckhoffAutomationInterface.Runtime
             catch (ArgumentException ex)
             {
                 Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine("Usage: beckhoffAutomationInterface verify --target umrt|local --expect <expect.json> [--variant <name>] [--timeout <s>]");
+                Console.Error.WriteLine(VerifyUsage);
                 return 1;
             }
 
@@ -131,8 +136,8 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // ------------------------------------------------------------------ activate
 
-        const string ActivateUsage =
-            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc-name <name>] [--yes]";
+        internal const string ActivateUsage =
+            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc <name>] [--timeout <s>] [--yes]";
 
         /// <summary>
         /// Builds one variant and activates it on the target, then waits for the PLC to run.
@@ -146,7 +151,7 @@ namespace BeckhoffAutomationInterface.Runtime
             string target, netId, tsprojPath;
             try
             {
-                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc-name", "--timeout" }, new[] { "--yes" });
+                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout" }, new[] { "--yes" });
                 if (a.Positional == null || a.Get("--target") == null)
                     throw new ArgumentException("'activate' needs a project path and --target umrt|local.");
                 target = RuntimeTargets.Normalize(a.Get("--target"));
@@ -169,7 +174,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 return 1;
             }
 
-            string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc-name"));
+            string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc"));
             ProjectShadowCopy shadow = null;
             try
             {

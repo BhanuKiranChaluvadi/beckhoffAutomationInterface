@@ -117,17 +117,14 @@ namespace BeckhoffAutomationInterface
             return found;
         }
 
-        /// <summary>Prints the new top-level subcommand usage. Replaces the old flat-flag
-        /// entry point as of the Slice 5 cutover (docs/ideas/cli-subcommand-redesign.md) —
-        /// RunOptions.PrintUsage()'s detailed flag reference still exists and still backs
-        /// every subcommand internally (see the Translate* functions), but is no longer
-        /// reachable by typing those flags directly at the top level.</summary>
+        /// <summary>Prints the top-level usage (docs/ideas/cli-subcommand-redesign.md, "Final CLI
+        /// spec"). '<command> --help' prints that command's own usage line.</summary>
         static void PrintTopLevelUsage()
         {
             Console.WriteLine("Usage: beckhoffAutomationInterface <command> [args]");
             Console.WriteLine();
             Console.WriteLine("Commands:");
-            Console.WriteLine("  build  <path> [--plc-name X]");
+            Console.WriteLine("  build  <path> [--plc X] [--clean] [--variant V | --all-variants]");
             Console.WriteLine("      Compile an existing PLC project and report pass/fail.");
             Console.WriteLine("      <path> may be a .tsproj file, or a folder containing exactly one.");
             Console.WriteLine();
@@ -138,12 +135,12 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  sync   code|libs|io|events|variants|all <source> --project <project> [--incremental] [--clean] [...]");
             Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
             Console.WriteLine();
-            Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc-name X] [--overwrite]");
-            Console.WriteLine("  export object <ObjectName> <source-path> --project <path> [--plc-name X]");
+            Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc X] [--overwrite]");
+            Console.WriteLine("  export object <ObjectName> <source-path> --project <path> [--plc X]");
             Console.WriteLine("      Regenerate .st source (or manifests) FROM an existing project (reverse export);");
             Console.WriteLine("      'object' writes just the one named live PLC object back to .st.");
             Console.WriteLine();
-            Console.WriteLine("  activate <path> --target umrt|local [--variant V] [--plc-name X] [--yes]");
+            Console.WriteLine("  activate <path> --target umrt|local [--variant V] [--plc X] [--yes]");
             Console.WriteLine("      Build one variant and activate it on UmRT_Default or the local runtime, then wait for");
             Console.WriteLine("      the PLC to run. Without --yes: only shows what is on the target now (changes nothing).");
             Console.WriteLine();
@@ -161,12 +158,11 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  --shell xae|vs2022   DTE shell to automate. Default: TwinCAT XAE shell if installed,");
             Console.WriteLine("                       else Visual Studio 2022. Also settable as 'shell=' in .stconfig.");
             Console.WriteLine();
-            Console.WriteLine("Run '<command> --help' is not yet supported per-command; see README.md for full flag reference.");
+            Console.WriteLine("Run '<command> --help' for that command's usage; README.md has the full flag reference.");
         }
 
         /// <summary>Removes "flag value" from args and returns the value (null when absent).
-        /// For options every subcommand accepts, which the per-subcommand translators would
-        /// otherwise drop.</summary>
+        /// For options every subcommand accepts.</summary>
         internal static string TakeGlobalOption(ref string[] args, string flag)
         {
             int i = Array.IndexOf(args, flag);
@@ -215,6 +211,19 @@ namespace BeckhoffAutomationInterface
                 Console.Error.WriteLine("ERROR: unknown --shell '{0}'. Use one of: {1}.", shell,
                     string.Join(", ", DteShell.All.Select(s => s.Name)));
                 Environment.Exit(1);
+            }
+
+            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
+            {
+                string usage = args[0] == "verify" ? Runtime.RuntimeCommands.VerifyUsage
+                             : args[0] == "activate" ? Runtime.RuntimeCommands.ActivateUsage
+                             : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
+                             : null;
+                if (usage != null)
+                {
+                    Console.WriteLine(usage);
+                    Environment.Exit(0);
+                }
             }
 
             RunOptions options = null;
@@ -298,12 +307,12 @@ namespace BeckhoffAutomationInterface
                     Console.WriteLine("{0}: Event class check: {1} declared, {2} present, {3} missing.",
                         Now(), desiredEventClasses.Count, eventReport.Present.Count, eventReport.Missing.Count);
                     foreach (string name in eventReport.Missing)
-                        Console.WriteLine("    ! MISSING '{0}' — will be created by the events stage (--sync-events or a full run).", name);
+                        Console.WriteLine("    ! MISSING '{0}' — will be created by the events stage ('sync events' or 'sync all').", name);
                 }
             }
             if (options.CheckEvents)
             {
-                Console.WriteLine("{0}: --check-events: event class check complete, skipping Visual Studio.", Now());
+                Console.WriteLine("{0}: check events: event class check complete, skipping Visual Studio.", Now());
                 Environment.Exit(missingEventClassCount > 0 ? 1 : 0);
             }
 
