@@ -266,10 +266,11 @@ Validate the name (PLC identifier) in `init`/`sync` before the shell starts, and
 **Scope:** S
 
 ### Checkpoint 2: Variant builds
-- [ ] Add `ST/VariantSample` (port of `Experiments/VariantDemo/src` + `variants.xml`; a hyphen is not allowed in a PLC project name)
-- [ ] `sync all ST/variant-sample` then `build --all-variants`: both pass. The build log shows
+- [x] Add `ST/VariantSample` (port of `Experiments/VariantDemo/src` + `variants.xml`; a hyphen is not allowed in a PLC project name)
+- [x] `init ST/VariantSample` (full sync) then `build --all-variants`: both pass. The build log shows
       `VARIANT CHECK` and `FEATURE CHECK` messages for the correct branch.
-- [ ] Remove the variants from the scratch project's manifest → `sync variants` removes them
+- [x] Remove the variants from the scratch project's manifest → `sync variants` removes them
+      (2026-10-14: MachineB removed → "- variant MachineB", build covers MachineA only, `--variant MachineB` refused)
 - [ ] Review with the user before Phase 3
 
 ---

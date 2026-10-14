@@ -130,7 +130,7 @@ cd beckhoffAutomationInterface\bin\Debug\net48
 
 ### Commands
 
-The pipeline is made of five stages. `sync <mode>` runs **exactly one**
+The pipeline is made of six stages. `sync <mode>` runs **exactly one**
 stage (or `all` for every stage in order) then exits — this is how
 one-time per-project setup (device tree, Create PLC Data Type, Event
 Classes) runs in isolation without touching code or compiling. `build`
@@ -142,10 +142,11 @@ compiles only, without syncing anything first.
 | `sync libs <path>` | `libraries.xml` → PLC library references. | opens VS |
 | `sync io <path>` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
 | `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
+| `sync variants <path>` | `variants.xml` → TwinCAT project variants and groups; switches on the PLC's variant defines (see [Machine variants](#machine-variants)). No manifest = nothing to do. | opens VS |
 | `sync all <path>` | Every stage above, in order, then build. | opens VS |
-| `build <path> [--plc-name X]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
+| `build <path> [--plc-name X] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
-Stage execution order for `sync all`: code → libs → io-tree → `.tsproj`
+Stage execution order for `sync all`: variants → code → libs → io-tree → `.tsproj`
 edits (io templates + events) → io links → build. Visual Studio is opened
 lazily by the first stage that needs it and closed for the `.tsproj` edits.
 
@@ -627,12 +628,41 @@ possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
 > a mistyped path can never silently bootstrap (or bury a duplicate project
 > inside) the wrong location.
 
+## Machine variants
+
+One PLC project can serve a family of machines with TwinCAT Variant Management
+(TwinCAT 3.1.4024+). Declare the variants in **`variants.xml`** next to the other
+manifests (example: [`ST/VariantSample`](ST/VariantSample)):
+
+```xml
+<Variants DefineMode="Implicit">
+  <Variant Name="MachineA" />
+  <Variant Name="MachineB" />
+  <Group Name="PCV_MODBUS">   <Member>MachineA</Member> </Group>
+  <Group Name="PCV_ETHERCAT"> <Member>MachineB</Member> </Group>
+</Variants>
+```
+
+- `sync variants` (also part of `sync all`, first stage) writes the variants and groups into
+  the project and switches on the PLC's variant defines. A second run reports "no change";
+  a variant removed from the file is removed from the project.
+- The PLC gets the **active variant's name and its group names** as compiler defines. Use a
+  group as a feature switch: `{IF defined (PCV_MODBUS)}`. Keep machine names in one
+  configuration GVL; test features everywhere else.
+- Variant and group names must be valid PLC identifiers (they become defines).
+- `build` builds **every** variant (clean each time), because the compiler does not check code in
+  a branch that is not selected. `--variant <name>` builds one. The run ends with a summary
+  and exits 1 if any variant fails.
+- Each build prints the PLC's message pragmas, e.g. `{warning 'VARIANT CHECK: MachineA'}`, as
+  `[PLC MESSAGE]` lines, so the log shows which branch was compiled.
+
 ## Manifests (config data, not `.st` source)
 
 Alongside the `.st` files, a project folder can contain:
 
 - **`libraries.xml`** — PLC library references (`<Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />`)
 - **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
+- **`variants.xml`** — TwinCAT project variants and groups (see [Machine variants](#machine-variants))
 - **`events.xml`** — Event Classes for `Tc3_EventLogger`, created from matching
   `event-classes/<Name>.xml` templates via a direct `.tsproj` edit (the
   Automation Interface has no path for this — see `Sync/TsprojEventClassEditor.cs`)
