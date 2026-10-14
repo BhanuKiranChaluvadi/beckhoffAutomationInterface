@@ -61,10 +61,11 @@ namespace BeckhoffAutomationInterface
             // throws RPC_E_SERVERCALL_RETRYLATER). Requires the STA thread (see [STAThread]
             // on Program.Main).
             MessageFilter.Register();
-            // Snapshot existing devenv PIDs so we can reliably identify the one WE spawn
-            // (HWND-based capture is fragile once a modal dialog is up).
+            // Snapshot existing shell PIDs (devenv or TcXaeShell, per the resolved shell) so we
+            // can reliably identify the one WE spawn (HWND-based capture is fragile once a
+            // modal dialog is up).
             var devenvBefore = new System.Collections.Generic.HashSet<int>(
-                System.Diagnostics.Process.GetProcessesByName("devenv").Select(p => p.Id));
+                System.Diagnostics.Process.GetProcessesByName(shell.ProcessName).Select(p => p.Id));
             EnvDTE80.DTE2 dte = (EnvDTE80.DTE2)Activator.CreateInstance(dteType);
             // Unattended automation (CI) must never block on a modal dialog with no one
             // to click it — SuppressUI tells VS to auto-answer automation-triggered
@@ -81,14 +82,17 @@ namespace BeckhoffAutomationInterface
             // Identify our devenv process (the one that appeared after CreateInstance), so we
             // can force-kill it later if a graceful dte.Quit() leaves it alive (e.g. behind a
             // modal dialog). Fall back to the HWND method if the diff is inconclusive.
-            int devenvPid = System.Diagnostics.Process.GetProcessesByName("devenv")
+            int devenvPid = System.Diagnostics.Process.GetProcessesByName(shell.ProcessName)
                 .Select(p => p.Id)
                 .FirstOrDefault(id => !devenvBefore.Contains(id));
+            string pidSource = "process list";
             if (devenvPid == 0)
             {
+                pidSource = "window handle";
                 try { GetWindowThreadProcessId((IntPtr)dte.MainWindow.HWnd, out devenvPid); }
                 catch { /* non-fatal: we just lose the force-kill fallback */ }
             }
+            Console.WriteLine("{0}: Shell process: {1} (pid {2}, found by {3}).", Now(), shell.ProcessName, devenvPid, pidSource);
 
             return new VisualStudioSession(dte, shell, devenvPid);
         }
@@ -128,10 +132,10 @@ namespace BeckhoffAutomationInterface
             try
             {
                 var p = System.Diagnostics.Process.GetProcessById(_devenvPid);
-                if (!p.WaitForExit(3000))
+                if (!p.WaitForExit(10000)) // TcXaeShell often needs >3 s to exit after Quit()
                 {
                     p.Kill();
-                    Console.WriteLine("{0}: Force-killed lingering devenv (pid {1}).", Now(), _devenvPid);
+                    Console.WriteLine("{0}: Force-killed lingering {1} (pid {2}).", Now(), Shell.ProcessName, _devenvPid);
                 }
             }
             catch { /* already gone — the happy path */ }

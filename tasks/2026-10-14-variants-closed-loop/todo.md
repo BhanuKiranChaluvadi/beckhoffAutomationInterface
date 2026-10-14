@@ -61,15 +61,38 @@ Use the process name of the resolved shell (`devenv` or `TcXaeShell`), so the fo
 exit and `DialogAutoDismisser` work with XAE.
 
 **Acceptance criteria:**
-- [ ] With `TcXaeShell`, the PID is found by the process diff (not only by the window-handle fallback)
-- [ ] After a run, no `TcXaeShell.exe` that this tool started stays alive
+- [x] With `TcXaeShell`, the PID is found by the process diff (not only by the window-handle fallback)
+- [x] After a run, no `TcXaeShell.exe` that this tool started stays alive
 
 **Verification:**
-- [ ] Unit test: the process name comes from the resolved shell
-- [ ] Manual: run `build` twice with `--shell xae`; check Task Manager has no leftover process
+- [x] Unit test: the process name comes from the resolved shell (`DteShellResolverTests`)
+- [x] Manual: run `build` twice with `--shell xae`; check Task Manager has no leftover process
+      (2026-10-14: found by process list; TcXaeShell needed >3 s to exit, so the grace period is now 10 s — clean exit, no force-kill)
 
 **Dependencies:** Task 1
 **Files likely touched:** `VisualStudioSession.cs`, `DteShellResolver.cs`
+**Scope:** S
+
+## Task 2a: TwinCAT silent mode (no Yes/No prompts)
+**Description:** User request: the tool must never wait for a click. Set
+`ITcAutomationSettings.SilentMode = true` (via `dte.GetObject("TcAutomationSettings")`) right after
+the shell loads, so TwinCAT answers its own questions with the default. Silent mode is a
+persistent XAE setting: read the old value first and restore it on exit, so the user's
+interactive XAE still asks. Keep `DialogAutoDismisser` as a safety net. Known prompts
+(`images/`): "Target System Process Image Update" (Yes/No, EL1918 AMS Net ID mismatch) and
+"…\PLC_NFL_prj.tmc not found" (OK).
+
+**Acceptance criteria:**
+- [ ] Silent mode is on during every session and the previous value is restored on exit (also after a failure)
+- [ ] The log says once: "TwinCAT silent mode on (was: X)"
+- [ ] CI run on the bench PC (project with EL1918, no `.tmc`) finishes with no dialog shown
+
+**Verification:**
+- [ ] Manual: read `SilentMode` before and after a run on this PC — unchanged
+- [ ] Manual (Checkpoint 1): bench PC run with no click
+
+**Dependencies:** Task 1
+**Files likely touched:** `VisualStudioSession.cs`
 **Scope:** S
 
 ## Task 3: Clean before build

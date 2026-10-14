@@ -49,6 +49,7 @@ two variants were built, activated on `UmRT_Default` and verified over ADS (all 
 ### Phase 1: Works on XAE-only PCs
 - [ ] Task 1: DTE shell resolver (`TcXaeShell` default, VS 2022 fallback, `--shell`)
 - [ ] Task 2: Process detection for `devenv` **and** `TcXaeShell`
+- [ ] Task 2a: TwinCAT silent mode — no Yes/No prompts, previous setting restored (user request)
 - [ ] Task 3: Clean before build (`--clean`)
 - [ ] Task 4: Build-output-pane fallback for empty error texts
 
