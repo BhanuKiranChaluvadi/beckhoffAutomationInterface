@@ -14,11 +14,15 @@ namespace BeckhoffAutomationInterface.Sync
         public bool Disabled { get; }
         public List<IoNodeSpec> Children { get; }
 
-        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children)
+        /// <summary>Project variants that have this device (Variants="A,B"); null = all variants.</summary>
+        public IReadOnlyList<string> Variants { get; }
+
+        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null)
         {
             Name = name;
             Disabled = disabled;
             Children = children;
+            Variants = variants;
         }
     }
 
@@ -44,12 +48,16 @@ namespace BeckhoffAutomationInterface.Sync
         /// turned on; plain digital terminals (EL2008 etc.) typically leave it null.</summary>
         public string CreatePlcType { get; }
 
-        public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null)
+        /// <summary>Project variants that have this box/terminal (Variants="A,B"); null = all variants.</summary>
+        public IReadOnlyList<string> Variants { get; }
+
+        public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null, IReadOnlyList<string> variants = null)
         {
             Name = name;
             Product = product;
             Children = children;
             CreatePlcType = createPlcType;
+            Variants = variants;
         }
     }
 }

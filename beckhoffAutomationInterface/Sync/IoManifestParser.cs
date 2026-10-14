@@ -33,6 +33,12 @@ namespace BeckhoffAutomationInterface.Sync
     /// with no variables linked to a task blocks the build with a modal "needs
     /// sync master" dialog, so until variable-linking is automated, devices are
     /// declared Disabled so the tree is still populated but the build stays green.
+    ///
+    /// The optional Variants="A,B" attribute (Device/Box/Terminal) puts an item in those
+    /// project variants only (see variants.xml and IoVariantRules); no attribute = all
+    /// variants. NOT allowed on &lt;Link&gt;: TwinCAT stores links once for all variants
+    /// (docs/ideas/variant-io-spike.md), and a link to an item that is disabled in a
+    /// variant is harmless.
     /// </summary>
     static class IoManifestParser
     {
@@ -49,8 +55,18 @@ namespace BeckhoffAutomationInterface.Sync
                 .Select(deviceEl => new IoDeviceSpec(
                     (string)deviceEl.Attribute("Name"),
                     (bool?)deviceEl.Attribute("Disabled") ?? false,
-                    ParseChildNodes(deviceEl)))
+                    ParseChildNodes(deviceEl),
+                    ParseVariants(deviceEl)))
                 .ToList();
+        }
+
+        /// <summary>null when the attribute is absent (= all variants).</summary>
+        static IReadOnlyList<string> ParseVariants(XElement el)
+        {
+            string value = (string)el.Attribute("Variants");
+            if (value == null)
+                return null;
+            return value.Split(',').Select(v => v.Trim()).Where(v => v.Length > 0).ToList();
         }
 
         static List<IoNodeSpec> ParseChildNodes(XElement parentEl) =>
@@ -63,7 +79,8 @@ namespace BeckhoffAutomationInterface.Sync
             (string)nodeEl.Attribute("Name"),
             (string)nodeEl.Attribute("Product"),
             ParseChildNodes(nodeEl),
-            (string)nodeEl.Attribute("CreatePlcType"));
+            (string)nodeEl.Attribute("CreatePlcType"),
+            ParseVariants(nodeEl));
 
         /// <summary>Parses the optional &lt;Links&gt; section: PLC-variable-to-IO-channel links.</summary>
         public static List<LinkSpec> ParseLinks(string manifestFilePath)
@@ -72,6 +89,11 @@ namespace BeckhoffAutomationInterface.Sync
                 return new List<LinkSpec>();
 
             XDocument doc = XDocument.Load(manifestFilePath);
+            XElement perVariant = doc.Root.Elements("Links").Elements("Link").FirstOrDefault(e => e.Attribute("Variants") != null);
+            if (perVariant != null)
+                throw new System.FormatException(string.Format(
+                    "io-devices.xml: <Link PlcVar=\"{0}\"> has a Variants attribute. Links are the same in every variant " +
+                    "(TwinCAT stores them once); put Variants on the Device/Box/Terminal instead.", (string)perVariant.Attribute("PlcVar")));
             return doc.Root
                 .Elements("Links")
                 .Elements("Link")

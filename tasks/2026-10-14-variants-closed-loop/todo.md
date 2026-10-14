@@ -301,12 +301,12 @@ and two terminals:
 in a variant where its parent is absent.
 
 **Acceptance criteria:**
-- [ ] The attribute is parsed into the spec model. No attribute = all variants.
-- [ ] An unknown variant name, or a child wider than its parent, gives a clear error with the item path
+- [x] The attribute is parsed into the spec model. No attribute = all variants. A `Variants` attribute on `<Link>` is rejected (links are global).
+- [x] An unknown variant name, or a child wider than its parent, gives a clear error with the item path
 
 **Verification:**
-- [ ] Unit tests: absent, single, multiple, unknown name, child-wider-than-parent
-- [ ] Existing `IoManifestParserTests` still pass (no attribute = old behaviour)
+- [x] Unit tests: absent, single, multiple, unknown name, child-wider-than-parent, empty, no variants.xml, link rejected (`IoVariantRulesTests`)
+- [x] Existing `IoManifestParserTests` still pass (no attribute = old behaviour)
 
 **Dependencies:** Tasks 5, 8
 **Files likely touched:** `Sync/IoManifestParser.cs`, spec model types, `IoManifestParserTests.cs`
