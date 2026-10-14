@@ -43,13 +43,13 @@ with a resolver. Order: `--shell` / `.stconfig shell` if given, else `TcXaeShell
 logic is unit-testable.
 
 **Acceptance criteria:**
-- [ ] With no option, a PC that has only XAE starts `TcXaeShell` (no `Class not registered` crash)
-- [ ] `--shell vs2022` on a PC without VS 2022 fails with one clear message that names the missing exe
-- [ ] The chosen shell and its exe path are printed once at start
+- [x] With no option, a PC that has only XAE starts `TcXaeShell` (no `Class not registered` crash) — unit-tested; bench PC check at Checkpoint 1
+- [x] `--shell vs2022` on a PC without VS 2022 fails with one clear message that names the missing exe
+- [x] The chosen shell and its exe path are printed once at start
 
 **Verification:**
-- [ ] Unit tests: selection order, explicit override, missing-exe case, nothing-registered case
-- [ ] Manual: `build` on `ST/sample` scratch project with `--shell xae` and `--shell vs2022` on this PC
+- [x] Unit tests: selection order, explicit override, missing-exe case, nothing-registered case
+- [x] Manual: `build` on `ST/sample` scratch project with `--shell xae` and `--shell vs2022` on this PC (2026-10-14: both BUILD PASSED; XAE 10 s, VS 2022 3 min 22 s)
 
 **Dependencies:** Task 0
 **Files likely touched:** `VisualStudioSession.cs`, new `DteShellResolver.cs`, `RunOptions.cs` (`--shell`, `.stconfig` key), new `DteShellResolverTests.cs`

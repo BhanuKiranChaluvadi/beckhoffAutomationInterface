@@ -509,7 +509,24 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  init   <source-path> --dest <path> [--name X]");
             Console.WriteLine("      Bootstrap a brand-new TwinCAT solution/PLC project.");
             Console.WriteLine();
+            Console.WriteLine("Global option (any command that opens TwinCAT):");
+            Console.WriteLine("  --shell xae|vs2022   DTE shell to automate. Default: TwinCAT XAE shell if installed,");
+            Console.WriteLine("                       else Visual Studio 2022. Also settable as 'shell=' in .stconfig.");
+            Console.WriteLine();
             Console.WriteLine("Run '<command> --help' is not yet supported per-command; see README.md for full flag reference.");
+        }
+
+        /// <summary>Removes "flag value" from args and returns the value (null when absent).
+        /// For options every subcommand accepts, which the per-subcommand translators would
+        /// otherwise drop.</summary>
+        internal static string TakeGlobalOption(ref string[] args, string flag)
+        {
+            int i = Array.IndexOf(args, flag);
+            if (i < 0 || i + 1 >= args.Length)
+                return null;
+            string value = args[i + 1];
+            args = args.Take(i).Concat(args.Skip(i + 2)).ToArray();
+            return value;
         }
 
         [STAThread]
@@ -519,6 +536,14 @@ namespace BeckhoffAutomationInterface
             {
                 PrintTopLevelUsage();
                 Environment.Exit(args.Length == 0 ? 1 : 0);
+            }
+
+            string shell = TakeGlobalOption(ref args, "--shell");
+            if (shell != null && !DteShellResolver.IsKnownName(shell))
+            {
+                Console.Error.WriteLine("ERROR: unknown --shell '{0}'. Use one of: {1}.", shell,
+                    string.Join(", ", DteShell.All.Select(s => s.Name)));
+                Environment.Exit(1);
             }
 
             switch (args[0])
@@ -545,6 +570,9 @@ namespace BeckhoffAutomationInterface
                     Environment.Exit(1);
                     break;
             }
+
+            if (shell != null)
+                args = args.Concat(new[] { "--shell", shell }).ToArray();
 
             RunOptions options = RunOptions.Parse(args);
             if (options.ConfigFileLoaded)

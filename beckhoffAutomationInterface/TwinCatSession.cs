@@ -48,7 +48,7 @@ namespace BeckhoffAutomationInterface
             if (IsOpen)
                 return;
 
-            Vs = VisualStudioSession.Start();
+            Vs = VisualStudioSession.Start(_options.Shell);
 
             if (_options.IsReverseExport || _options.ExistingTsprojPath != null)
             {

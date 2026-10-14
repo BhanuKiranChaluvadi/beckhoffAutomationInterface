@@ -228,8 +228,12 @@ namespace BeckhoffAutomationInterface
         /// GitHub, never bootstrapped by this tool) — see TwinCatSession.EnsureOpen.</summary>
         public string ExistingTsprojPath { get; }
 
+        /// <summary>DTE shell to automate: "xae", "vs2022", or null = first usable one
+        /// (XAE preferred). See DteShellResolver.</summary>
+        public string Shell { get; }
+
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -251,6 +255,7 @@ namespace BeckhoffAutomationInterface
             PlcProjectName = plcProjectName ?? projectName;
             ExistingTsprojPath = existingTsprojPath;
             ConfigFileLoaded = configFileLoaded;
+            Shell = shell;
         }
 
         /// <summary>
@@ -353,7 +358,9 @@ namespace BeckhoffAutomationInterface
                 // a wrong value here silently targets the wrong PLC project/file.
                 plcProjectName: GetOption(args, "--plc-name"),
                 existingTsprojPath: GetOption(args, "--tsproj"),
-                configFileLoaded: configFileLoaded);
+                configFileLoaded: configFileLoaded,
+                // Not safety-gated: picking a shell never changes a project.
+                shell: GetOption(args, "--shell") ?? config.GetString("shell"));
         }
 
         static string GetOption(string[] args, params string[] flags)

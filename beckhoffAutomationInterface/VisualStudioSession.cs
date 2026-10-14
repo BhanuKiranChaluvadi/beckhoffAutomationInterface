@@ -21,13 +21,15 @@ namespace BeckhoffAutomationInterface
         const int VS_QUIT_TIMEOUT_MS = 30000; // 30 seconds for a graceful dte.Quit() before force-killing
 
         public EnvDTE80.DTE2 Dte { get; }
+        public DteShell Shell { get; }
 
         readonly int _devenvPid;
         readonly DialogAutoDismisser _dialogAutoDismisser;
 
-        VisualStudioSession(EnvDTE80.DTE2 dte, int devenvPid)
+        VisualStudioSession(EnvDTE80.DTE2 dte, DteShell shell, int devenvPid)
         {
             Dte = dte;
+            Shell = shell;
             _devenvPid = devenvPid;
             // Only meaningful once we actually have a devenv PID to watch — falls back to
             // relying on SuppressUI alone in the rare case that lookup failed (see Start()).
@@ -35,18 +37,23 @@ namespace BeckhoffAutomationInterface
                 _dialogAutoDismisser = new DialogAutoDismisser(devenvPid);
         }
 
-        /// <summary>Creates and waits for a new Visual Studio DTE instance to finish loading.</summary>
-        public static VisualStudioSession Start()
+        /// <summary>Creates and waits for a new DTE instance to finish loading.
+        /// shellName: "xae", "vs2022", or null for the first usable one (see DteShellResolver).</summary>
+        public static VisualStudioSession Start(string shellName)
         {
-            Console.WriteLine("{0}: Getting Visual Studio DTE type...", Now());
-            Type dteType = Type.GetTypeFromProgID("VisualStudio.DTE.17.0");
-            if (dteType == null)
+            DteShell shell;
+            try
             {
-                Console.Error.WriteLine("ERROR: VisualStudio.DTE.17.0 is not registered.");
-                Console.Error.WriteLine("Ensure Visual Studio 2022 (17.x) is installed.");
-                Environment.Exit(1);
+                shell = DteShellResolver.Resolve(shellName, new WindowsComRegistry(), System.IO.File.Exists);
             }
-            Console.WriteLine("{0}: Visual Studio DTE type resolved.", Now());
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                Environment.Exit(1);
+                return null; // unreachable
+            }
+            Console.WriteLine("{0}: Using shell '{1}' ({2}): {3}", Now(), shell.Name, shell.ProgId, shell.ExePath);
+            Type dteType = Type.GetTypeFromProgID(shell.ProgId);
 
             Console.WriteLine("{0}: Creating the DTE instance...", Now());
             // Register a COM message filter so calls VS rejects while busy are auto-retried
@@ -83,7 +90,7 @@ namespace BeckhoffAutomationInterface
                 catch { /* non-fatal: we just lose the force-kill fallback */ }
             }
 
-            return new VisualStudioSession(dte, devenvPid);
+            return new VisualStudioSession(dte, shell, devenvPid);
         }
 
         /// <summary>Closes Visual Studio, force-killing it if a graceful Quit() doesn't
