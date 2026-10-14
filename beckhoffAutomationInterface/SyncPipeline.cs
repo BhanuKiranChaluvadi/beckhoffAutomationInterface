@@ -544,17 +544,81 @@ namespace BeckhoffAutomationInterface
         /// locations print raw, clearly labeled — never silently dropped.</summary>
         void RunBuild()
         {
+            List<string> variants;
+            try
+            {
+                variants = VariantBuildPlan.Select(VariantSyncEngine.ProjectVariants(_session.SysManager), _options.Variant, _options.AllVariants);
+            }
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine("{0}: BUILD FAILED — {1}", Now(), ex.Message);
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            if (variants.Count == 0)
+            {
+                BuildOnce(_options.Clean); // project without variants: one plain build, as before
+                return;
+            }
+
+            if (!VariantSyncEngine.DefinesEnabled(_session.SysManager, _options.PlcItemPath))
+            {
+                Console.WriteLine("{0}: BUILD FAILED — variant defines are off for '{1}', so the PLC would get no variant defines. Run 'sync variants' first.",
+                    Now(), _options.PlcItemPath);
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            var sys14 = (ITcSysManager14)_session.SysManager;
+            string original = sys14.CurrentProjectVariant;
+            var results = new List<VariantBuildResult>();
+            try
+            {
+                foreach (string variant in variants)
+                {
+                    Console.WriteLine("{0}: ===== Variant '{1}' =====", Now(), variant);
+                    sys14.CurrentProjectVariant = variant;
+                    // Always clean: the previous variant's output must not pass for this one.
+                    results.Add(BuildOnce(clean: true, variant: variant));
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(original))
+                {
+                    try { sys14.CurrentProjectVariant = original; }
+                    catch (COMException) { /* best effort; the project is not saved by a build */ }
+                }
+            }
+
+            Console.WriteLine("{0}: Variant build summary:{1}{2}", Now(), Environment.NewLine, VariantBuildPlan.Summary(results));
+            if (results.Any(r => !r.Passed))
+                Environment.ExitCode = 1;
+        }
+
+        /// <summary>One clean/build of the current variant (or of a project without variants),
+        /// with errors, warnings and the PLC's message pragmas printed.</summary>
+        VariantBuildResult BuildOnce(bool clean, string variant = null)
+        {
+            var result = new VariantBuildResult { Variant = variant };
             BuildReport buildReport = null;
             try
             {
-                RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte, _options.Clean), "building solution");
+                RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte, clean), "building solution");
             }
             catch (BuildTimeoutException ex)
             {
                 Console.WriteLine("{0}: BUILD TIMED OUT — {1}", Now(), ex.Message);
                 Environment.ExitCode = 1; // CI contract: anything but BUILD PASSED is non-zero
-                return; // Main's using will force-close VS (dialog is still up)
+                result.TimedOut = true;
+                return result; // Main's using will force-close VS (dialog is still up)
             }
+
+            foreach (string message in buildReport.PragmaMessages)
+                Console.WriteLine("    [PLC MESSAGE] {0}", message);
+            result.Passed = buildReport.Success;
+            result.ErrorCount = buildReport.Errors.Count;
 
             if (buildReport.Success)
             {
@@ -574,7 +638,7 @@ namespace BeckhoffAutomationInterface
                     foreach (BuildError warning in buildReport.Warnings)
                         Console.WriteLine("    [WARN] {0} {1}", warning.Description, FormatErrorLocation(warning, provenance));
                 }
-                return;
+                return result;
             }
 
             if (buildReport.Warnings.Count > 0)
@@ -584,6 +648,7 @@ namespace BeckhoffAutomationInterface
                 foreach (BuildError warning in buildReport.Warnings)
                     Console.WriteLine("    [WARN] {0} {1}", warning.Description, FormatErrorLocation(warning, provenance));
             }
+            return result;
         }
 
         /// <summary>Fresh full parse of the source folder for error mapping — independent

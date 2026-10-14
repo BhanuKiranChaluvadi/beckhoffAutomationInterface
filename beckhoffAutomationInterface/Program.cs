@@ -126,13 +126,15 @@ namespace BeckhoffAutomationInterface
         {
             if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
             {
-                Console.WriteLine("Usage: beckhoffAutomationInterface build <path-to-.tsproj-or-folder> [--plc-name <name>] [--clean]");
+                Console.WriteLine("Usage: beckhoffAutomationInterface build <path-to-.tsproj-or-folder> [--plc-name <name>] [--clean] [--variant <name> | --all-variants]");
                 Console.WriteLine();
                 Console.WriteLine("Compiles an existing TwinCAT PLC project and reports pass/fail.");
                 Console.WriteLine("  <path>              A .tsproj file, or a folder containing exactly one.");
                 Console.WriteLine("  --plc-name <name>   The real PLC project name inside TIPC, if it differs");
                 Console.WriteLine("                      from the .tsproj file's own name.");
                 Console.WriteLine("  --clean             Clean the solution before the build (no stale results).");
+                Console.WriteLine("  --variant <name>    Build only this project variant (clean build).");
+                Console.WriteLine("  --all-variants      Build every project variant (default when the project has variants).");
                 Console.WriteLine();
                 Console.WriteLine("Exit code: 0 = build passed, 1 = build failed or timed out.");
                 Environment.Exit(0);
@@ -141,6 +143,8 @@ namespace BeckhoffAutomationInterface
             string path = null;
             string plcName = null;
             bool clean = false;
+            string variant = null;
+            bool allVariants = false;
             for (int i = 1; i < args.Length; i++)
             {
                 if (args[i] == "--plc-name" && i + 1 < args.Length)
@@ -150,6 +154,14 @@ namespace BeckhoffAutomationInterface
                 else if (args[i] == "--clean")
                 {
                     clean = true;
+                }
+                else if (args[i] == "--variant" && i + 1 < args.Length)
+                {
+                    variant = args[++i];
+                }
+                else if (args[i] == "--all-variants")
+                {
+                    allVariants = true;
                 }
                 else if (path == null && !args[i].StartsWith("--"))
                 {
@@ -185,6 +197,10 @@ namespace BeckhoffAutomationInterface
             var result = new List<string> { "--tsproj", tsprojPath, "--plc-name", resolvedPlcName, "--build" };
             if (clean)
                 result.Add("--clean");
+            if (variant != null)
+                result.AddRange(new[] { "--variant", variant });
+            if (allVariants)
+                result.Add("--all-variants");
             return result.ToArray();
         }
 

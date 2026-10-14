@@ -225,19 +225,23 @@ so a second run changes nothing. Add it to `sync all`.
 
 ## Task 7: `build --variant` and `--all-variants`
 **Description:** `build <project> --variant <v>` sets `CurrentProjectVariant`, cleans, builds and
-reports. `--all-variants` reads the variant list from the project and does this for each one.
+reports. Each build prints the PLC's message pragmas (`[PLC MESSAGE]`, C0373) as proof of the compiled branch. `--all-variants` reads the variant list from the project and does this for each one.
 At the end it prints one summary table (variant → pass/fail, error count) and exits non-zero if
 any variant fails. If the project has variants but `PvDefine` is off, fail with a clear message
 ("run `sync variants`"), because the PLC would get no defines.
 
 **Acceptance criteria:**
-- [ ] `--variant X` builds only X. An unknown X fails with the list of valid names.
-- [ ] `--all-variants` builds every variant, even after one fails, and prints the summary
-- [ ] The exit code is 0 only if all requested variants pass
+- [x] `--variant X` builds only X (case-insensitive). An unknown X fails with the list of valid names.
+- [x] `--all-variants` builds every variant, even after one fails, and prints the summary. Also the default when the project has variants.
+- [x] The exit code is 0 only if all requested variants pass
 
 **Verification:**
-- [ ] Unit tests: summary/exit-code logic, unknown-variant message
-- [ ] Manual: `ST/variant-sample` (Checkpoint 2)
+- [x] Unit tests: summary/exit-code logic, unknown-variant message (`VariantBuildPlanTests`)
+- [x] Manual on a scratch project from `ST/VariantSample` (2026-10-14), each response as expected:
+      1. `build` → both variants, each prints its own `[PLC MESSAGE]` branch lines, ALL 2 PASSED, exit 0
+      2. `build --variant machineb` → only MachineB, exit 0
+      3. `build --variant Google` → "unknown variant 'Google'. The project has: MachineA, MachineB.", exit 1
+      4. error injected only in MachineB's branch → MachineA PASSED, MachineB FAILED (2 errors), exit 1
 
 **Dependencies:** Tasks 3, 6
 **Files likely touched:** `Sync/BuildRunner.cs`, `SyncPipeline.cs`, `RunOptions.cs`, new `Sync/VariantBuildReport.cs`, tests

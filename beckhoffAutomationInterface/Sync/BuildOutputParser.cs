@@ -33,5 +33,23 @@ namespace BeckhoffAutomationInterface.Sync
             }
             return errors;
         }
+
+        // C0373 is the compiler code of the PLC's own message pragmas ({warning '...'}),
+        // e.g. "…\MAIN.TcPOU(9) : warning: C0373: VARIANT CHECK: MachineA branch compiled".
+        static readonly Regex PragmaMessageLine = new Regex(
+            @":\s*(?:warning|info|message)\s*:\s*C0373\s*:\s*(?<text>.+?)\s*$",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+        /// <summary>Texts of the PLC's message pragmas in a build log — proof of which
+        /// conditional-compilation branch was compiled.</summary>
+        public static List<string> ParsePragmaMessages(string outputText)
+        {
+            var messages = new List<string>();
+            if (string.IsNullOrEmpty(outputText))
+                return messages;
+            foreach (Match m in PragmaMessageLine.Matches(outputText))
+                messages.Add(m.Groups["text"].Value);
+            return messages;
+        }
     }
 }

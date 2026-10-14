@@ -244,8 +244,15 @@ namespace BeckhoffAutomationInterface
         /// false when it fell back to the current directory.</summary>
         public bool SourceFolderExplicit { get; }
 
+        /// <summary>Build only this project variant (--variant). Null = all variants when the
+        /// project has any (see VariantBuildPlan).</summary>
+        public string Variant { get; }
+
+        /// <summary>--all-variants: build every project variant (also the default).</summary>
+        public bool AllVariants { get; }
+
         RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -270,6 +277,8 @@ namespace BeckhoffAutomationInterface
             Shell = shell;
             Clean = clean;
             SourceFolderExplicit = sourceFolderExplicit;
+            Variant = variant;
+            AllVariants = allVariants;
         }
 
         /// <summary>
@@ -378,7 +387,10 @@ namespace BeckhoffAutomationInterface
                 // Not safety-gated: picking a shell never changes a project.
                 shell: GetOption(args, "--shell") ?? config.GetString("shell"),
                 clean: args.Contains("--clean") || config.GetBool("clean"),
-                sourceFolderExplicit: cliSource != null || config.GetString("source") != null);
+                sourceFolderExplicit: cliSource != null || config.GetString("source") != null,
+                // CLI-only: which variant to build is a per-run choice, not a default.
+                variant: GetOption(args, "--variant"),
+                allVariants: args.Contains("--all-variants"));
         }
 
         static string GetOption(string[] args, params string[] flags)

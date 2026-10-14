@@ -23,6 +23,10 @@ namespace BeckhoffAutomationInterface.Sync
         public bool Success => Succeeded;
         public List<BuildError> Errors { get; } = new List<BuildError>();
         public List<BuildError> Warnings { get; } = new List<BuildError>();
+
+        /// <summary>Texts of the PLC's message pragmas ({warning '...'}, C0373) from the build
+        /// log — shows which conditional-compilation branch was compiled.</summary>
+        public List<string> PragmaMessages { get; } = new List<string>();
     }
 
     /// <summary>Thrown when a build does not finish within the allotted time — almost
@@ -105,9 +109,12 @@ namespace BeckhoffAutomationInterface.Sync
                     report.Warnings.Add(buildError);
             }
 
+            string paneText = ReadBuildOutputPane(dte);
+            report.PragmaMessages.AddRange(BuildOutputParser.ParsePragmaMessages(paneText));
+
             if (ShouldUseOutputPane(report))
             {
-                List<BuildError> fromPane = BuildOutputParser.ParseErrors(ReadBuildOutputPane(dte));
+                List<BuildError> fromPane = BuildOutputParser.ParseErrors(paneText);
                 if (fromPane.Count > 0)
                 {
                     report.Errors.Clear();
