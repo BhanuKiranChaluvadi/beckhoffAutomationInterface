@@ -255,9 +255,17 @@ namespace BeckhoffAutomationInterface
         /// after the variant is selected (see Sync/CompilerDefines). Empty when none.</summary>
         public IReadOnlyList<string> Defines { get; }
 
+        /// <summary>init: create the objects of the fresh project with one PLCopen import before
+        /// the normal code sync (see Sync/PlcOpenBulkImport). Off with --no-bulk-import.</summary>
+        public bool BulkImport => Init && !NoBulkImport;
+
+        /// <summary>--no-bulk-import (init only): create every object one by one, as before.</summary>
+        public bool NoBulkImport { get; }
+
         internal RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null, bool noBulkImport = false)
         {
+            NoBulkImport = noBulkImport;
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
             ProjectName = projectName;

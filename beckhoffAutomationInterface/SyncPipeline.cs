@@ -346,6 +346,13 @@ namespace BeckhoffAutomationInterface
                 PrintLines("! ", lintIssues);
             }
 
+            // init: one PLCopen import creates the objects of the fresh project; the sync below
+            // then writes only the texts that still differ (see PlcOpenBulkImport).
+            // Never retried: a repeated import could duplicate objects (the message filter
+            // already waits while the shell is busy).
+            if (_options.BulkImport && !_options.Incremental)
+                PlcOpenBulkImport.Run(_session.SysManager, _options.ProjectRootPath, desiredPous);
+
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);

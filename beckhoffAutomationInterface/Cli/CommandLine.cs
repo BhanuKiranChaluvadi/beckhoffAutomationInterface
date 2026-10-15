@@ -32,7 +32,7 @@ namespace BeckhoffAutomationInterface.Cli
             "export code|libs|io|events|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
             "  export object <ObjectName> <source> --project <project> [--plc <name>]";
         public const string InitUsage =
-            "init <source> --into <folder> [--name <name>] [--ignore <glob>]...";
+            "init <source> --into <folder> [--name <name>] [--ignore <glob>]... [--no-bulk-import]";
 
         // Every command: where .stconfig is read from, and whether at all.
         static readonly string[] ConfigOptions = { "--config" };
@@ -234,7 +234,7 @@ namespace BeckhoffAutomationInterface.Cli
 
         static RunOptions ParseInit(string[] args, string shell, string cwd)
         {
-            Args a = Args.Read(args, 1, InitUsage, new[] { "--into", "--name", "--ignore" }, new string[0]);
+            Args a = Args.Read(args, 1, InitUsage, new[] { "--into", "--name", "--ignore" }, new[] { "--no-bulk-import" });
             string source = SingleSource(a, "init", InitUsage);
             Config config = Config.Load(a, source, cwd);
             string into = a.Get("--into") ?? throw new UsageException("'init' needs --into <folder> (where the new solution is created).", InitUsage);
@@ -282,7 +282,8 @@ namespace BeckhoffAutomationInterface.Cli
                 sourceFolderExplicit: sourceFolder != null || config.Source != null,
                 variant: a.Get("--variant"),
                 allVariants: a.Has("--all-variants"),
-                defines: a.GetAll("--define"));
+                defines: a.GetAll("--define"),
+                noBulkImport: a.Has("--no-bulk-import"));
         }
 
         static string SingleSource(Args a, string command, string usage)
