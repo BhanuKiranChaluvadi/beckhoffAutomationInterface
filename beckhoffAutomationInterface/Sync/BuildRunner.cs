@@ -27,6 +27,10 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Texts of the PLC's message pragmas ({warning '...'}, C0373) from the build
         /// log — shows which conditional-compilation branch was compiled.</summary>
         public List<string> PragmaMessages { get; } = new List<string>();
+
+        /// <summary>A failed build with no error: the last lines of the Build output pane. The
+        /// cause is then outside the PLC code (I/O, task or safety configuration).</summary>
+        public List<string> OutputTail { get; } = new List<string>();
     }
 
     /// <summary>Thrown when a build does not finish within the allotted time — almost
@@ -121,7 +125,16 @@ namespace BeckhoffAutomationInterface.Sync
                     report.Errors.AddRange(fromPane);
                 }
             }
+            if (!report.Succeeded && report.Errors.All(e => string.IsNullOrWhiteSpace(e.Description)))
+                report.OutputTail.AddRange(TailLines(paneText, 30));
             return report;
+        }
+
+        /// <summary>The last non-empty lines of a text (empty for null).</summary>
+        internal static List<string> TailLines(string text, int count)
+        {
+            List<string> lines = (text ?? "").Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).ToList();
+            return lines.Skip(Math.Max(0, lines.Count - count)).ToList();
         }
 
         /// <summary>A failed build whose error list has no usable text (empty, or only

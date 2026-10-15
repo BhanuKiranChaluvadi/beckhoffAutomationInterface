@@ -17,12 +17,18 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Project variants that have this device (Variants="A,B"); null = all variants.</summary>
         public IReadOnlyList<string> Variants { get; }
 
-        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null)
+        /// <summary>Network adapter address of the EtherCAT master (Adapter="02000000B101", 12 hex
+        /// digits = DeviceDef/AddressInfo/Pnp/DeviceData); null = leave it as it is. Two enabled
+        /// masters with the same (empty) adapter fail the system build with no error text.</summary>
+        public string Adapter { get; }
+
+        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null, string adapter = null)
         {
             Name = name;
             Disabled = disabled;
             Children = children;
             Variants = variants;
+            Adapter = adapter;
         }
     }
 

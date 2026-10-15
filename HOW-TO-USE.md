@@ -198,6 +198,18 @@ Keep **one** `io-devices.xml`. Mark the items that only some machines have:
 
 Examples: [`ST/VariantSample`](ST/VariantSample) and [`ST/VariantIoSample`](ST/VariantIoSample).
 
+### More than one EtherCAT master
+
+Give each enabled master its own network adapter address:
+
+```xml
+<Device Name="BH 1" Disabled="false" Adapter="02000000B101">
+```
+
+Two enabled masters with the same (empty) adapter fail the system build with no error text.
+On a PC with no EtherCAT card, use test addresses (`02000000B101`, `02000000B201`, ...).
+On the real machine, use the real adapter. `export io` writes the attribute back.
+
 ## 10. Run the program and check live values (closed loop)
 
 ### 10.1 Activate

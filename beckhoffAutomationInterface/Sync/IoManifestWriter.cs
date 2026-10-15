@@ -84,6 +84,9 @@ namespace BeckhoffAutomationInterface.Sync
                     deviceEl.Add(new XAttribute("Variants", string.Join(",", deviceVariants))); // Disabled is per variant then
                 else if (device.Disabled == DISABLED_STATE.SMDS_DISABLED)
                     deviceEl.Add(new XAttribute("Disabled", "true"));
+                string adapter = IoSyncEngine.AdapterOf(device.ProduceXml());
+                if (!string.IsNullOrEmpty(adapter) && adapter.Trim('0').Length > 0)
+                    deviceEl.Add(new XAttribute("Adapter", adapter));
 
                 AppendChildren(device, deviceEl, report, variantsByPath);
                 root.Add(deviceEl);

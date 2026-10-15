@@ -660,6 +660,10 @@ and mark the items that only some machines have (example: [`ST/VariantIoSample`]
 <Terminal Name="Term 3 (EL2008)" Product="EL2008" Variants="MachineA" />
 ```
 
+- `Adapter="02000000B101"` on a `<Device>` sets the master's network adapter (12 hex digits,
+  `Pnp/DeviceData`). Two enabled masters with the same (empty) adapter fail the system build
+  with no error text, so give each enabled master its own (a test address on a PC with no
+  EtherCAT card).
 - `Variants="A,B"` works on `<Device>`, `<Box>` and `<Terminal>`. No attribute = all variants.
   A child cannot be in a variant where its parent is not. Names must be in `variants.xml`.
 - `sync io` enables the item in those variants and disables it in the others (TwinCAT variant

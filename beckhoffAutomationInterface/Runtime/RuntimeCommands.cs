@@ -257,6 +257,8 @@ namespace BeckhoffAutomationInterface.Runtime
                         Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
                         foreach (Sync.BuildError e in build.Errors)
                             Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, shadow.ToOriginalPath(e.FileName), e.Line);
+                        foreach (string line in build.OutputTail)
+                            Console.WriteLine("      | {0}", line);
                         return 1;
                     }
                     Console.WriteLine("{0}: Build passed.", Now());

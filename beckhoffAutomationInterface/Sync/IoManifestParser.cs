@@ -56,8 +56,22 @@ namespace BeckhoffAutomationInterface.Sync
                     (string)deviceEl.Attribute("Name"),
                     (bool?)deviceEl.Attribute("Disabled") ?? false,
                     ParseChildNodes(deviceEl),
-                    ParseVariants(deviceEl)))
+                    ParseVariants(deviceEl),
+                    ParseAdapter(deviceEl)))
                 .ToList();
+        }
+
+        /// <summary>Adapter="02000000B101": 12 hex digits (a MAC address), null when absent.</summary>
+        static string ParseAdapter(XElement deviceEl)
+        {
+            string value = ((string)deviceEl.Attribute("Adapter"))?.Replace("-", "").Replace(":", "").Trim().ToUpperInvariant();
+            if (value == null)
+                return null;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9A-F]{12}$"))
+                throw new System.FormatException(string.Format(
+                    "io-devices.xml: Device '{0}' Adapter=\"{1}\" is not a 12-digit hex adapter address (for example 02000000B101).",
+                    (string)deviceEl.Attribute("Name"), (string)deviceEl.Attribute("Adapter")));
+            return value;
         }
 
         /// <summary>null when the attribute is absent (= all variants).</summary>

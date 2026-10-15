@@ -7,6 +7,13 @@ namespace BeckhoffAutomationInterface.Tests
     /// Task 4). Sample lines are real TwinCAT 3.1.4026 build output.</summary>
     public class BuildOutputParserTests
     {
+        [Fact]
+        public void TailLines_LastNonEmptyLines()   // a failed build with 0 errors shows these (2026-10-14)
+        {
+            Assert.Equal(new[] { "b", "c" }, BuildRunner.TailLines("a\r\n\r\nb\n  \nc\n", 2));
+            Assert.Empty(BuildRunner.TailLines(null, 5));
+        }
+
         const string RealOutput =
             "------ Build started: Application: VariantDemo.DemoPlc -------\r\n" +
             "Typify code...\r\n" +

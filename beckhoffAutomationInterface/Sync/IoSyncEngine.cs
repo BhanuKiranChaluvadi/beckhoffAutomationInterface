@@ -79,6 +79,13 @@ namespace BeckhoffAutomationInterface.Sync
                     report.StateChanged.Add($"{deviceSpec.Name} -> {(deviceSpec.Disabled ? "disabled" : "enabled")}");
                 }
 
+                if (deviceSpec.Adapter != null && AdapterOf(device.ProduceXml()) != deviceSpec.Adapter)
+                {
+                    device.ConsumeXml("<TreeItem><DeviceDef><AddressInfo><Pnp><DeviceData>" + deviceSpec.Adapter +
+                                      "</DeviceData></Pnp></AddressInfo></DeviceDef></TreeItem>");
+                    report.StateChanged.Add($"{deviceSpec.Name} -> adapter {deviceSpec.Adapter}");
+                }
+
                 SyncChildren(sysManager, device, deviceSpec.Children, report, confirmDelete);
             }
 
@@ -98,6 +105,13 @@ namespace BeckhoffAutomationInterface.Sync
                 ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
                 SyncChildren(sysManager, node, nodeSpec.Children, report, confirmDelete);
             }
+        }
+
+        /// <summary>The adapter address (Pnp/DeviceData) in a device's XML; null when absent.</summary>
+        internal static string AdapterOf(string deviceXml)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(deviceXml ?? "", "<Pnp>.*?<DeviceData>([0-9A-Fa-f]*)</DeviceData>", System.Text.RegularExpressions.RegexOptions.Singleline);
+            return m.Success ? m.Groups[1].Value.ToUpperInvariant() : null;
         }
 
         /// <summary>

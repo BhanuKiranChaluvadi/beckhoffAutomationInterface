@@ -704,6 +704,12 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: BUILD FAILED — {1} error(s):", Now(), buildReport.Errors.Count);
                 foreach (BuildError error in buildReport.Errors)
                     Console.WriteLine("    [ERROR] {0} {1}", error.Description, FormatErrorLocation(error, provenance));
+                if (buildReport.OutputTail.Count > 0)
+                {
+                    Console.WriteLine("    No PLC error: the cause is outside the PLC code. End of the Build output:");
+                    foreach (string line in buildReport.OutputTail)
+                        Console.WriteLine("      | {0}", line);
+                }
 
                 if (buildReport.Warnings.Count > 0)
                 {

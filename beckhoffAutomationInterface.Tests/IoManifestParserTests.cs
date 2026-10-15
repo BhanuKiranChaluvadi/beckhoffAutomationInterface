@@ -30,6 +30,20 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void Adapter_IsTwelveHexDigits_NormalizedAndChecked()   // two masters on one (empty) adapter fail the build (2026-10-15)
+        {
+            string ok = WriteManifest(@"<IoTree><Device Name=""BH1"" Adapter=""02-00-00-00-b1-01"" /><Device Name=""BH2"" /></IoTree>");
+            var devices = IoManifestParser.Parse(ok);
+            Assert.Equal("02000000B101", devices[0].Adapter);
+            Assert.Null(devices[1].Adapter);
+
+            string bad = WriteManifest(@"<IoTree><Device Name=""BH1"" Adapter=""eth0"" /></IoTree>");
+            var ex = Assert.Throws<System.FormatException>(() => IoManifestParser.Parse(bad));
+            Assert.Contains("BH1", ex.Message);
+            Assert.Equal("02000000B101", IoSyncEngine.AdapterOf("<DeviceDef><AddressInfo><Pnp><DeviceName/><DeviceData>02000000b101</DeviceData></Pnp></AddressInfo></DeviceDef>"));
+        }
+
+        [Fact]
         public void DeviceWithDirectTerminals_ParsesFlatBoxAndTerminals()
         {
             string path = WriteManifest(@"
