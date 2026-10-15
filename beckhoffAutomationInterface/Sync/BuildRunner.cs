@@ -71,14 +71,14 @@ namespace BeckhoffAutomationInterface.Sync
             {
                 // Same asynchronous start + polled wait as the build, for the same reason.
                 Console.WriteLine("{0}: Cleaning solution...", Clock.Now());
-                dte.Solution.SolutionBuild.Clean(false);
+                Start(() => dte.Solution.SolutionBuild.Clean(false), "Clean");
                 WaitUntilDone(dte, timeoutMs, "Clean");
             }
 
             // Kick off the build asynchronously so our side never blocks on a modal
             // dialog; we drive completion ourselves via polling below.
             Console.WriteLine("{0}: Building solution...", Clock.Now());
-            dte.Solution.SolutionBuild.Build(false);
+            Start(() => dte.Solution.SolutionBuild.Build(false), "Build");
             WaitUntilDone(dte, timeoutMs, "Build");
 
             var report = new BuildReport();
@@ -159,10 +159,29 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>Polls SolutionBuild.BuildState until the running clean/build is done, so
         /// a modal dialog can never hang the process: past timeoutMs it throws.</summary>
+        /// <summary>Starts a clean or build. When the shell rejects the call for longer than
+        /// MessageFilter.RetryLimitMs (it stays busy), this is a timeout, not a crash.</summary>
+        static void Start(Action kickOff, string step)
+        {
+            try
+            {
+                kickOff();
+            }
+            catch (COMException ex)
+            {
+                throw new BuildTimeoutException(string.Format(
+                    "{0} could not start: the shell stayed busy for {1} minute(s) and rejected the call ({2}). " +
+                    "Close the hidden TcXaeShell this tool started, then run again.",
+                    step, MessageFilter.RetryLimitMs / 60000, ex.Message));
+            }
+        }
+
         static void WaitUntilDone(EnvDTE80.DTE2 dte, int timeoutMs, string step)
         {
-            int elapsed = 0;
-            while (elapsed < timeoutMs)
+            // Real time, not the sum of the sleeps: one rejected call can take up to
+            // MessageFilter.RetryLimitMs before it fails.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (clock.ElapsedMilliseconds < timeoutMs)
             {
                 try
                 {
@@ -176,7 +195,6 @@ namespace BeckhoffAutomationInterface.Sync
                 }
 
                 Thread.Sleep(PollIntervalMs);
-                elapsed += PollIntervalMs;
             }
 
             throw new BuildTimeoutException(

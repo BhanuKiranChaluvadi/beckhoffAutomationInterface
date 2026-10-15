@@ -31,13 +31,23 @@ namespace BeckhoffAutomationInterface
         int IOleMessageFilter.HandleInComingCall(int dwCallType, IntPtr hTaskCaller, int dwTickCount, IntPtr lpInterfaceInfo)
             => 0;
 
+        /// <summary>How long one call may stay rejected before it is cancelled. Without a limit,
+        /// a shell that stays busy (seen: stuck in Clean during activate) hangs the tool for ever,
+        /// and no timeout above this filter can run.</summary>
+        public const int RetryLimitMs = 10 * 60 * 1000;
+
         int IOleMessageFilter.RetryRejectedCall(IntPtr hTaskCallee, int dwTickCount, int dwRejectType)
+            => RetryDelay(dwRejectType, dwTickCount, RetryLimitMs);
+
+        /// <summary>The filter's answer (pure, unit-tested). dwRejectType 2 = SERVERCALL_RETRYLATER.
+        /// A value in [0,100) retries after that many milliseconds (99 = almost at once);
+        /// -1 cancels the call, which then fails with RPC_E_CALL_REJECTED (a COMException).
+        /// elapsedMs = dwTickCount, the time since the call was first made.</summary>
+        internal static int RetryDelay(int rejectType, int elapsedMs, int limitMs)
         {
-            // dwRejectType == 2 => SERVERCALL_RETRYLATER. Returning a value in [0,100)
-            // retries the call after that many milliseconds (99 = retry almost immediately).
-            if (dwRejectType == 2)
+            if (rejectType == 2 && elapsedMs < limitMs)
                 return 99;
-            return -1; // cancel the call for any other reject type
+            return -1; // past the limit, or any other reject type
         }
 
         // PENDINGMSG_WAITDEFPROCESS = 2
