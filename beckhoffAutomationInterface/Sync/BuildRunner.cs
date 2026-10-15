@@ -65,6 +65,27 @@ namespace BeckhoffAutomationInterface.Sync
         const int DefaultBuildTimeoutMs = 5 * 60 * 1000; // 5 minutes
         const int PollIntervalMs = 2000;
 
+        /// <summary>Watchdog limit for one whole Build() call (clean + build, 5 min each, plus
+        /// margin). Past it the caller's VisualStudioSession.Watchdog closes the shell.</summary>
+        public static readonly TimeSpan HangLimit = TimeSpan.FromMinutes(15);
+
+        /// <summary>True for the COM errors of a shell that is gone (closed by the watchdog,
+        /// or crashed): waiting longer cannot help (pure, unit-tested).</summary>
+        internal static bool IsShellGone(int hresult)
+        {
+            switch ((uint)hresult)
+            {
+                case 0x80010007: // RPC_E_SERVER_DIED
+                case 0x80010012: // RPC_E_SERVER_DIED_DNE
+                case 0x80010108: // RPC_E_DISCONNECTED
+                case 0x800706BA: // RPC_S_SERVER_UNAVAILABLE
+                case 0x800706BE: // RPC_S_CALL_FAILED
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         public static BuildReport Build(EnvDTE80.DTE2 dte, bool clean = false, int timeoutMs = DefaultBuildTimeoutMs)
         {
             if (clean)
@@ -167,11 +188,15 @@ namespace BeckhoffAutomationInterface.Sync
             {
                 kickOff();
             }
+            catch (COMException ex) when (IsShellGone(ex.HResult))
+            {
+                throw new BuildTimeoutException(string.Format(
+                    "{0} did not finish: the shell hung and was closed ({1}).", step, ex.Message));
+            }
             catch (COMException ex)
             {
                 throw new BuildTimeoutException(string.Format(
-                    "{0} could not start: the shell stayed busy for {1} minute(s) and rejected the call ({2}). " +
-                    "Close the hidden TcXaeShell this tool started, then run again.",
+                    "{0} could not start: the shell stayed busy for {1} minute(s) and rejected the call ({2}).",
                     step, MessageFilter.RetryLimitMs / 60000, ex.Message));
             }
         }
@@ -187,6 +212,11 @@ namespace BeckhoffAutomationInterface.Sync
                 {
                     if ((int)dte.Solution.SolutionBuild.BuildState == VsBuildStateDone)
                         return;
+                }
+                catch (COMException ex) when (IsShellGone(ex.HResult))
+                {
+                    throw new BuildTimeoutException(string.Format(
+                        "{0} did not finish: the shell hung and was closed ({1}).", step, ex.Message));
                 }
                 catch (COMException)
                 {

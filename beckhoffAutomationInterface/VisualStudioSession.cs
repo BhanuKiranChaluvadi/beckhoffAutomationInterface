@@ -90,19 +90,19 @@ namespace BeckhoffAutomationInterface
             // must never wait for a click.
             ITcAutomationSettings automationSettings = EnableSilentMode(dte, out bool previousSilentMode);
 
-            // Identify our devenv process (the one that appeared after CreateInstance), so we
-            // can force-kill it later if a graceful dte.Quit() leaves it alive (e.g. behind a
-            // modal dialog). Fall back to the HWND method if the diff is inconclusive.
-            int devenvPid = System.Diagnostics.Process.GetProcessesByName(shell.ProcessName)
+            // Identify our shell process, so we can force-kill it later if a graceful dte.Quit()
+            // leaves it alive (e.g. behind a modal dialog) and the watchdog can close it. The
+            // window handle of OUR DTE is exact. The process-list diff is not: with parallel
+            // runs (build_nflite_machine.ps1 -Parallel) several shells start at once, and every
+            // run picked the same new pid - one run then killed another run's shell (2026-10-15).
+            int hwndPid = 0;
+            try { GetWindowThreadProcessId((IntPtr)dte.MainWindow.HWnd, out hwndPid); }
+            catch { /* no window yet: use the process list below */ }
+            var newPids = System.Diagnostics.Process.GetProcessesByName(shell.ProcessName)
                 .Select(p => p.Id)
-                .FirstOrDefault(id => !devenvBefore.Contains(id));
-            string pidSource = "process list";
-            if (devenvPid == 0)
-            {
-                pidSource = "window handle";
-                try { GetWindowThreadProcessId((IntPtr)dte.MainWindow.HWnd, out devenvPid); }
-                catch { /* non-fatal: we just lose the force-kill fallback */ }
-            }
+                .Where(id => !devenvBefore.Contains(id))
+                .ToList();
+            int devenvPid = ChooseShellPid(hwndPid, newPids, out string pidSource);
             Console.WriteLine("{0}: Shell process: {1} (pid {2}, found by {3}).", Now(), shell.ProcessName, devenvPid, pidSource);
 
             var session = new VisualStudioSession(dte, shell, devenvPid);
@@ -152,6 +152,47 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: WARNING: could not restore TwinCAT silent mode to off.", Now());
             }
             _automationSettings = null;
+        }
+
+        /// <summary>Which shell process is ours (pure, unit-tested). The window handle of our own
+        /// DTE wins. Without it, the process-list diff is used only when exactly one new shell
+        /// appeared. Otherwise 0: unknown, and then nothing is ever force-killed - killing a
+        /// guess could close another run's shell or the user's XAE.</summary>
+        internal static int ChooseShellPid(int hwndPid, System.Collections.Generic.IReadOnlyList<int> newPids, out string source)
+        {
+            if (hwndPid > 0)
+            {
+                source = "window handle";
+                return hwndPid;
+            }
+            if (newPids.Count == 1)
+            {
+                source = "process list";
+                return newPids[0];
+            }
+            source = newPids.Count == 0 ? "nothing: no new shell process"
+                                        : string.Format("nothing: {0} new shell processes, not sure which", newPids.Count);
+            return 0;
+        }
+
+        /// <summary>Watchdog for one step (dispose it when the step ends). If the step still runs
+        /// after the limit, the shell THIS session started is closed: a COM call that the shell
+        /// accepted but never finishes (seen 2026-10-15: Clean deadlocked with the background
+        /// PLC precompile) cannot time out by itself, and the message filter only sees rejected
+        /// calls. The blocked call then fails with a COM error and the tool exits.</summary>
+        public IDisposable Watchdog(string step, TimeSpan limit)
+        {
+            if (_devenvPid <= 0)
+                return new Timer(_ => { }); // no pid: nothing to close (rare, see Start)
+            int pid = _devenvPid;
+            string processName = Shell.ProcessName;
+            return new Timer(_ =>
+            {
+                Console.WriteLine("{0}: TIMEOUT — {1} did not finish in {2} minute(s); closing the {3} this tool started (pid {4}).",
+                    Now(), step, (int)limit.TotalMinutes, processName, pid);
+                try { System.Diagnostics.Process.GetProcessById(pid).Kill(); }
+                catch { /* already gone */ }
+            }, null, limit, Timeout.InfiniteTimeSpan);
         }
 
         public void Dispose()

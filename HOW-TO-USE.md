@@ -228,6 +228,7 @@ bai activate C:\work\TwinCAT\Shark --target umrt --variant SAS --yes
 ```
 
 The tool compiles the variant, activates it, starts TwinCAT, and waits until the PLC is in Run.
+It does not clean first: a clean during TwinCAT's background precompile can lock the shell.
 On `umrt`, the tool disables the EtherCAT devices, because UmRT has no EtherCAT adapter.
 To start the PLC in simulation for such a test run, add `--define SIMULATION`: the tool adds
 this PLC compiler define for this build only (the code tests `{IF defined (SIMULATION)}`).
@@ -354,6 +355,7 @@ new option.
 | `verify` shows `FAIL` | The variant on the target is not the one you named, or the code does not do what `expect.json` says. Look at the actual values. |
 | Linking fails with `0x98510001` | The `%I*`/`%Q*` variable is not used in the code, so it is not in the process image. Use it in the code. |
 | A `TcXaeShell` process stays open | Close it in Task Manager. The tool closes its own shell in about 10 seconds. |
+| `TIMEOUT — Build did not finish in 15 minute(s)` | The shell locked up during the build. The tool closed the shell it started. Run again. |
 
 ## 17. Test the tool
 

@@ -675,7 +675,8 @@ namespace BeckhoffAutomationInterface
             BuildReport buildReport = null;
             try
             {
-                RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte, clean), "building solution");
+                using (_session.Vs.Watchdog("Build", BuildRunner.HangLimit))
+                    RetryOnBusy(() => buildReport = BuildRunner.Build(_session.Dte, clean), "building solution");
             }
             catch (BuildTimeoutException ex)
             {

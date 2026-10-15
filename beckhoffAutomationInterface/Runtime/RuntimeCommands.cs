@@ -243,7 +243,13 @@ namespace BeckhoffAutomationInterface.Runtime
                     Sync.BuildReport build;
                     try
                     {
-                        build = Sync.BuildRunner.Build(vs.Dte, clean: true);
+                        // No Clean: the variant, define, device and boot-flag changes above start a
+                        // background PLC precompile, and a Clean sent while it runs can deadlock
+                        // the shell (seen 4 times on Google, 2026-10-15; Build alone passed). The
+                        // project was built before (init/sync), and the build applies the changed
+                        // defines (verify checks GVL_Simulation.bActive from --define SIMULATION).
+                        using (vs.Watchdog("Build", Sync.BuildRunner.HangLimit))
+                            build = Sync.BuildRunner.Build(vs.Dte, clean: false);
                     }
                     catch (Sync.BuildTimeoutException ex)
                     {
