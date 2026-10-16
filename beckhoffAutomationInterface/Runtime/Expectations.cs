@@ -151,6 +151,68 @@ namespace BeckhoffAutomationInterface.Runtime
             }
         }
 
+        public static bool IsString(string type) => StringType.IsMatch(type.Trim());
+
+        public static bool IsBool(string type) => type.Trim().Equals("BOOL", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Raw bytes for a write (the inverse of Decode). value: bool for BOOL, string for
+        /// STRING(n), a number for the others. Throws FormatException when the value does not fit.</summary>
+        public static byte[] Encode(string type, object value)
+        {
+            int size = SizeOf(type);
+            if (IsString(type))
+            {
+                if (!(value is string s))
+                    throw new FormatException(string.Format("a {0} value must be a string", type));
+                byte[] text = Encoding.GetEncoding(1252).GetBytes(s);
+                if (text.Length > size - 1)
+                    throw new FormatException(string.Format("'{0}' is longer than {1} characters", s, size - 1));
+                var data = new byte[size];
+                Array.Copy(text, data, text.Length);
+                return data;
+            }
+            if (IsBool(type))
+            {
+                if (!(value is bool b))
+                    throw new FormatException("a BOOL value must be true or false");
+                return new[] { b ? (byte)1 : (byte)0 };
+            }
+            if (!(value is double d))
+                throw new FormatException(string.Format("a {0} value must be a number", type));
+
+            string t = type.Trim().ToUpperInvariant();
+            if (t == "REAL")
+                return BitConverter.GetBytes((float)d);
+            if (t == "LREAL")
+                return BitConverter.GetBytes(d);
+
+            if (d != Math.Floor(d))
+                throw new FormatException(string.Format("a {0} value must be a whole number, not {1}", type, Format(d)));
+            IntegerRange(t, out double min, out double max);
+            if (d < min || d > max)
+                throw new FormatException(string.Format("{0} is outside the {1} range ({2} to {3})", Format(d), type, Format(min), Format(max)));
+            byte[] all = t == "ULINT" ? BitConverter.GetBytes((ulong)d) : BitConverter.GetBytes((long)d);
+            var result = new byte[size];
+            Array.Copy(all, result, size); // little-endian: the low bytes come first
+            return result;
+        }
+
+        static void IntegerRange(string type, out double min, out double max)
+        {
+            switch (type)
+            {
+                case "BYTE": case "USINT": min = byte.MinValue; max = byte.MaxValue; return;
+                case "SINT": min = sbyte.MinValue; max = sbyte.MaxValue; return;
+                case "INT": min = short.MinValue; max = short.MaxValue; return;
+                case "UINT": case "WORD": min = ushort.MinValue; max = ushort.MaxValue; return;
+                case "DINT": min = int.MinValue; max = int.MaxValue; return;
+                case "UDINT": case "DWORD": min = uint.MinValue; max = uint.MaxValue; return;
+                case "LINT": min = long.MinValue; max = long.MaxValue; return;
+                case "ULINT": min = ulong.MinValue; max = ulong.MaxValue; return;
+                default: throw new FormatException("unsupported PLC type '" + type + "'");
+            }
+        }
+
         public static string Format(object value) =>
             value is double d ? d.ToString("0.######", CultureInfo.InvariantCulture)
             : value is bool bo ? (bo ? "TRUE" : "FALSE")

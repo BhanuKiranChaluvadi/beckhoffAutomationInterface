@@ -33,6 +33,10 @@ namespace BeckhoffAutomationInterface.Cli
             "  export object <ObjectName> <source> --project <project> [--plc <name>]";
         public const string InitUsage =
             "init <source> --into <folder> [--name <name>] [--ignore <glob>]...";
+        // Parsed in Runtime/RuntimeCommands.Test (runtime command style); the text is here with the others.
+        public const string TestUsage =
+            "test --target umrt|local --scenarios <file-or-folder> [--variant <name>] [--variants <variants.xml> | --groups <G1,G2>]\n" +
+            "       [--tags <a,b>] [--junit <file>] [--timeout <s>]";
 
         // Every command: where .stconfig is read from, and whether at all.
         static readonly string[] ConfigOptions = { "--config" };
@@ -126,6 +130,7 @@ namespace BeckhoffAutomationInterface.Cli
                 case "sync": return SyncUsage;
                 case "export": return ExportUsage;
                 case "init": return InitUsage;
+                case "test": return TestUsage;
                 default: return null;
             }
         }

@@ -139,6 +139,166 @@ namespace BeckhoffAutomationInterface.Runtime
             throw new ArgumentException(string.Format("choose --variant: expect.json lists {0}.", string.Join(", ", file.Keys)));
         }
 
+        // ------------------------------------------------------------------ test
+
+        internal static string TestUsage => "Usage: beckhoffAutomationInterface " + Cli.CommandLine.TestUsage;
+
+        /// <summary>
+        /// Runs scenario files (Scenario) against the running PLC over ADS. Exit code: 0 = every
+        /// selected scenario passed (skipped ones do not count), 1 = a scenario failed or the PLC
+        /// is not in Run, 2 = a wrong command line or an invalid scenario file (nothing runs).
+        /// </summary>
+        public static int Test(string[] args)
+        {
+            CommandArgs a;
+            string target, netId, variant;
+            List<string> groups = null, tags;
+            List<Scenario> selected;
+            int timeoutS;
+            try
+            {
+                a = CommandArgs.Parse(args,
+                    new[] { "--target", "--scenarios", "--variant", "--variants", "--groups", "--tags", "--junit", "--timeout" }, new string[0]);
+                if (a.Get("--target") == null || a.Get("--scenarios") == null)
+                    throw new ArgumentException("'test' needs --target umrt|local and --scenarios <file or folder>.");
+                if (a.Get("--groups") != null && a.Get("--variants") != null)
+                    throw new ArgumentException("use --groups or --variants, not both.");
+                timeoutS = 60;
+                if (a.Get("--timeout") != null && (!int.TryParse(a.Get("--timeout"), out timeoutS) || timeoutS <= 0))
+                    throw new ArgumentException("--timeout needs a number of seconds (more than 0).");
+                target = RuntimeTargets.Normalize(a.Get("--target"));
+
+                variant = a.Get("--variant");
+                tags = SplitList(a.Get("--tags"));
+                if (a.Get("--groups") != null)
+                    groups = SplitList(a.Get("--groups"));
+                else if (a.Get("--variants") != null)
+                    groups = GroupsOfVariant(Sync.VariantManifestParser.Parse(a.Get("--variants")), a.Get("--variants"), ref variant);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is Sync.VariantManifestException
+                                       || ex is System.IO.IOException || ex is System.Xml.XmlException)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                Console.Error.WriteLine(TestUsage);
+                return 2;
+            }
+
+            var problems = new List<string>();
+            try
+            {
+                List<Scenario> all = ScenarioFile.LoadAll(a.Get("--scenarios"), problems);
+                selected = ScenarioFilter.ByTags(all, tags);
+                if (problems.Count == 0 && selected.Count == 0)
+                    problems.Add(all.Count == 0
+                        ? "no scenario file (*.json) in " + a.Get("--scenarios")
+                        : string.Format("no scenario has the tag(s) {0} ({1} scenario(s) found)", string.Join(", ", tags), all.Count));
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is System.IO.IOException || ex is UnauthorizedAccessException)
+            {
+                problems.Add(ex.Message);
+                selected = null;
+            }
+            if (problems.Count > 0)
+            {
+                foreach (string p in problems)
+                    Console.Error.WriteLine("ERROR: " + p);
+                Console.Error.WriteLine("{0}: TEST NOT STARTED — {1} problem(s). Nothing was sent to the PLC.", Now(), problems.Count);
+                return 2;
+            }
+
+            try
+            {
+                netId = RuntimeTargets.NetId(target);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is FormatException || ex is System.IO.IOException)
+            {
+                Console.Error.WriteLine("ERROR: " + ex.Message);
+                return 1;
+            }
+
+            DateTime started = DateTime.Now;
+            Console.WriteLine("{0}: Test on {1} ({2}), boot project: {3}", Now(), target, netId,
+                RuntimeTargets.CurrentBootProject(target) ?? "(none)");
+            Console.WriteLine("{0}: {1} scenario(s) from {2}; feature groups: {3}", Now(), selected.Count, a.Get("--scenarios"),
+                groups == null ? "not given (scenarios with \"requires\" are skipped)" : groups.Count == 0 ? "(none)" : string.Join(", ", groups));
+
+            List<ScenarioResult> results;
+            using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
+            {
+                if (!WaitForPlcRun(target, netId, plc, timeoutS, "TEST FAILED"))
+                    return 1;
+
+                var guard = new SymbolSizeGuard(plc.TrySymbolInfo);
+                var clock = Stopwatch.StartNew();
+                var runner = new ScenarioRunner(guard.Reader(plc.TryRead), guard.Writer(plc.TryWrite), Thread.Sleep,
+                    () => clock.Elapsed.TotalSeconds, ScenarioRunner.IndexSeed(DateTime.UtcNow)) { PlcTypeNote = guard.Note };
+                string root = a.Get("--scenarios");
+                results = runner.RunAll(selected, groups, timeoutS, r => PrintResult(r, root));
+            }
+
+            int failed = results.Count(r => r.Status == ScenarioStatus.Failed);
+            int skipped = results.Count(r => r.Status == ScenarioStatus.Skipped);
+            int passed = results.Count - failed - skipped;
+            string label = variant ?? target;
+            Console.WriteLine(failed == 0
+                ? string.Format("{0}: TEST PASSED — {1}: {2} passed, {3} skipped, in {4}.", Now(), label, passed, skipped, ScenarioNumbers.Seconds(results.Sum(r => r.Seconds)))
+                : string.Format("{0}: TEST FAILED — {1}: {2} of {3} failed ({4} passed, {5} skipped).", Now(), label, failed, results.Count, passed, skipped));
+
+            string junit = a.Get("--junit");
+            if (junit != null)
+            {
+                try
+                {
+                    JUnitReport.Write(junit, JUnitReport.Build("bai test " + label, results, a.Get("--scenarios"), started));
+                    Console.WriteLine("{0}: JUnit XML: {1}", Now(), junit);
+                }
+                catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+                {
+                    Console.Error.WriteLine("ERROR: cannot write {0}: {1}", junit, ex.Message);
+                    return 1;
+                }
+            }
+            return failed == 0 ? 0 : 1;
+        }
+
+        static void PrintResult(ScenarioResult r, string root)
+        {
+            string id = JUnitReport.ClassName(root, r.Scenario.File);
+            string status = r.Status == ScenarioStatus.Passed ? "PASS" : r.Status == ScenarioStatus.Failed ? "FAIL" : "SKIP";
+            Console.WriteLine("  {0}  {1}  {2}  ({3})", status, id, r.Scenario.Name,
+                r.Status == ScenarioStatus.Skipped ? r.Message : ScenarioNumbers.Seconds(r.Seconds));
+            if (r.Status == ScenarioStatus.Failed)
+            {
+                Console.WriteLine("        {0}", r.Message);
+                foreach (string line in r.Details)
+                    Console.WriteLine("        {0}", line);
+            }
+        }
+
+        /// <summary>"a, b,,c" -> [a, b, c]; null -> empty.</summary>
+        internal static List<string> SplitList(string value) =>
+            (value ?? "").Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+
+        /// <summary>The feature groups of a variant in variants.xml. Without --variant, a file with one
+        /// variant gives that variant.</summary>
+        internal static List<string> GroupsOfVariant(Sync.VariantManifest manifest, string path, ref string variant)
+        {
+            if (manifest == null)
+                throw new ArgumentException("variants file not found: " + path);
+            if (variant == null)
+            {
+                if (manifest.Variants.Count != 1)
+                    throw new ArgumentException(string.Format("choose --variant: {0} lists {1}.", path, string.Join(", ", manifest.Variants)));
+                variant = manifest.Variants[0];
+            }
+            string name = variant;
+            string found = manifest.Variants.FirstOrDefault(v => v.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (found == null)
+                throw new ArgumentException(string.Format("{0} has no variant '{1}'. It has: {2}.", path, variant, string.Join(", ", manifest.Variants)));
+            variant = found;
+            return manifest.Groups.Where(g => g.Value.Contains(found, StringComparer.OrdinalIgnoreCase)).Select(g => g.Key).ToList();
+        }
+
         // ------------------------------------------------------------------ activate
 
         internal const string ActivateUsage =
@@ -331,7 +491,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
         /// <summary>Waits for the PLC (port 851) to report Run. On timeout, says why TwinCAT may
         /// have stayed in Config mode (see ConfigModeHint).</summary>
-        static bool WaitForPlcRun(string target, string netId, AdsClient plc, int timeoutS)
+        static bool WaitForPlcRun(string target, string netId, AdsClient plc, int timeoutS, string failure = "VERIFY FAILED")
         {
             var clock = Stopwatch.StartNew();
             ushort plcState = 0;
@@ -352,7 +512,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 int sysErr = system.TryReadState(out ushort sysState);
                 string sysText = sysErr == 0 ? AdsClient.StateName(sysState) : "not reachable (ADS error " + sysErr + ")";
                 string plcText = plcErr == 0 ? AdsClient.StateName(plcState) : "not reachable (ADS error " + plcErr + ")";
-                Console.WriteLine("{0}: VERIFY FAILED — PLC not in Run after {1} s. TwinCAT: {2}. PLC: {3}.", Now(), timeoutS, sysText, plcText);
+                Console.WriteLine("{0}: {4} — PLC not in Run after {1} s. TwinCAT: {2}. PLC: {3}.", Now(), timeoutS, sysText, plcText, failure);
                 if (sysErr == 0 && sysState == AdsClient.StateConfig)
                     Console.WriteLine("    TwinCAT stays in Config mode: the runtime did not start. " +
                                       ConfigModeHint(RuntimeTargets.LicenseExpiry(target), DateTime.Now));

@@ -154,6 +154,11 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  verify --target umrt|local --expect <expect.json> [--variant V] [--timeout S]");
             Console.WriteLine("      Read live PLC values over ADS and compare them with expect.json (exit 0 = all as expected).");
             Console.WriteLine();
+            Console.WriteLine("  test   --target umrt|local --scenarios <file-or-folder> [--variant V] [--variants <variants.xml> | --groups G1,G2]");
+            Console.WriteLine("         [--tags a,b] [--junit <file>] [--timeout S]");
+            Console.WriteLine("      Run scenario files (send commands, wait for and check PLC values) over ADS. Exit 0 = all");
+            Console.WriteLine("      passed, 1 = a scenario failed, 2 = wrong command line or invalid scenario file.");
+            Console.WriteLine();
             Console.WriteLine("  doctor");
             Console.WriteLine("      Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state,");
             Console.WriteLine("      boot projects and license expiry.");
@@ -224,6 +229,7 @@ namespace BeckhoffAutomationInterface
             {
                 string usage = args[0] == "verify" ? Runtime.RuntimeCommands.VerifyUsage
                              : args[0] == "activate" ? Runtime.RuntimeCommands.ActivateUsage
+                             : args[0] == "test" ? Runtime.RuntimeCommands.TestUsage
                              : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
                              : null;
                 if (usage != null)
@@ -243,6 +249,9 @@ namespace BeckhoffAutomationInterface
                 case "activate":
                     Environment.Exit(Runtime.RuntimeCommands.Activate(args, shell));
                     break;
+                case "test":
+                    Environment.Exit(Runtime.RuntimeCommands.Test(args));
+                    break;
                 case "doctor":
                     Environment.Exit(Runtime.Doctor.Run());
                     break;
@@ -255,7 +264,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, doctor.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, doctor.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;

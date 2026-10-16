@@ -7,7 +7,8 @@ For the full reference of all options, see [README.md](README.md).
 
 You write PLC code as `.st` text files in git. The tool puts these files into a TwinCAT 3
 project, compiles the project and tells you the errors. It can also activate the project on a
-runtime and read live PLC values to make sure that the program runs correctly.
+runtime and read live PLC values to make sure that the program runs correctly. It can run
+test scenarios: send commands to the PLC and check the results.
 
 You do not use the TwinCAT XAE window. The tool never shows a Yes/No dialog box.
 
@@ -263,7 +264,92 @@ bai verify --target umrt --expect C:\work\ST\Shark\expect.json --variant SAS
 The tool reads the live values over ADS. Exit code 0 = `VERIFY PASSED`.
 Each check shows `OK` or `FAIL`, the actual value and the expected value.
 
-### 10.3 License
+### 10.3 Test sequences (scenario files)
+
+`verify` reads values one time. `test` runs a **scenario**: it sends commands to the PLC, as
+the client does, and then waits for values and checks them. Use it to test a sequence in
+simulation.
+
+Write one JSON file for each scenario:
+
+```json
+{
+  "name": "Purge precursor, change material",
+  "tags": ["sequence", "smoke"],
+  "requires": ["PCV_ETHERCAT"],
+  "timeoutS": 300,
+  "steps": [
+    { "do": "send", "command": 200, "parameters": { "mode": 1, "side": 1, "bubbler": 1 }, "expect": "accepted" },
+    { "do": "waitUntil", "symbol": "PRG_Sequence.fbOrchestrator.eActiveSequence", "type": "INT", "equals": 7, "timeoutS": 5 },
+    { "do": "waitUntil", "symbol": "PRG_Sequence.fbOrchestrator.bDone", "equals": true },
+    { "do": "check", "symbol": "PRG_Sequence.fbOrchestrator.bError", "equals": false },
+    { "do": "write", "symbol": "GVL_Simulation.bSafetyOk", "value": false },
+    { "do": "wait", "seconds": 2 }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | Required. The name in the results. |
+| `tags` | Optional. Names that select a set of scenarios, for example `smoke`, `full`, `fault`. |
+| `requires` | Optional. Feature groups (from `variants.xml`) that the machine must have. Never a machine name. |
+| `timeoutS` | Optional. The time limit for the full scenario. Default: 600 s. |
+| `steps` | Required. The steps, in order. |
+
+The steps:
+
+| `do` | Fields | What it does |
+|---|---|---|
+| `send` | `command`, optional `parameters`, `expect` (`accepted` or `rejected`, default `accepted`), `timeoutS` (default 10) | Writes the command JSON into `PRG_Telemetry.fbCommandReceiver.AdsStream`. Then waits until `nLastCommandIndex` (accepted) or `nLastRejectedCommandIndex` (rejected) shows the index of the command. |
+| `waitUntil` | `symbol`, `type`, a condition, optional `timeoutS` | Reads the symbol again and again until the condition is true. Without `timeoutS`, it waits until the scenario time ends. |
+| `check` | `symbol`, `type`, a condition | Reads the symbol one time. |
+| `write` | `symbol`, `type`, `value` | Writes the value into the symbol. |
+| `wait` | `seconds` | Waits. |
+
+A condition is `equals` or `notEquals` (with optional `tolerance` for numbers), or `lessThan`
+and/or `greaterThan` (numbers only). `type` is a PLC type: `BOOL`, `BYTE`, `SINT`, `INT`, `UINT`,
+`DINT`, `UDINT`, `LINT`, `ULINT`, `REAL`, `LREAL`, `STRING(n)`. For an enum, use `INT`. You can
+leave out `type` only when the value is `true` or `false` (then it is `BOOL`). The tool reads the
+size of each symbol from the PLC: if `type` does not agree, the step fails and shows the PLC type.
+
+Run all scenarios in a folder:
+
+```powershell
+bai test --target umrt --scenarios C:\work\BeckhoffLib\Machines\NFLite\tests `
+         --variants C:\work\BeckhoffLib\Machines\NFLite\Shark\variants.xml --tags smoke --junit C:\work\results\shark.xml
+```
+
+| Option | Meaning |
+|---|---|
+| `--scenarios` | One scenario file, or a folder. The tool reads all `*.json` files in the folder and its subfolders. |
+| `--variants`, `--variant` | The tool reads the feature groups of the variant from `variants.xml`. If the file has one variant, `--variant` is not necessary. |
+| `--groups` | The feature groups, for example `PCV_MODBUS,SPECTROMETER_PLC`. Use it instead of `--variants`. |
+| `--tags` | Run only the scenarios that have one of these tags. |
+| `--junit` | Write the results as JUnit XML (one test case for each scenario), for CI. |
+| `--timeout` | Time limit for the PLC to go to Run and for the machine to become idle before each scenario. Default: 60 s. |
+
+What the tool does:
+
+1. It reads all scenario files first. If one file is not correct, it shows `file: step n:` and
+   the problem, and it sends nothing to the PLC (exit code 2).
+2. It skips a scenario when the machine does not have all its `requires` groups. Without
+   `--variants` or `--groups`, it skips each scenario that has `requires`.
+3. Before each scenario, it waits until no sequence runs (`eActiveSequence` = 0, or 99 = Error).
+   It sends ErrorAcknowledge (9999). If the program has `GVL_Simulation.bReset`, it sets it to
+   TRUE. Then it waits for `eActiveSequence` = 0.
+4. It runs the steps. The scenario stops at the first step that fails. The next scenario
+   runs.
+5. It shows one line for each scenario (`PASS`, `FAIL` or `SKIP`) and a summary. For a
+   failure, it shows the step, the symbol, the expected value and the actual value. It also
+   shows `eActiveSequence`, `sStatus` and `stLastError` of `PRG_Sequence.fbOrchestrator`.
+
+Exit code: 0 = all scenarios passed (`TEST PASSED`), 1 = a scenario failed or the PLC is not in
+Run, 2 = the command line or a scenario file is not correct.
+
+**CAUTION: A scenario sends real commands to the PLC. Use `test` only on a PLC in simulation.**
+
+### 10.4 License
 
 - UmRT needs a license. A 7-day trial license is free. Only a person can make or renew it in
   the TwinCAT window (it asks for a security code).
@@ -323,8 +409,9 @@ See [docs/plc-ci-setup-guide.md](docs/plc-ci-setup-guide.md) and
 
 | Code | Meaning |
 |---|---|
-| 0 | Done, and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, no problems found) |
-| 1 | A problem: compile error, failed check, wrong command line, missing project, or `activate` without `--yes` |
+| 0 | Done, and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, `TEST PASSED`, no problems found) |
+| 1 | A problem: compile error, failed check, failed scenario, wrong command line, missing project, or `activate` without `--yes` |
+| 2 | Only `test`: the command line or a scenario file is not correct. Nothing was sent to the PLC. |
 
 When the command line is wrong, the tool shows the correct usage. If you use an option of the
 old command line (for example `--dest`, `--plc-name`, `--sync-code`), the error tells you the
@@ -353,6 +440,8 @@ new option.
 | `io-devices.xml: TwinCAT placed '...' at '...'` | The nesting in `io-devices.xml` is wrong. E-bus terminals go under their coupler (for example EK1100), not under another terminal. |
 | The PLC stays in Config after `activate` | Run `bai doctor`. Look at the license expiry date. Renew the trial license in the TwinCAT window. |
 | `verify` shows `FAIL` | The variant on the target is not the one you named, or the code does not do what `expect.json` says. Look at the actual values. |
+| `test`: `send` gives `no answer` | The command id is not known, or the command receiver does not run. Look at the PLC log. |
+| `test`: `the "type" does not match the PLC symbol` | Use the PLC type that the message shows in the `type` field of the step. |
 | Linking fails with `0x98510001` | The `%I*`/`%Q*` variable is not used in the code, so it is not in the process image. Use it in the code. |
 | A `TcXaeShell` process stays open | Close it in Task Manager. The tool closes its own shell in about 10 seconds. |
 | `TIMEOUT — Build did not finish in 15 minute(s)` | The shell locked up during the build. The tool closed the shell it started. Run again. |
@@ -391,6 +480,7 @@ Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 | `bai export object <Name> <source> --project <p> [--plc N]` | Yes |
 | `bai activate <project> --target umrt\|local [--variant V] [--plc N] [--define NAME]... [--yes]` | Yes (only with `--yes`) |
 | `bai verify --target umrt\|local --expect <expect.json> [--variant V] [--timeout S]` | No |
+| `bai test --target umrt\|local --scenarios <file or folder> [--variant V] [--variants <variants.xml> \| --groups G1,G2] [--tags a,b] [--junit <file>] [--timeout S]` | No |
 
 For each command that opens TwinCAT: `--shell xae|vs2022`.
 For `init`, `sync`, `build`, `check`, `export`: `--config <folder>`, `--no-config`.

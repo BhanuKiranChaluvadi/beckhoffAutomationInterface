@@ -17,9 +17,10 @@ namespace BeckhoffAutomationInterface.Runtime
         public const ushort PortPlc1 = 851;
         public const ushort StateRun = 5;
         public const ushort StateConfig = 15;
+        public const int ErrorInvalidSize = 1797;      // ADSERR_DEVICE_INVALIDSIZE
         public const int ErrorSymbolNotFound = 1808;   // ADSERR_DEVICE_SYMBOLNOTFOUND
 
-        const uint SymHandleByName = 0xF003, SymValueByHandle = 0xF005, SymReleaseHandle = 0xF006;
+        const uint SymHandleByName = 0xF003, SymValueByHandle = 0xF005, SymReleaseHandle = 0xF006, SymInfoByNameEx = 0xF009;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         struct AmsAddr
@@ -101,6 +102,58 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 AdsSyncWriteReqEx(_port, ref _addr, SymReleaseHandle, 0, 4, handle);
             }
+        }
+
+        /// <summary>Writes a symbol's raw bytes by name. Returns the ADS error code (0 = ok);
+        /// ErrorSymbolNotFound when the symbol is not in the running program.</summary>
+        public int TryWrite(string symbol, byte[] value)
+        {
+            byte[] name = Encoding.ASCII.GetBytes(symbol + "\0");
+            byte[] handle = new byte[4];
+            int err = AdsSyncReadWriteReqEx2(_port, ref _addr, SymHandleByName, 0, 4, handle, (uint)name.Length, name, out uint _);
+            if (err != 0)
+                return err;
+            try
+            {
+                return AdsSyncWriteReqEx(_port, ref _addr, SymValueByHandle, BitConverter.ToUInt32(handle, 0), (uint)value.Length, value);
+            }
+            finally
+            {
+                AdsSyncWriteReqEx(_port, ref _addr, SymReleaseHandle, 0, 4, handle);
+            }
+        }
+
+        /// <summary>Size in bytes and PLC type name of a symbol (ADS symbol info). Returns the ADS
+        /// error code (0 = ok).</summary>
+        public int TrySymbolInfo(string symbol, out int size, out string typeName)
+        {
+            size = 0;
+            typeName = null;
+            byte[] name = Encoding.ASCII.GetBytes(symbol + "\0");
+            var entry = new byte[0x4000];
+            int err = AdsSyncReadWriteReqEx2(_port, ref _addr, SymInfoByNameEx, 0, (uint)entry.Length, entry, (uint)name.Length, name, out uint read);
+            if (err != 0)
+                return err;
+            return ParseSymbolEntry(entry, (int)read, out size, out typeName) ? 0 : ErrorInvalidSize;
+        }
+
+        /// <summary>AdsSymbolEntry: entryLength, iGroup, iOffs, size, dataType, flags (6 x UINT32),
+        /// nameLength, typeLength, commentLength (3 x UINT16), then name, type and comment, each
+        /// NUL-terminated.</summary>
+        internal static bool ParseSymbolEntry(byte[] entry, int length, out int size, out string typeName)
+        {
+            size = 0;
+            typeName = null;
+            if (length < 30)
+                return false;
+            size = (int)BitConverter.ToUInt32(entry, 12);
+            int nameLength = BitConverter.ToUInt16(entry, 24);
+            int typeLength = BitConverter.ToUInt16(entry, 26);
+            int typeStart = 30 + nameLength + 1;
+            if (typeStart + typeLength > length)
+                return false;
+            typeName = Encoding.ASCII.GetString(entry, typeStart, typeLength);
+            return true;
         }
 
         public static string StateName(ushort state)
