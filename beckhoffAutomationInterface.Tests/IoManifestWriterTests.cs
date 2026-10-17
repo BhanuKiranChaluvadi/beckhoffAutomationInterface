@@ -42,6 +42,83 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.True(heuristic); // no parenthetical — this is a fallback guess, flagged for review
         }
 
+        [Theory]
+        [InlineData("Box 1 (CU2508)", "CU2508 Ethernet Port", "CU2508-0000-0000")]            // the real box on an adapter port
+        [InlineData("Box 48 (CU2508-0022)", "CU2508-0022 Ethernet Port", "CU2508-0022-0000")]
+        [InlineData("Box 44 (CU2508)", "CU2508 Configuration Port", "CU2508")]               // the other box keeps its short name
+        public void DeriveProduct_Cu2508EthernetPort_UsesTheFullProductString(string name, string itemSubTypeName, string expectedProduct)
+        {
+            // R2.1 spike, 2026-10-17: Product="CU2508" makes "CU2508 Configuration Port" (an EtherCAT
+            // slave); the real projects have "CU2508 Ethernet Port" = CU2508-0000-0000.
+            string product = IoManifestWriter.DeriveProduct(name, itemSubTypeName, out bool heuristic);
+
+            Assert.Equal(expectedProduct, product);
+            Assert.False(heuristic);
+        }
+
+        [Fact]
+        public void ToXml_RoundTripsThroughTheParser_BothLayouts()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "IoManifestWriterTests_" + Guid.NewGuid());
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string source = Path.Combine(dir, "source.xml");
+                File.WriteAllText(source, @"
+<IoTree>
+  <Adapter Name=""Device 1 (RT-Ethernet Adapter)"" Mac=""000105992C32"" Ports=""8"" DeviceDesc=""Ethernet 5"" />
+  <Adapter Name=""Spare"" Mac=""000105992C33"" Ports=""2"" Disabled=""true"" />
+  <Device Name=""BH1"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""1"">
+    <Box Name=""Box 1 (CU2508)"" Product=""CU2508-0000-0000"" />
+    <Box Name=""EK1100_1.1"" Product=""EK1100-0000-0018"">
+      <Terminal Name=""EL3174_1.1"" Product=""EL3174-0000-0017"" CreatePlcType=""Channel"" />
+      <Terminal Name=""EL2008_1.1"" Product=""EL2008"" Variants=""A"" />
+    </Box>
+  </Device>
+  <Device Name=""BH2"" Disabled=""true"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""8"" />
+  <Device Name=""BH 3 (Safety)"" Adapter=""02000000B301"" Variants=""A,B"" />
+</IoTree>");
+                IoManifest first = IoManifestParser.ParseManifest(source);
+
+                string written = Path.Combine(dir, "written.xml");
+                IoManifestWriter.ToXml(first).Save(written);
+                IoManifest second = IoManifestParser.ParseManifest(written);
+
+                Assert.Equal(Describe(first), Describe(second));
+                Assert.Contains("Adapter Name=\"Device 1 (RT-Ethernet Adapter)\" Mac=\"000105992C32\" Ports=\"8\"", File.ReadAllText(written));
+                Assert.Contains("Via=\"Device 1 (RT-Ethernet Adapter)\" Port=\"1\"", File.ReadAllText(written));
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        /// <summary>Every parsed field, one line per item, for a deep compare.</summary>
+        static string Describe(IoManifest manifest)
+        {
+            var lines = new List<string>();
+            foreach (IoAdapterSpec a in manifest.Adapters)
+                lines.Add($"A|{a.Name}|{a.Mac}|{a.Ports}|{a.DeviceDesc}|{a.Disabled}");
+            foreach (IoDeviceSpec d in manifest.Devices)
+            {
+                lines.Add($"D|{d.Name}|{d.Disabled}|{Join(d.Variants)}|{d.Adapter}|{d.Via}|{d.Port}");
+                DescribeNodes(d.Children, "  ", lines);
+            }
+            return string.Join("|", lines);
+        }
+
+        static void DescribeNodes(IReadOnlyList<IoNodeSpec> nodes, string indent, List<string> lines)
+        {
+            foreach (IoNodeSpec n in nodes)
+            {
+                lines.Add($"{indent}N|{n.Name}|{n.Product}|{n.CreatePlcType}|{Join(n.Variants)}");
+                DescribeNodes(n.Children, indent + "  ", lines);
+            }
+        }
+
+        static string Join(IReadOnlyList<string> values) => values == null ? "<all>" : string.Join(",", values);
+
         [Fact]
         public void DeriveProduct_FlagsPureCustomLabelWithNoProductInfo_ForReview()
         {

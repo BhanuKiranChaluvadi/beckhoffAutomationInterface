@@ -666,6 +666,16 @@ and mark the items that only some machines have (example: [`ST/VariantIoSample`]
   `Pnp/DeviceData`). Two enabled masters with the same (empty) adapter fail the system build
   with no error text, so give each enabled master its own (a test address on a PC with no
   EtherCAT card).
+- The other layout: one real-time Ethernet adapter with a CU2508 (8 ports) and the EtherCAT
+  devices on its ports. `<Adapter Name="Device 1 (RT-Ethernet Adapter)" Mac="000105992C32"
+  Ports="8" />` (before the devices) makes the adapter (DevType 109, ESL ports);
+  `<Device Name="BH1" Via="Device 1 (RT-Ethernet Adapter)" Port="1">` makes an EtherCAT device
+  of SubType 111 on port 1 (its address is the port's TcCom object id, read from the adapter).
+  `Via` and `Adapter` are exclusive; one device per port. The CU2508 box on the port is
+  `Product="CU2508-0000-0000"` ("CU2508 Ethernet Port"; `CU2508` alone makes the
+  "Configuration Port" slave). A device with the wrong kind (94 vs 111) is an error; with
+  `--confirm-delete-io` it is deleted and made again. `export io` writes `<Adapter>`/`Via`/`Port`
+  back. Details: [HOW-TO-USE.md](HOW-TO-USE.md), section 9.
 - `Variants="A,B"` works on `<Device>`, `<Box>` and `<Terminal>`. No attribute = all variants.
   A child cannot be in a variant where its parent is not. Names must be in `variants.xml`.
 - `sync io` enables the item in those variants and disables it in the others (TwinCAT variant
@@ -725,7 +735,7 @@ mapped to its `.st` line, incremental sync, the git hook worker, and read-only r
 Alongside the `.st` files, a project folder can contain:
 
 - **`libraries.xml`** — PLC library references (`<Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />`)
-- **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
+- **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Adapter>`/`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
 - **`variants.xml`** — TwinCAT project variants and groups (see [Machine variants](#machine-variants))
 - **`events.xml`** — Event Classes for `Tc3_EventLogger`, created from matching
   `event-classes/<Name>.xml` templates via a direct `.tsproj` edit (the

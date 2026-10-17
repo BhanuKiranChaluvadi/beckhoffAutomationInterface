@@ -15,6 +15,11 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Orphans found but NOT deleted because confirmDelete was false — see
         /// IoSyncEngine.Sync's confirmDelete parameter.</summary>
         public List<string> Warnings { get; } = new List<string>();
+
+        /// <summary>Items that exist with the wrong kind (for example a DevType 94 master where
+        /// io-devices.xml declares a device on an adapter port) and were not changed because
+        /// confirmDelete was false. The sync fails then.</summary>
+        public List<string> Errors { get; } = new List<string>();
     }
 
     /// <summary>
@@ -49,34 +54,74 @@ namespace BeckhoffAutomationInterface.Sync
     /// --confirm-delete-io, orphans are reported via IoSyncReport.Warnings only —
     /// never deleted — matching the existing --incremental/--confirm-delete
     /// safer-default pattern for .st sync.
+    ///
+    /// ADAPTER/PORT LAYOUT (2026-10-17, R2.1 spike; see IoDeviceXml): &lt;Adapter&gt; items
+    /// (DevType 109) are made first, then a &lt;Device Via Port&gt; is made as SubType 111 with
+    /// the TcCom object id of that adapter port as its address. TwinCAT cannot change the
+    /// kind of an existing device (94 master vs 111 on a port vs 109 adapter): a wrong kind
+    /// is an IoSyncReport.Errors entry, or, with --confirm-delete-io, the item is deleted
+    /// and made again (the link stage then makes its links again).
     /// </summary>
     static class IoSyncEngine
     {
         const int TSM_DEV_TYPE_ETHERCAT = 94;
         const int TREEITEMTYPE_TERM = 6;
 
-        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices, bool confirmDelete = false)
+        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> desiredDevices, bool confirmDelete = false) =>
+            Sync(sysManager, new List<IoAdapterSpec>(), desiredDevices, confirmDelete);
+
+        public static IoSyncReport Sync(ITcSysManager sysManager, IReadOnlyList<IoAdapterSpec> desiredAdapters,
+                                        IReadOnlyList<IoDeviceSpec> desiredDevices, bool confirmDelete = false)
         {
             var report = new IoSyncReport();
             ITcSmTreeItem ioRoot = sysManager.LookupTreeItem("TIID");
 
-            var desiredDeviceNames = new HashSet<string>(desiredDevices.Select(d => d.Name));
+            // Adapters are TIID children too: never orphans while declared.
+            var desiredDeviceNames = new HashSet<string>(desiredAdapters.Select(a => a.Name).Concat(desiredDevices.Select(d => d.Name)));
             DeleteOrphans(ioRoot, desiredDeviceNames, report, confirmDelete);
+
+            // Adapters first: a device on a port needs the port's object id.
+            var portOids = new Dictionary<string, List<uint>>();
+            foreach (IoAdapterSpec adapterSpec in desiredAdapters)
+            {
+                ITcSmTreeItem adapter = GetOrCreateOfKind(sysManager, ioRoot, adapterSpec.Name, IoDeviceKind.Adapter, report, confirmDelete);
+                if (adapter == null)
+                    continue;
+                SetDisabled(adapter, adapterSpec.Name, adapterSpec.Disabled, report);
+                if (!IoDeviceXml.AdapterMatches(adapterSpec, adapter.ProduceXml()))
+                {
+                    adapter.ConsumeXml(IoDeviceXml.AdapterConsumeXml(adapterSpec));
+                    report.StateChanged.Add($"{adapterSpec.Name} -> MAC {adapterSpec.Mac}, {adapterSpec.Ports} port(s)");
+                }
+                List<uint> oids = IoDeviceXml.PortOidsOf(adapter.ProduceXml());
+                if (oids.Count < adapterSpec.Ports)
+                    throw new InvalidOperationException(string.Format(
+                        "io-devices.xml: adapter '{0}' has {1} port(s) in TwinCAT, not {2}.", adapterSpec.Name, oids.Count, adapterSpec.Ports));
+                portOids[adapterSpec.Name] = oids;
+            }
 
             foreach (IoDeviceSpec deviceSpec in desiredDevices)
             {
-                ITcSmTreeItem device = GetOrCreate(sysManager, ioRoot, deviceSpec.Name, TSM_DEV_TYPE_ETHERCAT, null, report);
+                ITcSmTreeItem device = GetOrCreateOfKind(sysManager, ioRoot, deviceSpec.Name,
+                    deviceSpec.OnPort ? IoDeviceKind.OnPort : IoDeviceKind.Master, report, confirmDelete);
+                if (device == null)
+                    continue;
 
                 // Enable/disable the master as declared. An ENABLED EtherCAT master with
                 // no variable linked to a task blocks the build with a modal "needs sync
                 // master" dialog, so declaring Disabled="true" keeps the tree populated
                 // (device shown, grayed out) while letting the build stay green until
                 // variable-linking is automated.
-                DISABLED_STATE desiredState = deviceSpec.Disabled ? DISABLED_STATE.SMDS_DISABLED : DISABLED_STATE.SMDS_NOT_DISABLED;
-                if (device.Disabled != desiredState)
+                SetDisabled(device, deviceSpec.Name, deviceSpec.Disabled, report);
+
+                if (deviceSpec.OnPort && portOids.TryGetValue(deviceSpec.Via, out List<uint> oids))
                 {
-                    device.Disabled = desiredState;
-                    report.StateChanged.Add($"{deviceSpec.Name} -> {(deviceSpec.Disabled ? "disabled" : "enabled")}");
+                    uint portOid = oids[deviceSpec.Port.Value - 1];
+                    if (IoDeviceXml.TcComObjectIdOf(device.ProduceXml()) != portOid)
+                    {
+                        device.ConsumeXml(IoDeviceXml.PortConsumeXml(portOid));
+                        report.StateChanged.Add($"{deviceSpec.Name} -> {deviceSpec.Via} port {deviceSpec.Port} ({IoDeviceXml.FormatObjectId(portOid)})");
+                    }
                 }
 
                 if (deviceSpec.Adapter != null && AdapterOf(device.ProduceXml()) != deviceSpec.Adapter)
@@ -90,6 +135,68 @@ namespace BeckhoffAutomationInterface.Sync
             }
 
             return report;
+        }
+
+        static void SetDisabled(ITcSmTreeItem item, string name, bool disabled, IoSyncReport report)
+        {
+            DISABLED_STATE desiredState = disabled ? DISABLED_STATE.SMDS_DISABLED : DISABLED_STATE.SMDS_NOT_DISABLED;
+            if (item.Disabled != desiredState)
+            {
+                item.Disabled = desiredState;
+                report.StateChanged.Add($"{name} -> {(disabled ? "disabled" : "enabled")}");
+            }
+        }
+
+        /// <summary>The TIID child of that name and kind, made when missing. An existing item of
+        /// another kind cannot be converted: with confirmDelete it is deleted and made again;
+        /// without, it is reported in IoSyncReport.Errors and null is returned (skip it).</summary>
+        static ITcSmTreeItem GetOrCreateOfKind(ITcSysManager sysManager, ITcSmTreeItem ioRoot, string name, IoDeviceKind kind,
+                                               IoSyncReport report, bool confirmDelete)
+        {
+            int type = kind == IoDeviceKind.Adapter ? IoDeviceXml.DevTypeRtEthernetAdapter
+                     : kind == IoDeviceKind.OnPort ? IoDeviceXml.SubTypeEtherCatOnPort
+                     : TSM_DEV_TYPE_ETHERCAT;
+            ITcSmTreeItem existing = TryLookup(sysManager, ioRoot.PathName + "^" + name);
+            if (existing != null)
+            {
+                IoDeviceKind actual = IoDeviceXml.KindOf(existing.ProduceXml());
+                if (actual == kind)
+                    return existing;
+                if (!confirmDelete)
+                {
+                    report.Errors.Add(string.Format(
+                        "{0} is {1} in the project, but io-devices.xml declares {2}. TwinCAT cannot change the kind of a device; " +
+                        "re-run with --confirm-delete-io to delete it and make it again (its links are made again too).",
+                        name, Describe(actual), Describe(kind)));
+                    return null;
+                }
+                ioRoot.DeleteChild(name);
+                report.Deleted.Add($"{name} ({Describe(actual)}; made again as {Describe(kind)})");
+            }
+            return GetOrCreate(sysManager, ioRoot, name, type, null, report);
+        }
+
+        static ITcSmTreeItem TryLookup(ITcSysManager sysManager, string path)
+        {
+            try
+            {
+                return sysManager.LookupTreeItem(path);
+            }
+            catch (COMException)
+            {
+                return null;
+            }
+        }
+
+        static string Describe(IoDeviceKind kind)
+        {
+            switch (kind)
+            {
+                case IoDeviceKind.Adapter: return "an RT-Ethernet adapter (DevType 109, <Adapter>)";
+                case IoDeviceKind.Master: return "an EtherCAT master with its own adapter (DevType 94, Adapter=)";
+                case IoDeviceKind.OnPort: return "an EtherCAT device on an adapter port (SubType 111, Via= Port=)";
+                default: return "another device type";
+            }
         }
 
         /// <summary>Recursively reconciles a Box/Terminal node's children against parent,

@@ -3,7 +3,8 @@ using System.Collections.Generic;
 namespace BeckhoffAutomationInterface.Sync
 {
     /// <summary>
-    /// Desired-state model for one EtherCAT master device and its bus topology,
+    /// Desired-state model for one EtherCAT device (an independent master, or a device
+    /// on a port of an &lt;Adapter&gt;) and its bus topology,
     /// parsed from an io-devices.xml manifest. Mirrors the real hardware tree:
     /// Device (master) -> Box (e.g. a CU2508 junction or EK1100 coupler) -> Box/
     /// Terminal, nested arbitrarily deep (e.g. Device -> CU2508 -> EK1100 -> EL2008).
@@ -22,13 +23,76 @@ namespace BeckhoffAutomationInterface.Sync
         /// masters with the same (empty) adapter fail the system build with no error text.</summary>
         public string Adapter { get; }
 
-        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null, string adapter = null)
+        /// <summary>Name of the &lt;Adapter&gt; (RT-Ethernet adapter, CU2508) that this device is on
+        /// (Via="Device 1 (RT-Ethernet Adapter)"); null = an independent master (DevType 94).
+        /// With Via the device is an EtherCAT device of SubType 111 whose address is the TcCom
+        /// object id of port <see cref="Port"/> of that adapter. Via and Adapter are exclusive.</summary>
+        public string Via { get; }
+
+        /// <summary>Port of the Via adapter, 1-based (Port="1" = the adapter's first port); null without Via.</summary>
+        public int? Port { get; }
+
+        /// <summary>True for a SubType 111 device on a port of an &lt;Adapter&gt; (Via + Port).</summary>
+        public bool OnPort => Via != null;
+
+        public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null, string adapter = null,
+                            string via = null, int? port = null)
         {
             Name = name;
             Disabled = disabled;
             Children = children;
             Variants = variants;
             Adapter = adapter;
+            Via = via;
+            Port = port;
+        }
+    }
+
+    /// <summary>
+    /// One real-time Ethernet adapter (DevType 109, "RT-Ethernet Adapter"), declared as
+    /// &lt;Adapter Name="..." Mac="000105992C32" Ports="8" /&gt; in io-devices.xml. With a
+    /// CU2508 port multiplier it has 8 ports (ESL mode); each EtherCAT device on a port
+    /// (&lt;Device Via="..." Port="n"&gt;) has the port's TcCom object id as its address.
+    /// Validated in the R2.1 spike (BeckhoffLib tasks/2026-10-16-plc-release, 2026-10-17)
+    /// against the real Shark project (PLC_NFL_SHARK_old).
+    /// </summary>
+    class IoAdapterSpec
+    {
+        public string Name { get; }
+
+        /// <summary>MAC address of the network card, 12 hex digits, upper case
+        /// (DeviceDef/AddressInfo/Pnp/DeviceData).</summary>
+        public string Mac { get; }
+
+        /// <summary>Number of ports (8 for a CU2508). The ports exist in ESL mode only.</summary>
+        public int Ports { get; }
+
+        /// <summary>Pnp/DeviceDesc, the adapter's description in XAE; null = leave it as it is.
+        /// Optional: TwinCAT finds the adapter by its MAC.</summary>
+        public string DeviceDesc { get; }
+
+        public bool Disabled { get; }
+
+        public IoAdapterSpec(string name, string mac, int ports, string deviceDesc = null, bool disabled = false)
+        {
+            Name = name;
+            Mac = mac;
+            Ports = ports;
+            DeviceDesc = deviceDesc;
+            Disabled = disabled;
+        }
+    }
+
+    /// <summary>The whole io-devices.xml tree part: adapters (first) and devices.</summary>
+    class IoManifest
+    {
+        public List<IoAdapterSpec> Adapters { get; }
+        public List<IoDeviceSpec> Devices { get; }
+
+        public IoManifest(List<IoAdapterSpec> adapters, List<IoDeviceSpec> devices)
+        {
+            Adapters = adapters;
+            Devices = devices;
         }
     }
 

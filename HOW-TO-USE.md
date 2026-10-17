@@ -242,9 +242,42 @@ Keep **one** `io-devices.xml`. Mark the items that only some machines have:
 
 Examples: [`ST/VariantSample`](ST/VariantSample) and [`ST/VariantIoSample`](ST/VariantIoSample).
 
-### More than one EtherCAT master
+### More than one EtherCAT device: the network layout
 
-Give each enabled master its own network adapter address:
+There are two layouts. You can use both in one file.
+
+**A. One network adapter with ports (CU2508).** The machine has one real-time Ethernet adapter
+with a CU2508 port multiplier. Each EtherCAT device is on one port of the adapter:
+
+```xml
+<IoTree>
+  <Adapter Name="Device 1 (RT-Ethernet Adapter)" Mac="000105992C32" Ports="8" />
+  <Device Name="BH1" Disabled="false" Via="Device 1 (RT-Ethernet Adapter)" Port="1">
+    <Box Name="Box 1 (CU2508)" Product="CU2508-0000-0000" />
+    ...
+  </Device>
+  <Device Name="BH2" Disabled="false" Via="Device 1 (RT-Ethernet Adapter)" Port="2">
+```
+
+| Attribute | On | What it does |
+|---|---|---|
+| `Name` | `<Adapter>` | The name of the adapter in the I/O tree. |
+| `Mac` | `<Adapter>` | The MAC address of the network card, 12 hex digits (`-` and `:` are allowed). |
+| `Ports` | `<Adapter>` | The number of ports. A CU2508 has 8. |
+| `DeviceDesc` | `<Adapter>` | Optional. The description of the network card in XAE. |
+| `Disabled` | `<Adapter>` | Optional. `true` = the adapter is disabled. |
+| `Via` | `<Device>` | The `Name` of the `<Adapter>` that the device is on. |
+| `Port` | `<Device>` | The port of that adapter, from 1 to `Ports`. |
+
+- Put `<Adapter>` before the devices.
+- `Via` and `Adapter` are not allowed on the same device. `Via` and `Port` go together.
+- One device on each port. Two devices on one port is an error.
+- The tool makes the adapter first. Then it puts each device on its port.
+- Use `Product="CU2508-0000-0000"` for the CU2508 box ("CU2508 Ethernet Port").
+  `Product="CU2508"` makes a different box ("CU2508 Configuration Port").
+- A PC without this network card can build the project.
+
+**B. One EtherCAT master per device.** Each master has its own network adapter:
 
 ```xml
 <Device Name="BH 1" Disabled="false" Adapter="02000000B101">
@@ -252,7 +285,13 @@ Give each enabled master its own network adapter address:
 
 Two enabled masters with the same (empty) adapter fail the system build with no error text.
 On a PC with no EtherCAT card, use test addresses (`02000000B101`, `02000000B201`, ...).
-On the real machine, use the real adapter. `export io` writes the attribute back.
+On the real machine, use the real adapter.
+
+TwinCAT cannot change a device from layout B to layout A, or back. `sync io` then stops with
+an error. Add `--confirm-delete-io`: the tool deletes the device and makes it again. The links
+are made again too.
+
+`export io` writes both layouts back (`<Adapter>`, `Via`, `Port`, `Adapter`).
 
 ## 10. Run the program and check live values (closed loop)
 
@@ -481,6 +520,8 @@ new option.
 | `BUILD FAILED — variant defines are off` | Run `bai sync variants` first. |
 | `object(s) are defined in more than one .st file` (`check parse` or `sync`) | Two files define the same object. Only one would reach the PLC, and which one depends on file order. Delete or rename the old file. |
 | `io-devices.xml: TwinCAT placed '...' at '...'` | The nesting in `io-devices.xml` is wrong. E-bus terminals go under their coupler (for example EK1100), not under another terminal. |
+| `IO SYNC FAILED — ... item(s) have the wrong kind` | A device in the project has the other network layout (section 9, "More than one EtherCAT device"). Add `--confirm-delete-io`, or make a new project. |
+| `io-devices.xml: Device '...' Via=...` or `... Port=...` | The `Via`/`Port` attributes are wrong. `Via` must be the name of an `<Adapter>`. `Port` must be from 1 to `Ports`. |
 | The PLC stays in Config after `activate` | Run `bai doctor`. Look at the license expiry date. Renew the trial license in the TwinCAT window. |
 | `verify` shows `FAIL` | The variant on the target is not the one you named, or the code does not do what `expect.json` says. Look at the actual values. |
 | `test`: `send` gives `no answer` | The command id is not known, or the command receiver does not run. Look at the PLC log. |

@@ -253,6 +253,7 @@ namespace BeckhoffAutomationInterface
                         Now(), ioReport.ProductsToVerify.Count);
                     PrintLines("! verify   ", ioReport.ProductsToVerify);
                 }
+                PrintLines("!! WARNING ", ioReport.Warnings);
             }
 
             // links.xml — variable links (turned on by --export-links or --export-all).
@@ -450,16 +451,24 @@ namespace BeckhoffAutomationInterface
         List<IoDeviceSpec> SyncIoTree()
         {
             Console.WriteLine("{0}: Parsing IO manifest '{1}'...", Now(), _options.IoManifestPath);
-            var desiredIoDevices = IoManifestParser.Parse(_options.IoManifestPath);
+            IoManifest manifest = IoManifestParser.ParseManifest(_options.IoManifestPath);
+            var desiredIoDevices = manifest.Devices;
 
-            Console.WriteLine("{0}: Syncing {1} IO device(s)...", Now(), desiredIoDevices.Count);
+            Console.WriteLine("{0}: Syncing {1} IO device(s){2}...", Now(), desiredIoDevices.Count,
+                manifest.Adapters.Count > 0 ? string.Format(" on {0} RT-Ethernet adapter(s)", manifest.Adapters.Count) : "");
             IoSyncReport ioReport = null;
-            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(_session.SysManager, desiredIoDevices, _options.ConfirmDeleteIo), "syncing IO tree");
+            RetryOnBusy(() => ioReport = IoSyncEngine.Sync(_session.SysManager, manifest.Adapters, desiredIoDevices, _options.ConfirmDeleteIo), "syncing IO tree");
 
             PrintLines("+ created  ", ioReport.Created);
             PrintLines("- deleted  ", ioReport.Deleted);
             PrintLines("~ state    ", ioReport.StateChanged);
             PrintLines("!! WARNING ", ioReport.Warnings);
+            PrintLines("!! ERROR   ", ioReport.Errors);
+            if (ioReport.Errors.Count > 0)
+            {
+                Console.WriteLine("{0}: IO SYNC FAILED — {1} item(s) have the wrong kind (see above).", Now(), ioReport.Errors.Count);
+                Environment.ExitCode = 1;
+            }
 
             SyncIoVariants(desiredIoDevices);
 

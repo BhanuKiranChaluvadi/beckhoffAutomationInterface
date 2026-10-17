@@ -43,6 +43,74 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal("02000000B101", IoSyncEngine.AdapterOf("<DeviceDef><AddressInfo><Pnp><DeviceName/><DeviceData>02000000b101</DeviceData></Pnp></AddressInfo></DeviceDef>"));
         }
 
+        // The real Shark layout (PLC_NFL_SHARK_old, R2.1 spike 2026-10-17): one RT-Ethernet adapter
+        // with a CU2508 (8 ports) and the EtherCAT devices on its ports.
+        const string AdapterLayout = @"
+<IoTree>
+  <Adapter Name=""Device 1 (RT-Ethernet Adapter)"" Mac=""00:01:05:99:2c:32"" Ports=""8"" />
+  <Device Name=""BH1"" Disabled=""false"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""1"">
+    <Box Name=""Box 1 (CU2508)"" Product=""CU2508-0000-0000"" />
+  </Device>
+  <Device Name=""BH3"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""3"" />
+  <Device Name=""Old"" Adapter=""02000000B101"" />
+</IoTree>";
+
+        [Fact]
+        public void Adapter_AndDevicesOnItsPorts_AreParsed()
+        {
+            IoManifest manifest = IoManifestParser.ParseManifest(WriteManifest(AdapterLayout));
+
+            IoAdapterSpec adapter = Assert.Single(manifest.Adapters);
+            Assert.Equal("Device 1 (RT-Ethernet Adapter)", adapter.Name);
+            Assert.Equal("000105992C32", adapter.Mac);
+            Assert.Equal(8, adapter.Ports);
+            Assert.Null(adapter.DeviceDesc);
+            Assert.False(adapter.Disabled);
+
+            Assert.Equal(3, manifest.Devices.Count);
+            Assert.True(manifest.Devices[0].OnPort);
+            Assert.Equal("Device 1 (RT-Ethernet Adapter)", manifest.Devices[0].Via);
+            Assert.Equal(1, manifest.Devices[0].Port);
+            Assert.Null(manifest.Devices[0].Adapter);
+            Assert.Equal("CU2508-0000-0000", manifest.Devices[0].Children[0].Product);
+            Assert.Equal(3, manifest.Devices[1].Port);
+            Assert.False(manifest.Devices[2].OnPort);                 // the old layout still works in the same file
+            Assert.Equal("02000000B101", manifest.Devices[2].Adapter);
+            Assert.Equal(3, IoManifestParser.Parse(WriteManifest(AdapterLayout)).Count);
+        }
+
+        [Fact]
+        public void Adapter_DeviceDescAndDisabled_AreOptional()
+        {
+            string path = WriteManifest(@"<IoTree><Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" DeviceDesc=""Ethernet 5"" Disabled=""true"" /></IoTree>");
+            IoAdapterSpec adapter = Assert.Single(IoManifestParser.ParseManifest(path).Adapters);
+            Assert.Equal("Ethernet 5", adapter.DeviceDesc);
+            Assert.True(adapter.Disabled);
+        }
+
+        [Theory]
+        [InlineData(@"<Adapter Name=""A"" Mac=""0001059"" Ports=""8"" />", "Mac")]                                   // not 12 hex digits
+        [InlineData(@"<Adapter Name=""A"" Ports=""8"" />", "no Mac")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" />", "Ports")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""0"" />", "Ports")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""eight"" />", "whole number")]
+        [InlineData(@"<Adapter Mac=""000105992C32"" Ports=""8"" />", "no Name")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""A"" Port=""1"" Adapter=""02000000B101"" />", "Via and Adapter")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""B"" Port=""1"" />", "no <Adapter Name=\"B\">")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""A"" />", "Via and Port together")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Port=""1"" />", "Via and Port together")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""A"" Port=""0"" />", "ports 1 to 8")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""A"" Port=""9"" />", "ports 1 to 8")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" Via=""A"" Port=""2"" /><Device Name=""BH2"" Via=""A"" Port=""2"" />", "both on port 2")]
+        [InlineData(@"<Adapter Name=""BH1"" Mac=""000105992C32"" Ports=""8"" /><Device Name=""BH1"" />", "used twice")]
+        [InlineData(@"<Adapter Name=""A"" Mac=""000105992C32"" Ports=""8"" /><Adapter Name=""A"" Mac=""000105992C33"" Ports=""8"" />", "used twice")]
+        public void AdapterLayout_RuleViolations_AreRefused(string body, string expectedText)
+        {
+            string path = WriteManifest("<IoTree>" + body + "</IoTree>");
+            var ex = Assert.Throws<System.FormatException>(() => IoManifestParser.ParseManifest(path));
+            Assert.Contains(expectedText, ex.Message);
+        }
+
         [Fact]
         public void DeviceWithDirectTerminals_ParsesFlatBoxAndTerminals()
         {
