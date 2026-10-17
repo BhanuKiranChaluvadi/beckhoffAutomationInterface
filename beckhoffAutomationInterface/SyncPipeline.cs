@@ -44,6 +44,8 @@ namespace BeckhoffAutomationInterface
         ///   Phase A (VS open):    code -> libraries -> io-tree
         ///   Phase B (VS CLOSED):  direct .tsproj edits (io's Create-PLC-Data-Type
         ///                         templates, events' Event Classes)
+        ///   Safety:               ids + copy (VS closed, only if needed), then the
+        ///                         safety project and its channel check (VS open)
         ///   Phase C (VS open):    io's variable links, build
         /// Visual Studio is opened lazily by whichever stage first needs it — a run
         /// selecting only the Events stage is a pure file edit and never launches VS.
@@ -103,6 +105,10 @@ namespace BeckhoffAutomationInterface
             // missing Event Classes.
             ApplyTsprojEdits(desiredIoDevices, includeEvents: stages.HasFlag(SyncStages.Events));
 
+            // Safety: its own .tsproj edit (box/module ids) + copy with VS closed, then adds the
+            // safety project through the open project. Before the links: they may use its channels.
+            SafetyPlan safety = stages.HasFlag(SyncStages.Safety) ? SyncSafety() : null;
+
             // Phase C — back through the Automation Interface, reopening VS lazily.
             if (stages.HasFlag(SyncStages.Io))
                 SyncLinks();
@@ -111,6 +117,9 @@ namespace BeckhoffAutomationInterface
                 _session.EnsureOpen();
                 RunBuild();
             }
+
+            if (safety != null)
+                CheckSafetyFilesAfterClose(safety);
         }
 
         /// <summary>--export: write the named live PLC object's text back to its mirrored
@@ -555,6 +564,103 @@ namespace BeckhoffAutomationInterface
             }
             // No eager reopen: whichever later stage needs Visual Studio (links, build)
             // calls session.EnsureOpen() itself, and an events-only run just ends here.
+        }
+
+        /// <summary>Safety stage: safety.xml -> the TwinSAFE project (see Sync/SafetyProjectSync).
+        /// No manifest = nothing to do. VS is closed only when the .tsproj ids or the copied
+        /// files must change. Any problem stops the run: without the right ids TwinCAT adds the
+        /// project silently with no Standard In/Out channels.</summary>
+        SafetyPlan SyncSafety()
+        {
+            SafetyManifest manifest;
+            try
+            {
+                manifest = SafetyManifestParser.Parse(_options.SafetyManifestPath, _options.SourceFolder);
+            }
+            catch (SafetyManifestException ex)
+            {
+                throw new InvalidOperationException("SAFETY FAILED — " + ex.Message);
+            }
+            if (manifest == null)
+            {
+                Console.WriteLine("{0}: No safety manifest '{1}' — safety stage skipped.", Now(), _options.SafetyManifestPath);
+                return null;
+            }
+
+            SafetyPlan plan;
+            try
+            {
+                plan = SafetyProjectSync.Plan(manifest, _options.TsprojFilePath);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new InvalidOperationException("SAFETY FAILED — " + ex.Message);
+            }
+            Console.WriteLine("{0}: Safety project '{1}': logic terminal '{2}' (Box Id {3}), {4} object id(s), {5} file(s).",
+                Now(), manifest.Name, plan.LogicTerminal.BoxName, plan.LogicTerminal.Id, plan.ObjectIds.Count, plan.Files.Count);
+            if (plan.IdChanges.Problems.Count > 0)
+                throw new InvalidOperationException("SAFETY FAILED — the project does not match the safety files:\n    "
+                    + string.Join("\n    ", plan.IdChanges.Problems));
+
+            if (plan.NeedsFileWork)
+            {
+                if (_session.IsOpen)
+                {
+                    Console.WriteLine("{0}: Closing Visual Studio to set the safety object ids and copy the safety project...", Now());
+                    _session.EnsureClosed();
+                }
+                ObjectIdEditResult ids = TsprojObjectIdEditor.Apply(_options.TsprojFilePath, plan.ObjectIds);
+                PrintLines("~ id       ", ids.Applied);
+                if (ids.Problems.Count > 0)
+                    throw new InvalidOperationException("SAFETY FAILED — " + string.Join("\n    ", ids.Problems));
+                List<string> copied = SafetyProjectSync.Copy(plan);
+                Console.WriteLine("{0}: Safety ids set ({1} change(s)); {2} safety file(s) copied to '{3}'.",
+                    Now(), ids.Applied.Count, copied.Count, plan.ProjectFolder);
+            }
+            List<string> different = SafetyProjectSync.Differences(plan);
+            if (different.Count > 0)
+                throw new InvalidOperationException("SAFETY FAILED — copied safety file(s) are not byte-equal to the source:\n    "
+                    + string.Join("\n    ", different));
+            Console.WriteLine("{0}: Safety files: {1} file(s) byte-equal to the source.", Now(), plan.Files.Count);
+
+            _session.EnsureOpen();
+            bool added = false;
+            List<string> otherProjects = null;
+            RetryOnBusy(() => added = SafetyProjectSync.AddProject(_session.SysManager, manifest.Name, plan.SplcprojPath, out otherProjects), "adding the safety project");
+            Console.WriteLine(added ? "    + safety   TISC^{0}" : "    = safety   TISC^{0} (already in the project)", manifest.Name);
+            PrintLines("!! WARNING safety project not in safety.xml: ", otherProjects);
+
+            string boxXml = null;
+            RetryOnBusy(() => boxXml = SafetyProjectSync.ProduceBoxXml(_session.SysManager, plan.LogicTerminal.BoxName), "reading the safety logic terminal");
+            if (boxXml == null)
+                throw new InvalidOperationException(string.Format("SAFETY FAILED — no box '{0}' in the I/O tree.", plan.LogicTerminal.BoxName));
+            List<string> problems = SafetyProjectSync.CheckChannels(boxXml, plan.LogicTerminal, plan.Channels, out List<string> found);
+            PrintLines("  channels ", found);
+            if (problems.Count > 0)
+                throw new InvalidOperationException("SAFETY FAILED — the safety logic terminal has not got its Standard In/Out channels "
+                    + "(object ids of the .tsproj and the safety files do not agree?):\n    " + string.Join("\n    ", problems));
+
+            if (added)
+                _session.Project.Save();
+            Console.WriteLine("{0}: Safety sync complete ('{1}' {2}, Standard In/Out channels on '{3}').",
+                Now(), manifest.Name, added ? "added" : "already present", plan.LogicTerminal.BoxName);
+            return plan;
+        }
+
+        /// <summary>After the last stage: close VS (it can write files when it saves or closes the
+        /// project) and check again that the copied safety files are byte-equal to the source.</summary>
+        void CheckSafetyFilesAfterClose(SafetyPlan plan)
+        {
+            _session.EnsureClosed();
+            List<string> different = SafetyProjectSync.Differences(plan);
+            if (different.Count > 0)
+            {
+                Console.WriteLine("{0}: SAFETY FAILED — TwinCAT changed copied safety file(s); they are not byte-equal to the source:", Now());
+                PrintLines("! changed  ", different);
+                Environment.ExitCode = 1;
+                return;
+            }
+            Console.WriteLine("{0}: Safety files after close: {1} file(s) byte-equal to the source.", Now(), plan.Files.Count);
         }
 
         /// <summary>Io stage, part 2: PLC-variable to IO-channel links declared in the

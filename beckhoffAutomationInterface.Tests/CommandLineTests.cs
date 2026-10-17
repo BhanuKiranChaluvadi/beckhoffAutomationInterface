@@ -140,7 +140,8 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData("io", 4)]
         [InlineData("events", 8)]
         [InlineData("variants", 32)]
-        [InlineData("all", 63)]
+        [InlineData("safety", 64)]
+        [InlineData("all", 127)]
         public void Sync_ModeSelectsTheStage(string mode, int stage) // SyncStages is internal: passed as int
         {
             Assert.Equal((SyncStages)stage, Parse("sync", mode, _source, "--project", _ownedSln).Stages);

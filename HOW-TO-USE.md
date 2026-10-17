@@ -16,7 +16,7 @@ You do not use the TwinCAT XAE window. The tool never shows a Yes/No dialog box.
 
 | Word | Meaning |
 |---|---|
-| **Source folder** | The folder with your `.st` files and the manifests (`libraries.xml`, `io-devices.xml`, `events.xml`, `variants.xml`). Example: `ST\Shark`. |
+| **Source folder** | The folder with your `.st` files and the manifests (`libraries.xml`, `io-devices.xml`, `events.xml`, `variants.xml`, `safety.xml`). Example: `ST\Shark`. |
 | **Project** | The TwinCAT solution that the tool makes and keeps up to date: `<folder>\<name>\<name>.sln`. |
 | **Adopted project** | A TwinCAT project that the tool did not make. The tool opens it read-only and never saves it. |
 | **Variant** | One machine of a machine family (for example Shark, UVM, SAS). One project can hold all variants. |
@@ -84,6 +84,7 @@ To send only one part, use one mode instead of `all`:
 | `io` | `io-devices.xml` → I/O tree and variable links |
 | `events` | `events.xml` → event classes (no TwinCAT window, very fast) |
 | `variants` | `variants.xml` → project variants (see section 9) |
+| `safety` | `safety.xml` → TwinSAFE project (see "The safety project" below) |
 | `all` | All of the above, then compile |
 
 A second run with no changes reports "0 created, 0 updated, 0 deleted".
@@ -103,6 +104,48 @@ The tool reads the files that changed since the last sync. The first sync must b
 The tool does not delete PLC objects by default. It only shows a warning. To delete the PLC
 object of a deleted `.st` file, add `--incremental --confirm-delete`. To delete I/O items that
 are not in `io-devices.xml`, add `--confirm-delete-io`.
+
+### The safety project (TwinSAFE)
+
+A machine with a TwinSAFE logic terminal (for example EL1918) has a safety project. The tool
+can add it to the project.
+
+1. Put the safety project folder into the source folder. Do not change it: use the files that
+   the TwinCAT safety editor saved.
+2. Write `safety.xml` in the source folder:
+
+   ```xml
+   <Safety Name="SHARK_Safety_prj" Folder="safety/SHARK_Safety_prj" />
+   ```
+
+   - `Name` is the name of the safety project. The folder must contain `<Name>.splcproj` and
+     `TargetSystemConfig.xml`.
+   - Optional: `TargetSystemConfig="<file>"`. This file replaces `TargetSystemConfig.xml` in the
+     copy. Use it when machines have the same safety logic but different terminals (serial
+     numbers).
+   - The tool ignores other attributes.
+3. Send it: `bai sync safety <source> --project <p>` (or `sync all`, or `init`).
+
+The tool does these steps:
+
+1. It gives the EtherCAT boxes and modules the object IDs that the safety files use. It finds
+   them by name, for example `Term 34 (EL1918)`. If a different box has the ID, the two boxes
+   change IDs. TwinCAT is closed for this step.
+2. It copies the safety folder next to the `.tsproj`, into `<Name>\`. It makes sure that each
+   copied file is byte-equal to the source.
+3. It adds the safety project. If the project has it already, it does not add it again.
+4. It makes sure that the safety logic terminal has its Standard In/Out channels (for example
+   `Standard In Var 1`). If not, it stops with `SAFETY FAILED`.
+5. At the end, it closes TwinCAT and compares the copied files with the source again.
+
+Why the IDs: if the IDs are not the same, TwinCAT adds the safety project with no error, but the
+terminal gets no Standard In/Out channels. Then the links to these channels fail.
+
+**CAUTION: Do not edit the safety files by hand. If a file changes (for example
+`TargetSystemConfig.xml`), TwinCAT shows a CRC error dialog box. The tool cannot close it.**
+
+Without `safety.xml`, the tool does nothing for safety. The tool does not download the safety
+project to the terminal. `export` does not write `safety.xml`.
 
 ## 6. Compile
 
@@ -442,6 +485,9 @@ new option.
 | `verify` shows `FAIL` | The variant on the target is not the one you named, or the code does not do what `expect.json` says. Look at the actual values. |
 | `test`: `send` gives `no answer` | The command id is not known, or the command receiver does not run. Look at the PLC log. |
 | `test`: `the "type" does not match the PLC symbol` | Use the PLC type that the message shows in the `type` field of the step. |
+| `SAFETY FAILED — ... box(es) named ...` | A box name of the safety files is not in `io-devices.xml`. Use the names of the real project, for example `Term 34 (EL1918)`. |
+| `SAFETY FAILED — ... has not got its Standard In/Out channels` | The object IDs do not agree. Look at the `~ id` lines and at the box names in `io-devices.xml`. |
+| `SAFETY FAILED — ... not byte-equal to the source` | A safety file changed. Get the safety folder again from git. Do not edit the files. |
 | Linking fails with `0x98510001` | The `%I*`/`%Q*` variable is not used in the code, so it is not in the process image. Use it in the code. |
 | A `TcXaeShell` process stays open | Close it in Task Manager. The tool closes its own shell in about 10 seconds. |
 | `TIMEOUT — Build did not finish in 15 minute(s)` | The shell locked up during the build. The tool closed the shell it started. Run again. |
@@ -472,7 +518,7 @@ Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 |---|---|
 | `bai doctor` | No |
 | `bai init <source> --into <folder> [--name N]` | Yes |
-| `bai sync code\|libs\|io\|events\|variants\|all <source> --project <p> [--incremental] [--clean] [--confirm-delete] [--confirm-delete-io] [--variant V]` | Yes (`events`: no) |
+| `bai sync code\|libs\|io\|events\|variants\|safety\|all <source> --project <p> [--incremental] [--clean] [--confirm-delete] [--confirm-delete-io] [--variant V]` | Yes (`events`: no) |
 | `bai build <project> [--plc N] [--clean] [--variant V \| --all-variants] [--define NAME]...` | Yes |
 | `bai check parse\|format\|links <source>` | No |
 | `bai check events <source> --project <p>` | No |

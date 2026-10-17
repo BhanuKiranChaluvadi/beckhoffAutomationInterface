@@ -147,6 +147,7 @@ compiles only, without syncing anything first.
 | `sync io <path>` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
 | `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
 | `sync variants <path>` | `variants.xml` → TwinCAT project variants and groups; switches on the PLC's variant defines (see [Machine variants](#machine-variants)). No manifest = nothing to do. | opens VS |
+| `sync safety <path>` | `safety.xml` → TwinSAFE project: sets the EtherCAT box/module object ids the safety files refer to (direct `.tsproj` edit), copies the safety folder unchanged next to the `.tsproj` (byte-equal check), adds it under `TISC` once, and fails unless the logic terminal shows its Standard In/Out channels. No manifest = nothing to do. See HOW-TO-USE.md, "The safety project". | opens VS, closes it for the `.tsproj` edit/copy only when something must change |
 | `sync all <path>` | Every stage above, in order, then build. | opens VS |
 | `activate <path> --target umrt\|local [--variant V] --yes` | Build one variant and activate it on UmRT_Default or this PC's runtime, then wait for the PLC to reach Run. Without `--yes` it only shows the target's current boot project (changes nothing). See [Closed loop on a runtime](#closed-loop-on-a-runtime). | opens VS (only with `--yes`) |
 | `verify --target umrt\|local --expect <expect.json> [--variant V]` | Read live PLC values over ADS and compare them with `expect.json`. Exit 0 = all as expected. | no VS |
@@ -157,7 +158,7 @@ compiles only, without syncing anything first.
 | `build <path> [--plc X] [--clean] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
 Stage execution order for `sync all`: variants → code → libs → io-tree → `.tsproj`
-edits (io templates + events) → io links → build. Visual Studio is opened
+edits (io templates + events) → safety → io links → build. Visual Studio is opened
 lazily by the first stage that needs it and closed for the `.tsproj` edits.
 
 > **Known gap:** unlike the old flat-flag CLI, `sync` runs exactly one mode
@@ -729,6 +730,9 @@ Alongside the `.st` files, a project folder can contain:
 - **`events.xml`** — Event Classes for `Tc3_EventLogger`, created from matching
   `event-classes/<Name>.xml` templates via a direct `.tsproj` edit (the
   Automation Interface has no path for this — see `Sync/TsprojEventClassEditor.cs`)
+- **`safety.xml`** (optional) — the TwinSAFE project: `<Safety Name="SHARK_Safety_prj" Folder="safety/SHARK_Safety_prj" [TargetSystemConfig="<file>"] />`.
+  `Folder` holds the project exactly as the safety editor saved it; it is copied, never changed
+  (`Sync/SafetyManifest.cs`, `Sync/SafetyProjectSync.cs`). Other attributes are ignored.
 
 All three are synced idempotently: existing entries are left alone, missing
 ones are added, removed-from-manifest ones are cleaned up (library/IO only —
@@ -755,6 +759,15 @@ undeclared items are only warned about).
   real or simulated target. If a declared link can't be resolved, the tool
   falls back to disabling the affected EtherCAT master so the build still
   passes unattended.
+- **A TwinSAFE project needs the box/module object ids it was made with.**
+  `TargetSystemConfig.xml` names the logic terminal's box id (`#x0302nnnn`),
+  each `<box> - <module>.sds` a module id (`#x0309nnnn`). With other ids
+  TwinCAT adds the project with no error and no Standard In/Out channels.
+  `ConsumeXml` cannot change an id, so `Sync/TsprojObjectIdEditor.cs` sets them
+  in the `.tsproj` (VS closed; boxes found by name; a box that holds the id
+  swaps with it; `Port?BoxInfo` references follow). The safety files are never
+  edited: a changed `TargetSystemConfig.xml` gives a modal CRC dialog that
+  `SuppressUI` does not stop.
 
 ## Troubleshooting
 

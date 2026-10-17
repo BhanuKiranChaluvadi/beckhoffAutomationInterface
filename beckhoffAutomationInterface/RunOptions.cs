@@ -11,7 +11,7 @@ namespace BeckhoffAutomationInterface
     /// --sync-*/--build CLI flag ORs one stage in; giving NO stage flag selects All
     /// (the original full sync+build behavior). Stages always execute in the fixed
     /// order Code → Libraries → Io(tree) → tsproj edits (Io templates + Events) →
-    /// Io links → Build, regardless of flag order.
+    /// Safety → Io links → Build, regardless of flag order.
     /// </summary>
     [Flags]
     enum SyncStages
@@ -23,7 +23,8 @@ namespace BeckhoffAutomationInterface
         Events = 8,
         Build = 16,
         Variants = 32,
-        All = Code | Libraries | Io | Events | Build | Variants,
+        Safety = 64,
+        All = Code | Libraries | Io | Events | Build | Variants | Safety,
     }
 
     /// <summary>
@@ -178,6 +179,9 @@ namespace BeckhoffAutomationInterface
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");
         public string VariantManifestPath => Path.Combine(SourceFolder, "variants.xml");
+
+        /// <summary>Optional TwinSAFE project (see Sync/SafetyManifest.cs). No file = no safety project.</summary>
+        public string SafetyManifestPath => Path.Combine(SourceFolder, "safety.xml");
 
         /// <summary>The PLC project's System Manager item, e.g. "TIPC^Shark" (variant settings live here).</summary>
         public string PlcItemPath => "TIPC^" + PlcProjectName;
