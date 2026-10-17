@@ -108,8 +108,8 @@ The round trip was also not exact: 6 of 405 files had one extra empty line after
 declaration without variables. (The sync ignores line breaks at the end of a text, so it did not
 write the stub `METHOD Halt` + line break again.)
 
-Decision: Method B is not in use. The code is on the local branch `spike/plcopen-bulk-import`
-(commit `cba0865`): `Sync/PlcOpenWriter.cs`, `Sync/PlcOpenBulkImport.cs`, unit tests, and the
+Decision: Method B is not in use. The code is kept in the tag `archive/spike-plcopen-bulk-import`
+(commit `cba0865`; the branch was deleted on 2026-10-17): `Sync/PlcOpenWriter.cs`, `Sync/PlcOpenBulkImport.cs`, unit tests, and the
 `init --no-bulk-import` option.
 
 ### Lessons from the spike
