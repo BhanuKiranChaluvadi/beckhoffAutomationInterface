@@ -139,7 +139,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  check  events <source-path> --project <path>");
             Console.WriteLine("      Read-only preflight checks against .st source (and, for 'events', the project).");
             Console.WriteLine();
-            Console.WriteLine("  sync   code|libs|io|events|variants|safety|all <source> --project <project> [--incremental] [--clean] [...]");
+            Console.WriteLine("  sync   code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--incremental] [--clean] [...]");
             Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
             Console.WriteLine();
             Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc X] [--overwrite]");

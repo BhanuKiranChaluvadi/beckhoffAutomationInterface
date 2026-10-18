@@ -26,7 +26,7 @@ namespace BeckhoffAutomationInterface.Cli
         public const string CheckUsage =
             "check parse|format|links <source> [--ignore <glob>]...\n  check events <source> --project <project>";
         public const string SyncUsage =
-            "sync code|libs|io|events|variants|safety|all <source> --project <project> [--incremental] [--clean]\n" +
+            "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--incremental] [--clean]\n" +
             "       [--confirm-delete] [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants]";
         public const string ExportUsage =
             "export code|libs|io|events|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
@@ -94,6 +94,7 @@ namespace BeckhoffAutomationInterface.Cli
             ["events"] = SyncStages.Events,
             ["variants"] = SyncStages.Variants,
             ["safety"] = SyncStages.Safety,
+            ["tasks"] = SyncStages.Tasks,
             ["all"] = SyncStages.All,
         };
 
@@ -216,7 +217,7 @@ namespace BeckhoffAutomationInterface.Cli
         static RunOptions ParseSync(string[] args, string shell, string cwd)
         {
             if (args.Length < 2)
-                throw new UsageException("'sync' needs a mode: code|libs|io|events|variants|safety|all.", SyncUsage);
+                throw new UsageException("'sync' needs a mode: code|libs|io|events|variants|safety|tasks|all.", SyncUsage);
             string mode = args[1];
             if (!SyncModes.ContainsKey(mode))
                 throw new UsageException("unknown 'sync' mode '" + mode + "'.", SyncUsage);

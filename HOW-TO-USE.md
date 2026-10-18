@@ -16,7 +16,7 @@ You do not use the TwinCAT XAE window. The tool never shows a Yes/No dialog box.
 
 | Word | Meaning |
 |---|---|
-| **Source folder** | The folder with your `.st` files and the manifests (`libraries.xml`, `io-devices.xml`, `events.xml`, `variants.xml`, `safety.xml`). Example: `ST\Shark`. |
+| **Source folder** | The folder with your `.st` files and the manifests (`libraries.xml`, `io-devices.xml`, `events.xml`, `variants.xml`, `safety.xml`, `tasks.xml`). Example: `ST\Shark`. |
 | **Project** | The TwinCAT solution that the tool makes and keeps up to date: `<folder>\<name>\<name>.sln`. |
 | **Adopted project** | A TwinCAT project that the tool did not make. The tool opens it read-only and never saves it. |
 | **Variant** | One machine of a machine family (for example Shark, UVM, SAS). One project can hold all variants. |
@@ -85,6 +85,7 @@ To send only one part, use one mode instead of `all`:
 | `events` | `events.xml` → event classes (no TwinCAT window, very fast) |
 | `variants` | `variants.xml` → project variants (see section 9) |
 | `safety` | `safety.xml` → TwinSAFE project (see "The safety project" below) |
+| `tasks` | `tasks.xml` → PLC tasks and their program calls (see "The tasks" below) |
 | `all` | All of the above, then compile |
 
 A second run with no changes reports "0 created, 0 updated, 0 deleted".
@@ -146,6 +147,45 @@ terminal gets no Standard In/Out channels. Then the links to these channels fail
 
 Without `safety.xml`, the tool does nothing for safety. The tool does not download the safety
 project to the terminal. `export` does not write `safety.xml`.
+
+### The tasks
+
+A new project has one task: `PlcTask` (10 ms, priority 20). It calls `MAIN`. The PLC template
+makes it. If the PLC needs more tasks (for example a fast task for one device), write
+`tasks.xml` in the source folder:
+
+```xml
+<Tasks>
+  <Task Name="PlcTask" CycleTimeUs="10000" Priority="20"><Call>MAIN</Call></Task>
+  <Task Name="SpectrometerTask" CycleTimeUs="1000" Priority="2"><Call>PRG_Spectrometer</Call></Task>
+</Tasks>
+```
+
+- Write all tasks, also `PlcTask`. The file is the full list.
+- `CycleTimeUs` is the cycle time in µs. It must be a multiple of the base time. The base time
+  is 1000 µs (the TwinCAT default). If your project has a different base time, write it on the
+  root: `<Tasks BaseTimeUs="500">`. The tool does not change the base time.
+- `Priority`: 1 is the highest. Each task must have a different priority.
+- `<Call>` names a PROGRAM of the source folder. A task calls its programs in the given order.
+  A program can be in one task only.
+- Send it: `bai sync tasks <source> --project <p>` (or `sync all`, or `init`).
+
+The tool checks the file before TwinCAT starts. Then it does these steps for each task:
+
+1. It makes the real-time task `TIRT^<Name>` if it is not there. It sets the cycle time and the
+   priority if they are different.
+2. It makes the PLC task `<Name>` with its first program call if it is not there. TwinCAT links
+   it to the real-time task of the same name. It adds the program calls that are missing.
+3. It reads the project again. If a change did not occur, it stops with `TASKS FAILED`.
+
+The step comes after the code (the programs must be there) and before the I/O links (a link
+names the process image of a task, for example `SpectrometerTask Inputs`). A second run
+changes nothing.
+
+**The tool does not delete a task or a program call.** A task that is not in `tasks.xml`, or a
+call that the file does not list, gives a `WARNING` line. Remove it in TwinCAT if it is wrong.
+
+Without `tasks.xml`, the tool does nothing for tasks: the project keeps `PlcTask`.
 
 ## 6. Compile
 
@@ -559,7 +599,7 @@ Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 |---|---|
 | `bai doctor` | No |
 | `bai init <source> --into <folder> [--name N]` | Yes |
-| `bai sync code\|libs\|io\|events\|variants\|safety\|all <source> --project <p> [--incremental] [--clean] [--confirm-delete] [--confirm-delete-io] [--variant V]` | Yes (`events`: no) |
+| `bai sync code\|libs\|io\|events\|variants\|safety\|tasks\|all <source> --project <p> [--incremental] [--clean] [--confirm-delete] [--confirm-delete-io] [--variant V]` | Yes (`events`: no) |
 | `bai build <project> [--plc N] [--clean] [--variant V \| --all-variants] [--define NAME]...` | Yes |
 | `bai check parse\|format\|links <source>` | No |
 | `bai check events <source> --project <p>` | No |

@@ -41,7 +41,7 @@ namespace BeckhoffAutomationInterface
         /// <summary>
         /// Executes the selected stages (see SyncStages; all of them when no stage flag
         /// was given) in a fixed three-phase order regardless of flag order:
-        ///   Phase A (VS open):    code -> libraries -> io-tree
+        ///   Phase A (VS open):    variants -> code -> libraries -> tasks -> io-tree
         ///   Phase B (VS CLOSED):  direct .tsproj edits (io's Create-PLC-Data-Type
         ///                         templates, events' Event Classes)
         ///   Safety:               ids + copy (VS closed, only if needed), then the
@@ -92,6 +92,10 @@ namespace BeckhoffAutomationInterface
                 _session.EnsureOpen();
                 SyncLibraries();
             }
+            // Tasks after the code (a task calls programs that must exist) and before the I/O:
+            // a link names the process image of a task ("<Task> Inputs").
+            if (stages.HasFlag(SyncStages.Tasks))
+                SyncTasks();
             List<IoDeviceSpec> desiredIoDevices = null;
             if (stages.HasFlag(SyncStages.Io))
             {
@@ -442,6 +446,51 @@ namespace BeckhoffAutomationInterface
             _session.Project.Save();
             Console.WriteLine("{0}: Library sync complete ({1} added, {2} removed).",
                 Now(), libraryReport.Added.Count, libraryReport.Removed.Count);
+        }
+
+        /// <summary>Tasks stage: tasks.xml -> real-time tasks and PLC task references (see
+        /// Sync/TaskSyncEngine). No manifest = nothing to do: the project keeps the PLC template's
+        /// PlcTask. Every call must name a PROGRAM of the source (checked before VS opens).
+        /// Extra tasks and calls are warnings, never deleted.</summary>
+        void SyncTasks()
+        {
+            TaskManifest desired;
+            try
+            {
+                desired = TaskManifestParser.Parse(_options.TaskManifestPath);
+            }
+            catch (TaskManifestException ex)
+            {
+                throw new InvalidOperationException("TASKS FAILED — " + ex.Message);
+            }
+            if (desired == null)
+            {
+                Console.WriteLine("{0}: No task manifest '{1}' — tasks stage skipped.", Now(), _options.TaskManifestPath);
+                return;
+            }
+
+            IEnumerable<string> programs = StFileParser.ParseFolder(_options.SourceFolder, _ignore)
+                .Where(p => p.Kind == PouKind.Program).Select(p => p.Name);
+            List<string> unknown = TaskManifestParser.CheckPrograms(desired, programs, _options.TaskManifestPath);
+            if (unknown.Count > 0)
+                throw new InvalidOperationException("TASKS FAILED — " + string.Join("\n    ", unknown));
+
+            _session.EnsureOpen();
+            Console.WriteLine("{0}: Syncing {1} task(s): {2}...", Now(), desired.Tasks.Count,
+                string.Join(", ", desired.Tasks.Select(t => string.Format("{0} ({1} µs, priority {2}: {3})", t.Name, t.CycleTimeUs, t.Priority, string.Join(", ", t.Calls)))));
+            TaskSyncPlan plan = null;
+            RetryOnBusy(() => plan = TaskSyncEngine.Sync(_session.SysManager, _options.ProjectRootPath, desired), "syncing tasks");
+
+            foreach (TaskAction action in plan.Actions)
+                Console.WriteLine("    {0}", action.Description);
+            PrintLines("!! WARNING ", plan.Warnings);
+            if (plan.Actions.Count == 0)
+            {
+                Console.WriteLine("{0}: Tasks already up to date (no change, {1} warning(s)).", Now(), plan.Warnings.Count);
+                return;
+            }
+            _session.Project.Save();
+            Console.WriteLine("{0}: Task sync complete ({1} change(s), {2} warning(s)).", Now(), plan.Actions.Count, plan.Warnings.Count);
         }
 
         /// <summary>Io stage, part 1: reconcile the I/O hardware tree (Device -> Box ->

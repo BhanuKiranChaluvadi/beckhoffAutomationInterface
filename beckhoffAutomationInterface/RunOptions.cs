@@ -10,8 +10,8 @@ namespace BeckhoffAutomationInterface
     /// The composable pipeline stages a run can execute (see tasks/plan.md). Each
     /// --sync-*/--build CLI flag ORs one stage in; giving NO stage flag selects All
     /// (the original full sync+build behavior). Stages always execute in the fixed
-    /// order Code → Libraries → Io(tree) → tsproj edits (Io templates + Events) →
-    /// Safety → Io links → Build, regardless of flag order.
+    /// order Variants → Code → Libraries → Tasks → Io(tree) → tsproj edits (Io templates +
+    /// Events) → Safety → Io links → Build, regardless of flag order.
     /// </summary>
     [Flags]
     enum SyncStages
@@ -24,7 +24,8 @@ namespace BeckhoffAutomationInterface
         Build = 16,
         Variants = 32,
         Safety = 64,
-        All = Code | Libraries | Io | Events | Build | Variants | Safety,
+        Tasks = 128,
+        All = Code | Libraries | Io | Events | Build | Variants | Safety | Tasks,
     }
 
     /// <summary>
@@ -182,6 +183,10 @@ namespace BeckhoffAutomationInterface
 
         /// <summary>Optional TwinSAFE project (see Sync/SafetyManifest.cs). No file = no safety project.</summary>
         public string SafetyManifestPath => Path.Combine(SourceFolder, "safety.xml");
+
+        /// <summary>Optional real-time tasks and their program calls (see Sync/TaskManifest.cs).
+        /// No file = the project keeps the PLC template's one task (PlcTask, calls MAIN).</summary>
+        public string TaskManifestPath => Path.Combine(SourceFolder, "tasks.xml");
 
         /// <summary>The PLC project's System Manager item, e.g. "TIPC^Shark" (variant settings live here).</summary>
         public string PlcItemPath => "TIPC^" + PlcProjectName;

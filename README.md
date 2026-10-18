@@ -148,6 +148,7 @@ compiles only, without syncing anything first.
 | `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
 | `sync variants <path>` | `variants.xml` → TwinCAT project variants and groups; switches on the PLC's variant defines (see [Machine variants](#machine-variants)). No manifest = nothing to do. | opens VS |
 | `sync safety <path>` | `safety.xml` → TwinSAFE project: sets the EtherCAT box/module object ids the safety files refer to (direct `.tsproj` edit), copies the safety folder unchanged next to the `.tsproj` (byte-equal check), adds it under `TISC` once, and fails unless the logic terminal shows its Standard In/Out channels. No manifest = nothing to do. See HOW-TO-USE.md, "The safety project". | opens VS, closes it for the `.tsproj` edit/copy only when something must change |
+| `sync tasks <path>` | `tasks.xml` → real-time tasks (`TIRT^<Name>`, cycle time, priority) and PLC task references with their program calls. Adds what is missing, sets a wrong cycle time/priority/linked task, reads the project again to check. Extra tasks and calls are only **warned** about, never deleted. No manifest = nothing to do (the template's `PlcTask` stays). See HOW-TO-USE.md, "The tasks". | opens VS |
 | `sync all <path>` | Every stage above, in order, then build. | opens VS |
 | `activate <path> --target umrt\|local [--variant V] --yes` | Build one variant and activate it on UmRT_Default or this PC's runtime, then wait for the PLC to reach Run. Without `--yes` it only shows the target's current boot project (changes nothing). See [Closed loop on a runtime](#closed-loop-on-a-runtime). | opens VS (only with `--yes`) |
 | `verify --target umrt\|local --expect <expect.json> [--variant V]` | Read live PLC values over ADS and compare them with `expect.json`. Exit 0 = all as expected. | no VS |
@@ -157,7 +158,7 @@ compiles only, without syncing anything first.
 | `doctor` | Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state, boot projects, license expiry. | no VS |
 | `build <path> [--plc X] [--clean] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
 
-Stage execution order for `sync all`: variants → code → libs → io-tree → `.tsproj`
+Stage execution order for `sync all`: variants → code → libs → tasks → io-tree → `.tsproj`
 edits (io templates + events) → safety → io links → build. Visual Studio is opened
 lazily by the first stage that needs it and closed for the `.tsproj` edits.
 
@@ -743,6 +744,10 @@ Alongside the `.st` files, a project folder can contain:
 - **`safety.xml`** (optional) — the TwinSAFE project: `<Safety Name="SHARK_Safety_prj" Folder="safety/SHARK_Safety_prj" [TargetSystemConfig="<file>"] />`.
   `Folder` holds the project exactly as the safety editor saved it; it is copied, never changed
   (`Sync/SafetyManifest.cs`, `Sync/SafetyProjectSync.cs`). Other attributes are ignored.
+- **`tasks.xml`** (optional) — the PLC tasks: `<Tasks [BaseTimeUs="1000"]><Task Name="PlcTask" CycleTimeUs="10000" Priority="20"><Call>MAIN</Call></Task>…</Tasks>`.
+  The full list of tasks (write `PlcTask` too); unique names and priorities, cycle time a multiple of
+  the base time, each `<Call>` a PROGRAM of the source and in one task only
+  (`Sync/TaskManifest.cs`, `Sync/TaskSyncEngine.cs`).
 
 All three are synced idempotently: existing entries are left alone, missing
 ones are added, removed-from-manifest ones are cleaned up (library/IO only —
