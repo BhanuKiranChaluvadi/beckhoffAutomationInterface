@@ -32,6 +32,9 @@ namespace BeckhoffAutomationInterface.Sync
     ///   CreateChild(name, TREEITEMTYPE_TERM=6, "", "&lt;ProductName&gt;") — the key
     ///   fix is passing the product name as vInfo (not null); the specific
     ///   TREEITEMTYPE/legacy TCSYSMANAGERBOXTYPES constant doesn't matter.
+    /// - A third-party box (MARPOSS, SMC, Bronkhorst ...): a product string fails ("Invalid item
+    ///   sub type"); CreateChild(name, 9099, "", int[4] { vendor, product, revision, 0 }) works
+    ///   when the ESI file is installed (M5.2 spike, 2026-10-18; see EtherCatIdentity).
     ///
     /// IMPORTANT CAVEAT (see docs/ideas/st-source-twincat-sync.md): TwinCAT pops a
     /// BLOCKING native "needs sync master (at least one variable linked to a tasked
@@ -209,9 +212,38 @@ namespace BeckhoffAutomationInterface.Sync
 
             foreach (IoNodeSpec nodeSpec in desiredChildren)
             {
-                ITcSmTreeItem node = GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report);
+                ITcSmTreeItem node = GetOrCreateNode(sysManager, parent, nodeSpec, report);
                 SyncChildren(sysManager, node, nodeSpec.Children, report, confirmDelete);
             }
+        }
+
+        /// <summary>A Beckhoff box from its Product string (TREEITEMTYPE_TERM); a box with an ESI
+        /// identity (a third-party box) with CreateChild(name, 9099, "", int[4]). A new box with an
+        /// identity must have the Product as its type name (ItemSubTypeName), if Product is given.</summary>
+        static ITcSmTreeItem GetOrCreateNode(ITcSysManager sysManager, ITcSmTreeItem parent, IoNodeSpec nodeSpec, IoSyncReport report)
+        {
+            int createdBefore = report.Created.Count;
+            ITcSmTreeItem node;
+            try
+            {
+                node = nodeSpec.Identity == null
+                    ? GetOrCreate(sysManager, parent, nodeSpec.Name, TREEITEMTYPE_TERM, nodeSpec.Product, report)
+                    : GetOrCreate(sysManager, parent, nodeSpec.Name, EtherCatIdentity.BoxSubType, nodeSpec.Identity.ToVInfo(), report);
+            }
+            catch (COMException ex)
+            {
+                throw new InvalidOperationException(string.Format(
+                    "io-devices.xml: TwinCAT cannot make box '{0}' ({1}): {2}. Is the ESI file of this box installed " +
+                    @"(TwinCAT\3.1\Config\Io\EtherCAT)? A box that is not a Beckhoff box needs VendorId, ProductCode and RevisionNo.",
+                    nodeSpec.Name, nodeSpec.Identity?.ToString() ?? "Product \"" + nodeSpec.Product + "\"", ex.Message), ex);
+            }
+
+            bool isNew = report.Created.Count > createdBefore;
+            if (isNew && nodeSpec.Identity != null && !string.IsNullOrEmpty(nodeSpec.Product) && node.ItemSubTypeName != nodeSpec.Product)
+                throw new InvalidOperationException(string.Format(
+                    "io-devices.xml: box '{0}': {1} made a \"{2}\", but Product says \"{3}\". Check the three numbers against the ESI file.",
+                    nodeSpec.Name, nodeSpec.Identity, node.ItemSubTypeName, nodeSpec.Product));
+            return node;
         }
 
         /// <summary>The adapter address (Pnp/DeviceData) in a device's XML; null when absent.</summary>
@@ -251,7 +283,7 @@ namespace BeckhoffAutomationInterface.Sync
         /// project that already has some (or all) of the desired hardware only creates
         /// what's missing.
         /// </summary>
-        static ITcSmTreeItem GetOrCreate(ITcSysManager sysManager, ITcSmTreeItem parent, string name, int type, string vInfo, IoSyncReport report)
+        static ITcSmTreeItem GetOrCreate(ITcSysManager sysManager, ITcSmTreeItem parent, string name, int type, object vInfo, IoSyncReport report)
         {
             ITcSmTreeItem item = TreeItemFactory.GetOrCreate(sysManager, parent, name, type, vInfo, out bool isNew);
             if (isNew)

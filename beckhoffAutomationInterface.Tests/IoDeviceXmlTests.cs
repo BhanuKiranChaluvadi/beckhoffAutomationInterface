@@ -1,4 +1,4 @@
-using BeckhoffAutomationInterface.Sync;
+﻿using BeckhoffAutomationInterface.Sync;
 using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
@@ -110,6 +110,46 @@ namespace BeckhoffAutomationInterface.Tests
                 IoDeviceXml.AdapterConsumeXml(new IoAdapterSpec("A", "000105992C32", 8, "Ethernet & 5")));
             Assert.Equal("<TreeItem><DeviceDef><AddressInfo><TcCom><ObjectId>#x03010011</ObjectId></TcCom></AddressInfo></DeviceDef></TreeItem>",
                 IoDeviceXml.PortConsumeXml(50397201));
+        }
+
+        // The MARPOSS spectrometer box after CreateChild(name, 9099, "", { 0x916, 0x4000, 0x10002, 0 })
+        // and a CU2508 box after CreateChild(name, 6, "", "CU2508-0000-0000") (M5.2 spike, 2026-10-18), shortened.
+        const string MarpossBoxXml =
+            "<?xml version=\"1.0\"?><TreeItem><ItemName>Box 11 (MARPOSS P3XF STANDARD)</ItemName><ItemType>5</ItemType><ItemSubType>9099</ItemSubType>" +
+            "<ItemSubTypeName>MARPOSS P3XF STANDARD</ItemSubTypeName><EtherCAT><Slave><Info><Name><![CDATA[Box 11 (MARPOSS P3XF STANDARD)]]></Name>" +
+            "<PhysAddr>1002</PhysAddr><AutoIncAddr>65535</AutoIncAddr><Physics>YY</Physics><VendorId>2326</VendorId><ProductCode>16384</ProductCode>" +
+            "<RevisionNo>65538</RevisionNo><SerialNo>0</SerialNo></Info></Slave></EtherCAT></TreeItem>";
+        const string Cu2508BoxXml =
+            "<?xml version=\"1.0\"?><TreeItem><ItemName>Box 12 (CU2508)</ItemName><ItemType>5</ItemType><ItemSubType>9099</ItemSubType>" +
+            "<ItemSubTypeName>CU2508 Ethernet Port</ItemSubTypeName><EtherCAT><Slave><Info><Name><![CDATA[Box 12 (CU2508)]]></Name><PhysAddr>1001</PhysAddr>" +
+            "<VendorId>2</VendorId><ProductCode>164385842</ProductCode><RevisionNo>0</RevisionNo><SerialNo>0</SerialNo>" +
+            "<ProductRevision>CU2508-0000-0000</ProductRevision></Info></Slave></EtherCAT></TreeItem>";
+
+        [Fact]
+        public void EtherCatIdentityOf_ReadsVendorProductRevision_ThirdPartyOnlyIsWritten()
+        {
+            EtherCatIdentity marposs = IoDeviceXml.EtherCatIdentityOf(MarpossBoxXml);
+            Assert.Equal(0x916u, marposs.VendorId);
+            Assert.Equal(0x4000u, marposs.ProductCode);
+            Assert.Equal(0x10002u, marposs.RevisionNo);
+            Assert.Same(marposs, IoManifestWriter.ThirdPartyIdentity(marposs));
+
+            EtherCatIdentity cu2508 = IoDeviceXml.EtherCatIdentityOf(Cu2508BoxXml);
+            Assert.Equal(EtherCatIdentity.BeckhoffVendorId, cu2508.VendorId);
+            Assert.Null(IoManifestWriter.ThirdPartyIdentity(cu2508));   // Beckhoff boxes keep Product only
+
+            Assert.Null(IoDeviceXml.EtherCatIdentityOf(OnPortXml));      // a device, not an EtherCAT slave
+            Assert.Null(IoDeviceXml.EtherCatIdentityOf("not xml"));
+        }
+
+        [Fact]
+        public void EtherCatIdentity_VInfoIsTheSpikeArray_AndFormatIsEsiNotation()
+        {
+            var id = new EtherCatIdentity(0x916, 0x4000, 0x10002);
+            Assert.Equal(new[] { 0x916, 0x4000, 0x10002, 0 }, id.ToVInfo());
+            Assert.Equal(9099, EtherCatIdentity.BoxSubType);
+            Assert.Equal("VendorId #x00000916, ProductCode #x00004000, RevisionNo #x00010002", id.ToString());
+            Assert.Equal(new[] { -1, 0, 0, 0 }, new EtherCatIdentity(0xFFFFFFFF, 0, 0).ToVInfo()); // no overflow exception
         }
     }
 }

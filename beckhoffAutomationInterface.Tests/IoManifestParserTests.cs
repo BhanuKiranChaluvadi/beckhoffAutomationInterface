@@ -1,4 +1,4 @@
-using BeckhoffAutomationInterface.Sync;
+﻿using BeckhoffAutomationInterface.Sync;
 using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
@@ -184,6 +184,39 @@ namespace BeckhoffAutomationInterface.Tests
 
             Assert.Equal("Channel", coupler.Children[0].CreatePlcType);
             Assert.Null(coupler.Children[1].CreatePlcType);
+        }
+
+        [Fact]
+        public void EsiIdentity_IsParsed_InEsiHexOrDecimal_AndNullWhenAbsent()   // M5.2: third-party boxes
+        {
+            string path = WriteManifest(@"
+<IoTree>
+  <Device Name=""BH5"">
+    <Box Name=""Box 12 (CU2508)"" Product=""CU2508-0000-0000"" />
+    <Box Name=""Box 11 (MARPOSS P3XF STANDARD)"" Product=""MARPOSS P3XF STANDARD"" VendorId=""#x00000916"" ProductCode=""0x4000"" RevisionNo=""65538"" />
+  </Device>
+</IoTree>");
+            List<IoNodeSpec> boxes = IoManifestParser.Parse(path)[0].Children;
+
+            Assert.Null(boxes[0].Identity);
+            Assert.Equal("MARPOSS P3XF STANDARD", boxes[1].Product);
+            Assert.Equal(0x916u, boxes[1].Identity.VendorId);
+            Assert.Equal(0x4000u, boxes[1].Identity.ProductCode);
+            Assert.Equal(0x10002u, boxes[1].Identity.RevisionNo);
+        }
+
+        [Theory]
+        [InlineData(@"VendorId=""#x00000916"" ProductCode=""#x00004000""", "all three")]
+        [InlineData(@"RevisionNo=""#x00010002""", "all three")]
+        [InlineData(@"VendorId=""MARPOSS"" ProductCode=""#x00004000"" RevisionNo=""#x00010002""", "VendorId=\"MARPOSS\" is not a number")]
+        [InlineData(@"VendorId=""#x916"" ProductCode=""#x"" RevisionNo=""#x00010002""", "ProductCode=\"#x\" is not a number")]
+        [InlineData(@"VendorId=""#x916"" ProductCode=""#x4000"" RevisionNo=""-1""", "RevisionNo=\"-1\" is not a number")]
+        public void EsiIdentity_PartialOrBad_IsRefused(string attributes, string expectedText)
+        {
+            string path = WriteManifest(@"<IoTree><Device Name=""BH5""><Box Name=""M"" " + attributes + @" /></Device></IoTree>");
+            var ex = Assert.Throws<System.FormatException>(() => IoManifestParser.Parse(path));
+            Assert.Contains(expectedText, ex.Message);
+            Assert.Contains("box 'M'", ex.Message);
         }
 
         [Fact]

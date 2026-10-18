@@ -1,4 +1,4 @@
-using BeckhoffAutomationInterface.Sync;
+﻿using BeckhoffAutomationInterface.Sync;
 using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
@@ -75,7 +75,10 @@ namespace BeckhoffAutomationInterface.Tests
       <Terminal Name=""EL2008_1.1"" Product=""EL2008"" Variants=""A"" />
     </Box>
   </Device>
-  <Device Name=""BH2"" Disabled=""true"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""8"" />
+  <Device Name=""BH2"" Disabled=""true"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""8"">
+    <Box Name=""Box 12 (CU2508)"" Product=""CU2508-0000-0000"" />
+    <Box Name=""Box 11 (MARPOSS P3XF STANDARD)"" Product=""MARPOSS P3XF STANDARD"" VendorId=""0x916"" ProductCode=""16384"" RevisionNo=""#x00010002"" />
+  </Device>
   <Device Name=""BH 3 (Safety)"" Adapter=""02000000B301"" Variants=""A,B"" />
 </IoTree>");
                 IoManifest first = IoManifestParser.ParseManifest(source);
@@ -87,6 +90,9 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.Equal(Describe(first), Describe(second));
                 Assert.Contains("Adapter Name=\"Device 1 (RT-Ethernet Adapter)\" Mac=\"000105992C32\" Ports=\"8\"", File.ReadAllText(written));
                 Assert.Contains("Via=\"Device 1 (RT-Ethernet Adapter)\" Port=\"1\"", File.ReadAllText(written));
+                // The ESI identity is written back in ESI notation (M5.2: third-party boxes).
+                Assert.Contains("Product=\"MARPOSS P3XF STANDARD\" VendorId=\"#x00000916\" ProductCode=\"#x00004000\" RevisionNo=\"#x00010002\"", File.ReadAllText(written));
+                Assert.DoesNotContain("CU2508-0000-0000\" VendorId", File.ReadAllText(written));
             }
             finally
             {
@@ -112,7 +118,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             foreach (IoNodeSpec n in nodes)
             {
-                lines.Add($"{indent}N|{n.Name}|{n.Product}|{n.CreatePlcType}|{Join(n.Variants)}");
+                lines.Add($"{indent}N|{n.Name}|{n.Product}|{n.CreatePlcType}|{Join(n.Variants)}|{n.Identity}");
                 DescribeNodes(n.Children, indent + "  ", lines);
             }
         }

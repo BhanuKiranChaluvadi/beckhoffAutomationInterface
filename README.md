@@ -677,6 +677,12 @@ and mark the items that only some machines have (example: [`ST/VariantIoSample`]
   "Configuration Port" slave). A device with the wrong kind (94 vs 111) is an error; with
   `--confirm-delete-io` it is deleted and made again. `export io` writes `<Adapter>`/`Via`/`Port`
   back. Details: [HOW-TO-USE.md](HOW-TO-USE.md), section 9.
+- A box that is not a Beckhoff box (a third-party EtherCAT slave, for example the MARPOSS
+  spectrometer) cannot be made from a `Product` text ("Invalid item sub type"). Give its ESI
+  identity: `VendorId="#x00000916" ProductCode="#x00004000" RevisionNo="#x00010002"` (all three
+  or none). `sync io` then calls `CreateChild(name, 9099, "", int[] { vendor, product, revision, 0 })`
+  and checks that the new box's type name is `Product`. The ESI file must be installed.
+  `export io` writes the three numbers for every box whose vendor id is not 2 (Beckhoff).
 - `Variants="A,B"` works on `<Device>`, `<Box>` and `<Terminal>`. No attribute = all variants.
   A child cannot be in a variant where its parent is not. Names must be in `variants.xml`.
 - `sync io` enables the item in those variants and disables it in the others (TwinCAT variant

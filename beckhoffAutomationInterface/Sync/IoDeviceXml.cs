@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
@@ -94,6 +94,17 @@ namespace BeckhoffAutomationInterface.Sync
             if (value.StartsWith("#x", System.StringComparison.OrdinalIgnoreCase))
                 return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint hex) ? hex : (uint?)null;
             return uint.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out uint dec) ? dec : (uint?)null;
+        }
+
+        /// <summary>The ESI identity of an EtherCAT box (EtherCAT/Slave/Info VendorId, ProductCode,
+        /// RevisionNo, decimal in ProduceXml); null when the XML has none (not an EtherCAT slave).</summary>
+        public static EtherCatIdentity EtherCatIdentityOf(string boxXml)
+        {
+            XElement info = Parse(boxXml)?.Element("EtherCAT")?.Element("Slave")?.Element("Info");
+            uint? vendor = ParseObjectId((string)info?.Element("VendorId"));
+            uint? product = ParseObjectId((string)info?.Element("ProductCode"));
+            uint? revision = ParseObjectId((string)info?.Element("RevisionNo"));
+            return vendor == null || product == null || revision == null ? null : new EtherCatIdentity(vendor.Value, product.Value, revision.Value);
         }
 
         public static string FormatObjectId(uint oid) => "#x" + oid.ToString("x8", CultureInfo.InvariantCulture);

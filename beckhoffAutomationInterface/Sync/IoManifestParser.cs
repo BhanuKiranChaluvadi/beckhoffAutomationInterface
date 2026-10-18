@@ -49,6 +49,11 @@ namespace BeckhoffAutomationInterface.Sync
     ///     &lt;Device Name="BH1" Via="Device 1 (RT-Ethernet Adapter)" Port="1"&gt;
     ///   Via and Adapter are exclusive; Via must name an &lt;Adapter&gt;; 1 &lt;= Port &lt;= Ports;
     ///   one device per port.
+    ///
+    /// A third-party box (not Beckhoff) is made from its ESI identity, not from Product:
+    ///   &lt;Box Name="Box 11 (MARPOSS P3XF STANDARD)" Product="MARPOSS P3XF STANDARD"
+    ///        VendorId="#x00000916" ProductCode="#x00004000" RevisionNo="#x00010002" /&gt;
+    ///   All three or none. Product is then only a check: the new box must have this type name.
     /// </summary>
     static class IoManifestParser
     {
@@ -178,7 +183,43 @@ namespace BeckhoffAutomationInterface.Sync
             (string)nodeEl.Attribute("Product"),
             ParseChildNodes(nodeEl),
             (string)nodeEl.Attribute("CreatePlcType"),
-            ParseVariants(nodeEl));
+            ParseVariants(nodeEl),
+            ParseIdentity(nodeEl));
+
+        static readonly string[] IdentityAttributes = { "VendorId", "ProductCode", "RevisionNo" };
+
+        /// <summary>VendorId + ProductCode + RevisionNo (all three or none; "#x00000916", "0x916"
+        /// or decimal). Null when none is present.</summary>
+        static EtherCatIdentity ParseIdentity(XElement nodeEl)
+        {
+            string[] values = IdentityAttributes.Select(a => (string)nodeEl.Attribute(a)).ToArray();
+            if (values.All(v => v == null))
+                return null;
+            if (values.Any(v => v == null))
+                throw new System.FormatException(string.Format(
+                    "io-devices.xml: box '{0}' needs all three of VendorId, ProductCode and RevisionNo, or none of them.",
+                    (string)nodeEl.Attribute("Name")));
+            var numbers = new uint[3];
+            for (int i = 0; i < 3; i++)
+            {
+                uint? n = ParseEsiNumber(values[i]);
+                if (n == null)
+                    throw new System.FormatException(string.Format(
+                        "io-devices.xml: box '{0}' {1}=\"{2}\" is not a number (use the ESI notation, for example #x00000916).",
+                        (string)nodeEl.Attribute("Name"), IdentityAttributes[i], values[i]));
+                numbers[i] = n.Value;
+            }
+            return new EtherCatIdentity(numbers[0], numbers[1], numbers[2]);
+        }
+
+        /// <summary>"#x00000916" (ESI/TwinCAT), "0x916" or decimal; null when not a number.</summary>
+        internal static uint? ParseEsiNumber(string value)
+        {
+            string v = (value ?? "").Trim();
+            if (v.StartsWith("0x", System.StringComparison.OrdinalIgnoreCase))
+                v = "#x" + v.Substring(2);
+            return IoDeviceXml.ParseObjectId(v);
+        }
 
         /// <summary>Parses the optional &lt;Links&gt; section: PLC-variable-to-IO-channel links.</summary>
         public static List<LinkSpec> ParseLinks(string manifestFilePath)

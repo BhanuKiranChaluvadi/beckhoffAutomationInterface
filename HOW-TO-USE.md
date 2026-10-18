@@ -333,6 +333,25 @@ are made again too.
 
 `export io` writes both layouts back (`<Adapter>`, `Via`, `Port`, `Adapter`).
 
+### Boxes that are not Beckhoff boxes (third-party EtherCAT slaves)
+
+The tool makes a Beckhoff box from its `Product` text. TwinCAT cannot make a box of another
+vendor from a text. For such a box, give the three numbers from its ESI file:
+
+```xml
+<Box Name="Box 11 (MARPOSS P3XF STANDARD)" Product="MARPOSS P3XF STANDARD"
+     VendorId="#x00000916" ProductCode="#x00004000" RevisionNo="#x00010002" />
+```
+
+- Get the numbers from the ESI file (`<Vendor><Id>` and `<Type ProductCode RevisionNo>`) or
+  from the `.xti` file of the box in the real project.
+- Give all three or none. Write them as `#x00000916` (ESI notation), `0x916` or a decimal number.
+- `Product` is the type name of the box. The tool makes a new box from the three numbers, then
+  compares its type name with `Product`. If they are different, `sync io` stops.
+- The ESI file must be installed (`C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Config\Io\EtherCAT`). If it is not, `sync io`
+  stops with "TwinCAT cannot make box".
+- `export io` writes the three numbers for each box that is not a Beckhoff box (vendor id not 2).
+
 ## 10. Run the program and check live values (closed loop)
 
 ### 10.1 Activate
@@ -560,6 +579,8 @@ new option.
 | `BUILD FAILED — variant defines are off` | Run `bai sync variants` first. |
 | `object(s) are defined in more than one .st file` (`check parse` or `sync`) | Two files define the same object. Only one would reach the PLC, and which one depends on file order. Delete or rename the old file. |
 | `io-devices.xml: TwinCAT placed '...' at '...'` | The nesting in `io-devices.xml` is wrong. E-bus terminals go under their coupler (for example EK1100), not under another terminal. |
+| `io-devices.xml: TwinCAT cannot make box '...'` | The ESI file of the box is not installed, or the box is not a Beckhoff box and has no `VendorId`/`ProductCode`/`RevisionNo` (section 9, "Boxes that are not Beckhoff boxes"). |
+| `io-devices.xml: box '...': ... made a "...", but Product says "..."` | The three numbers make a different box. Compare them with the ESI file. |
 | `IO SYNC FAILED — ... item(s) have the wrong kind` | A device in the project has the other network layout (section 9, "More than one EtherCAT device"). Add `--confirm-delete-io`, or make a new project. |
 | `io-devices.xml: Device '...' Via=...` or `... Port=...` | The `Via`/`Port` attributes are wrong. `Via` must be the name of an `<Adapter>`. `Port` must be from 1 to `Ports`. |
 | The PLC stays in Config after `activate` | Run `bai doctor`. Look at the license expiry date. Renew the trial license in the TwinCAT window. |

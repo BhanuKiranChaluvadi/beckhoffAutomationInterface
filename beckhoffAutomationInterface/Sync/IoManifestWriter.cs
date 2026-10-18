@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -57,6 +57,10 @@ namespace BeckhoffAutomationInterface.Sync
     /// Via="adapter" Port="n", where n is the position of its TcCom ObjectId in the adapter's
     /// port Oid list. Build reads the live tree into an IoManifest; ToXml (COM-free,
     /// round-trip tested) writes it.
+    ///
+    /// THIRD-PARTY BOXES (M5.2, 2026-10-18): a box whose ESI VendorId is not Beckhoff's (2) is
+    /// written with VendorId/ProductCode/RevisionNo (from its ProduceXml) and Product = its type
+    /// name (ItemSubTypeName), because sync can make it only from the identity.
     /// </summary>
     static class IoManifestWriter
     {
@@ -163,17 +167,27 @@ namespace BeckhoffAutomationInterface.Sync
                 if (child.PathName != directPrefix + child.Name)
                     continue; // genuine direct children only (flat-nested guard)
 
-                string product = DeriveProduct(child.Name, child.ItemSubTypeName, out bool derivedHeuristically);
+                // A third-party box cannot be made from a product string: write its ESI identity
+                // (and its type name as Product). Beckhoff boxes keep the Product string only.
+                EtherCatIdentity identity = ThirdPartyIdentity(IoDeviceXml.EtherCatIdentityOf(child.ProduceXml()));
+                bool derivedHeuristically = false;
+                string product = identity != null && !string.IsNullOrEmpty(child.ItemSubTypeName)
+                    ? child.ItemSubTypeName
+                    : DeriveProduct(child.Name, child.ItemSubTypeName, out derivedHeuristically);
                 variantsByPath.TryGetValue(child.PathName, out List<string> variants);
                 if (derivedHeuristically)
                     report.ProductsToVerify.Add($"{child.Name} -> Product=\"{product}\" (from Name/ItemSubTypeName=\"{child.ItemSubTypeName}\")");
 
                 nodes.Add(new IoNodeSpec(child.Name, string.IsNullOrEmpty(product) ? null : product,
-                    ReadChildren(child, report, variantsByPath), null, variants));
+                    ReadChildren(child, report, variantsByPath), null, variants, identity));
                 report.NodeCount++;
             }
             return nodes;
         }
+
+        /// <summary>The identity to write: only for a box that is not a Beckhoff box.</summary>
+        internal static EtherCatIdentity ThirdPartyIdentity(EtherCatIdentity identity) =>
+            identity != null && identity.VendorId != EtherCatIdentity.BeckhoffVendorId ? identity : null;
 
         /// <summary>The COM-free writer (round-trips through IoManifestParser.ParseManifest):
         /// &lt;Adapter&gt; elements first, then &lt;Device&gt; with &lt;Box&gt; (a node with
@@ -222,6 +236,12 @@ namespace BeckhoffAutomationInterface.Sync
                 var el = new XElement(node.Children.Count > 0 ? "Box" : "Terminal", new XAttribute("Name", node.Name));
                 if (node.Product != null)
                     el.Add(new XAttribute("Product", node.Product));
+                if (node.Identity != null)
+                {
+                    el.Add(new XAttribute("VendorId", EtherCatIdentity.Format(node.Identity.VendorId)));
+                    el.Add(new XAttribute("ProductCode", EtherCatIdentity.Format(node.Identity.ProductCode)));
+                    el.Add(new XAttribute("RevisionNo", EtherCatIdentity.Format(node.Identity.RevisionNo)));
+                }
                 if (node.CreatePlcType != null)
                     el.Add(new XAttribute("CreatePlcType", node.CreatePlcType));
                 if (node.Variants != null)

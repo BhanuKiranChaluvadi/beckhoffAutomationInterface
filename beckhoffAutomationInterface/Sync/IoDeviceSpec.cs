@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace BeckhoffAutomationInterface.Sync
 {
@@ -121,13 +121,56 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Project variants that have this box/terminal (Variants="A,B"); null = all variants.</summary>
         public IReadOnlyList<string> Variants { get; }
 
-        public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null, IReadOnlyList<string> variants = null)
+        /// <summary>The ESI identity (VendorId/ProductCode/RevisionNo attributes) of a box that
+        /// the Product string cannot make: a third-party box such as the MARPOSS spectrometer.
+        /// Null = make the box from Product (all Beckhoff boxes).</summary>
+        public EtherCatIdentity Identity { get; }
+
+        public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null, IReadOnlyList<string> variants = null,
+                          EtherCatIdentity identity = null)
         {
             Name = name;
             Product = product;
             Children = children;
             CreatePlcType = createPlcType;
             Variants = variants;
+            Identity = identity;
         }
+    }
+
+    /// <summary>
+    /// The identity of an EtherCAT slave in its ESI file: vendor id, product code and revision.
+    /// TwinCAT makes a box of any vendor from it with CreateChild(name, 9099, "", int[4]
+    /// { vendor, product, revision, 0 }) (Beckhoff SysManSamples, CreateEtherCATBox). A product
+    /// string works only for Beckhoff boxes: "MARPOSS P3XF STANDARD" gives "Invalid item sub
+    /// type" (M5.2 spike, TwinCAT 3.1.4026, 2026-10-18). The ESI file must be installed.
+    /// </summary>
+    sealed class EtherCatIdentity
+    {
+        /// <summary>The Beckhoff vendor id. Boxes of this vendor are made from Product.</summary>
+        public const uint BeckhoffVendorId = 2;
+
+        /// <summary>The box type id of CreateChild for an EtherCAT box made from its identity.</summary>
+        public const int BoxSubType = 9099;
+
+        public uint VendorId { get; }
+        public uint ProductCode { get; }
+        public uint RevisionNo { get; }
+
+        public EtherCatIdentity(uint vendorId, uint productCode, uint revisionNo)
+        {
+            VendorId = vendorId;
+            ProductCode = productCode;
+            RevisionNo = revisionNo;
+        }
+
+        /// <summary>The vInfo of CreateChild(name, 9099, "", vInfo).</summary>
+        public int[] ToVInfo() => new[] { unchecked((int)VendorId), unchecked((int)ProductCode), unchecked((int)RevisionNo), 0 };
+
+        /// <summary>TwinCAT notation, as in the ESI file and the .xti: "#x00000916".</summary>
+        public static string Format(uint value) => IoDeviceXml.FormatObjectId(value);
+
+        public override string ToString() =>
+            string.Format("VendorId {0}, ProductCode {1}, RevisionNo {2}", Format(VendorId), Format(ProductCode), Format(RevisionNo));
     }
 }
