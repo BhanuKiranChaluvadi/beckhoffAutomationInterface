@@ -16,6 +16,8 @@
     <Reference Include="Microsoft.CSharp" />
     <!-- JavaScriptSerializer for expect.json (part of .NET Framework 4.8, no NuGet) -->
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
   <ItemGroup>

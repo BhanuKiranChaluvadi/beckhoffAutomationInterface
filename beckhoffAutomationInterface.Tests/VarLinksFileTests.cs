@@ -11,7 +11,31 @@ namespace BeckhoffAutomationInterface.Tests
     /// </summary>
     public class VarLinksFileTests : System.IDisposable
     {
+        [Fact]
+        public void NativeImportReadbackRejectsMissingOrShiftedMappings()
+        {
+            const string expected = "<VarLinks><OwnerA Name='TIPC^PLC'><OwnerB Name='TIID^IO'><Link VarA='PlcTask Outputs^MAIN.output' VarB='Byte 1' OffsA='8' Size='8'/></OwnerB></OwnerA></VarLinks>";
+            const string actual = "<VarLinks><OwnerA Prefix='TIPC^PLC' Name='OutputSrc'><OwnerB Name='TIID^IO'><Link GrpA='PlcTask Outputs' VarA='MAIN.output' VarB='Byte 1' OffsA='8' OffsB='0' Size='8'/></OwnerB></OwnerA></VarLinks>";
+            Assert.Empty(VarLinksFile.MissingMappings(expected, actual));
+            Assert.Single(VarLinksFile.MissingMappings(expected, "<VarLinks/>"));
+            Assert.Single(VarLinksFile.MissingMappings(expected, actual.Replace("OffsA='8'", "OffsA='0'")));
+            Assert.Single(VarLinksFile.MissingMappings(expected, actual.Replace("Size='8'", "Size='16'")));
+            Assert.Single(VarLinksFile.MissingMappings(expected, actual.Replace("Byte 1", "Byte 2")));
+        }
+
         readonly string _dir;
+
+        [Fact]
+        public void ReversedSafetyConnectionKeepsOffsetsWithTheirEndpoints()
+        {
+            const string expected = "<VarLinks><OwnerA Name='TIID^Logic'><OwnerB Name='TIID^Module'><Link VarA='Message' VarB='FSOE' OffsA='8' OffsB='16' Size='32'/></OwnerB></OwnerA></VarLinks>";
+            const string reversed = "<VarLinks><OwnerA Name='TIID^Module'><OwnerB Name='TIID^Logic'><Link VarA='FSOE' VarB='Message' OffsA='16' OffsB='8' Size='32'/></OwnerB></OwnerA></VarLinks>";
+            Assert.Empty(VarLinksFile.MissingMappings(expected, reversed));
+            Assert.Single(VarLinksFile.MissingMappings(expected, reversed.Replace("OffsA='16'", "OffsA='8'")));
+            Assert.Single(VarLinksFile.MissingMappings(expected, reversed.Replace("Size='32'", "Size='16'")));
+            Assert.Throws<System.IO.InvalidDataException>(() => VarLinksFile.MissingMappings("<Other/>", reversed));
+            Assert.Throws<System.IO.InvalidDataException>(() => VarLinksFile.MissingMappings(expected, "<Other/>"));
+        }
 
         public VarLinksFileTests()
         {

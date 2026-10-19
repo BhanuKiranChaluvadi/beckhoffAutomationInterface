@@ -115,7 +115,15 @@ namespace BeckhoffAutomationInterface
 
             // Phase C — back through the Automation Interface, reopening VS lazily.
             if (stages.HasFlag(SyncStages.Io))
+            {
+                if (desiredIoDevices != null)
+                {
+                    _session.EnsureOpen();
+                    RetryOnBusy(() => IoSyncEngine.ApplyConfiguration(_session.SysManager, desiredIoDevices), "applying PDO and CoE configuration");
+                    _session.Project.Save();
+                }
                 SyncLinks();
+            }
             if (stages.HasFlag(SyncStages.Build))
             {
                 _session.EnsureOpen();
@@ -192,6 +200,41 @@ namespace BeckhoffAutomationInterface
             ReverseExports exports = _options.ReverseExports;
             Directory.CreateDirectory(_options.SourceFolder);
 
+            if (exports.HasFlag(ReverseExports.Native))
+            {
+                NativeProjectExport.Write(_options.TsprojFilePath, _options.SourceFolder);
+                Console.WriteLine("{0}: Native project snapshot written and every archived file verified.", Now());
+            }
+            if (exports.HasFlag(ReverseExports.Safety))
+            {
+                ConfigurationExporter.Safety(_options.TsprojFilePath, _options.SourceFolder);
+                Console.WriteLine("{0}: Safety export complete (byte-exact project files).", Now());
+            }
+            if (exports.HasFlag(ReverseExports.Tasks))
+            {
+                _session.EnsureOpen();
+                RetryOnBusy(() =>
+                {
+                    var tasks = TaskSyncEngine.ReadState(_session.SysManager, _options.ProjectRootPath);
+                    ConfigurationExporter.Tasks(tasks.RtTasks, tasks.TaskRefs).Save(_options.TaskManifestPath);
+                }, "exporting task configuration");
+                Console.WriteLine("{0}: Exported PLC task periods, priorities and ordered calls.", Now());
+            }
+            if (exports.HasFlag(ReverseExports.Variants))
+            {
+                _session.EnsureOpen();
+                RetryOnBusy(() =>
+                {
+                    var variants = VariantManifest.FromProjectVariantConfigXml(((ITcSysManager14)_session.SysManager).ProjectVariantConfig);
+                    if (variants.Variants.Count > 0)
+                    {
+                        if (!VariantSyncEngine.DefinesEnabled(_session.SysManager, _options.PlcItemPath))
+                            throw new InvalidOperationException("Variant defines are not implicit; use the native snapshot to retain this configuration.");
+                        ConfigurationExporter.Variants(variants).Save(_options.VariantManifestPath);
+                    }
+                }, "exporting variants");
+            }
+
             // Events: pure .tsproj read, no VS — do it first, while VS is still closed.
             if (exports.HasFlag(ReverseExports.Events))
             {
@@ -245,7 +288,9 @@ namespace BeckhoffAutomationInterface
                     Dictionary<string, List<string>> variantsByPath = IoVariantSync.VariantsByPath(
                         IoVariantSync.ReadState(((ITcSysManager14)_session.SysManager).ProjectVariantItems),
                         VariantSyncEngine.ProjectVariants(_session.SysManager));
-                    IoManifestWriter.Build(_session.SysManager.LookupTreeItem("TIID"), ioReport, variantsByPath).Save(_options.IoManifestPath);
+                    var ioManifest = IoManifestWriter.Build(_session.SysManager.LookupTreeItem("TIID"), ioReport, variantsByPath);
+                    ConfigurationExporter.PlcDataTypes(_options.TsprojFilePath, ioManifest, _options.SourceFolder);
+                    ioManifest.Save(_options.IoManifestPath);
                     if (variantsByPath.Count > 0)
                         Console.WriteLine("{0}: {1} I/O item(s) exist in some variants only (Variants attribute).", Now(), variantsByPath.Count);
                 }, "reading IO tree");
@@ -484,12 +529,16 @@ namespace BeckhoffAutomationInterface
             foreach (TaskAction action in plan.Actions)
                 Console.WriteLine("    {0}", action.Description);
             PrintLines("!! WARNING ", plan.Warnings);
-            if (plan.Actions.Count == 0)
-            {
-                Console.WriteLine("{0}: Tasks already up to date (no change, {1} warning(s)).", Now(), plan.Warnings.Count);
-                return;
-            }
             _session.Project.Save();
+            var cachedTiming = PlcTaskTimingEditor.Changes(_options.TsprojFilePath, _options.PlcProjectName, desired);
+            if (cachedTiming.Count > 0)
+            {
+                _session.EnsureClosed();
+                foreach (var file in cachedTiming) file.Value.Save(file.Key);
+                if (PlcTaskTimingEditor.Changes(_options.TsprojFilePath, _options.PlcProjectName, desired).Count > 0)
+                    throw new InvalidOperationException("PLC task timing did not persist.");
+                Console.WriteLine("{0}: Repaired saved timing in {1} PLC task reference(s).", Now(), cachedTiming.Count);
+            }
             Console.WriteLine("{0}: Task sync complete ({1} change(s), {2} warning(s)).", Now(), plan.Actions.Count, plan.Warnings.Count);
         }
 
@@ -739,7 +788,7 @@ namespace BeckhoffAutomationInterface
             // bulk COM call — then io-devices.xml's own <Links> apply on top, unchanged.
             // Both coexist rather than one replacing the other (see tasks/plan.md).
             bool varLinksApplied = false;
-            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.ProjectName, _options.VarLinksManifestPath), "applying links.xml");
+            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.PlcProjectName, _options.VarLinksManifestPath), "applying links.xml");
             if (varLinksApplied)
                 Console.WriteLine("{0}: Applied links.xml.", Now());
 
@@ -747,7 +796,7 @@ namespace BeckhoffAutomationInterface
             if (desiredLinks.Count > 0)
             {
                 Console.WriteLine("{0}: Syncing {1} variable link(s) from io-devices.xml...", Now(), desiredLinks.Count);
-                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(_session.SysManager, _options.ProjectName, desiredLinks), "linking variables");
+                RetryOnBusy(() => linkReport = VariableLinkEngine.Sync(_session.SysManager, _options.PlcProjectName, desiredLinks), "linking variables");
 
                 PrintLines("+ linked   ", linkReport.Linked);
                 PrintLines("x unlinked ", linkReport.Failed);
@@ -871,6 +920,16 @@ namespace BeckhoffAutomationInterface
                     Console.WriteLine("    [ERROR] {0} {1}", error.Description, FormatErrorLocation(error, provenance));
                 if (buildReport.OutputTail.Count > 0)
                 {
+                    try
+                    {
+                        string nativeErrors = ((ITcSysManager2)_session.SysManager).GetLastErrorMessages();
+                        if (!string.IsNullOrWhiteSpace(nativeErrors))
+                            Console.WriteLine("    TwinCAT System Manager: {0}", nativeErrors);
+                    }
+                    catch (COMException ex)
+                    {
+                        Console.WriteLine("    TwinCAT diagnostics unavailable: {0}", ex.Message);
+                    }
                     Console.WriteLine("    No PLC error: the cause is outside the PLC code. End of the Build output:");
                     foreach (string line in buildReport.OutputTail)
                         Console.WriteLine("      | {0}", line);

@@ -106,7 +106,7 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (IoDeviceSpec deviceSpec in desiredDevices)
             {
                 ITcSmTreeItem device = GetOrCreateOfKind(sysManager, ioRoot, deviceSpec.Name,
-                    deviceSpec.OnPort ? IoDeviceKind.OnPort : IoDeviceKind.Master, report, confirmDelete);
+                    deviceSpec.SubType == 111 ? IoDeviceKind.OnPort : IoDeviceKind.Master, report, confirmDelete);
                 if (device == null)
                     continue;
 
@@ -217,6 +217,28 @@ namespace BeckhoffAutomationInterface.Sync
             }
         }
 
+        // TwinSAFE creates its connection and standard PDOs when the safety project
+        // is attached. Apply and verify the exported configuration after that stage,
+        // before linking PLC variables. Never accept a partial pre-safety readback.
+        public static void ApplyConfiguration(ITcSysManager sysManager, IReadOnlyList<IoDeviceSpec> devices)
+        {
+            foreach (var device in devices)
+                ApplyChildConfiguration(sysManager, "TIID^" + device.Name, device.Children);
+        }
+
+        static void ApplyChildConfiguration(ITcSysManager sysManager, string parent, IReadOnlyList<IoNodeSpec> children)
+        {
+            foreach (var spec in children)
+            {
+                var node = sysManager.LookupTreeItem(parent + "^" + spec.Name);
+                if (PdoConfiguration.Apply(node, spec.ProcessData))
+                    Console.WriteLine("    ~ PDO configuration applied and verified: " + node.PathName);
+                if (CoeStartup.Apply(node, spec.CoeCommands))
+                    Console.WriteLine("    ~ CoE startup applied and verified: " + node.PathName);
+                ApplyChildConfiguration(sysManager, node.PathName, spec.Children);
+            }
+        }
+
         /// <summary>A Beckhoff box from its Product string (TREEITEMTYPE_TERM); a box with an ESI
         /// identity (a third-party box) with CreateChild(name, 9099, "", int[4]). A new box with an
         /// identity must have the Product as its type name (ItemSubTypeName), if Product is given.</summary>
@@ -239,12 +261,24 @@ namespace BeckhoffAutomationInterface.Sync
             }
 
             bool isNew = report.Created.Count > createdBefore;
+            if (nodeSpec.Identity != null)
+            {
+                var actual = IoDeviceXml.EtherCatIdentityOf(node.ProduceXml());
+                if (!SameIdentity(nodeSpec.Identity, actual))
+                    throw new InvalidOperationException("io-devices.xml: catalog identity differs at '" + node.PathName
+                        + "'. Expected " + nodeSpec.Identity + "; read " + (actual?.ToString() ?? "no identity")
+                        + ". Rebuild in a new project; existing hardware was not replaced.");
+            }
             if (isNew && nodeSpec.Identity != null && !string.IsNullOrEmpty(nodeSpec.Product) && node.ItemSubTypeName != nodeSpec.Product)
                 throw new InvalidOperationException(string.Format(
                     "io-devices.xml: box '{0}': {1} made a \"{2}\", but Product says \"{3}\". Check the three numbers against the ESI file.",
                     nodeSpec.Name, nodeSpec.Identity, node.ItemSubTypeName, nodeSpec.Product));
             return node;
         }
+
+        internal static bool SameIdentity(EtherCatIdentity expected, EtherCatIdentity actual) =>
+            expected != null && actual != null && expected.VendorId == actual.VendorId
+            && expected.ProductCode == actual.ProductCode && expected.RevisionNo == actual.RevisionNo;
 
         /// <summary>The adapter address (Pnp/DeviceData) in a device's XML; null when absent.</summary>
         internal static string AdapterOf(string deviceXml)

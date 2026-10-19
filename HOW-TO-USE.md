@@ -238,6 +238,19 @@ bai export all C:\work\ST\NewMachine --project C:\old\Machine\Machine.tsproj
 
 ## 9. One project for a family of machines (variants)
 
+For an editable rebuild of `export all`, retain the exported PLC instance name.
+Native `links.xml` endpoints include that name; renaming only the PLC does not
+rename the mappings. `sync all` creates the I/O tree, attaches TwinSAFE, then applies
+PDO and CoE configuration before importing links. Each requested connection is
+read back, including bit offsets and size. TwinCAT may save A/B endpoints in the
+opposite order; this is accepted only with the offsets attached to the same endpoints.
+The saved safety files must still match the exported source bytes.
+
+Use `--platform "TwinCAT RT (x64)"` or `--platform "TwinCAT OS (x64)"` to select the
+build platform explicitly. NFPro's retained native project uses OS x64; the NFLite
+projects use RT x64. A successful build does not establish that the selected runtime
+has all licenses needed to activate the native configuration.
+
 1. Write `variants.xml` in the source folder:
 
    ```xml
@@ -352,6 +365,14 @@ vendor from a text. For such a box, give the three numbers from its ESI file:
   stops with "TwinCAT cannot make box".
 - `export io` writes the three numbers for each box that is not a Beckhoff box (vendor id not 2).
 
+### CoE startup lists
+
+`sync io`/`sync all` apply an optional `<CoE><InitCmd>...</InitCmd></CoE>` under a terminal.
+`export io` and `export all` preserve the user commands in order. Import checks TwinCAT's
+read-back and preserves generated fixed commands. Omit the section to leave it unchanged;
+use `<CoE/>` to clear user commands explicitly. These are project settings, not online writes.
+See [CoE startup commands](docs/coe-startup.md) for the format and validation evidence.
+
 ## 10. Run the program and check live values (closed loop)
 
 ### 10.1 Activate
@@ -457,7 +478,7 @@ size of each symbol from the PLC: if `type` does not agree, the step fails and s
 Run all scenarios in a folder:
 
 ```powershell
-bai test --target umrt --scenarios C:\work\BeckhoffLib\Machines\NFLite\tests `
+bai test --target umrt --scenarios C:\work\BeckhoffLib\Tests\Integration\NFLite `
          --variants C:\work\BeckhoffLib\Machines\NFLite\Shark\variants.xml --tags smoke --junit C:\work\results\shark.xml
 ```
 
@@ -476,17 +497,31 @@ What the tool does:
    the problem, and it sends nothing to the PLC (exit code 2).
 2. It skips a scenario when the machine does not have all its `requires` groups. Without
    `--variants` or `--groups`, it skips each scenario that has `requires`.
-3. Before each scenario, it waits until no sequence runs (`eActiveSequence` = 0, or 99 = Error).
-   It sends ErrorAcknowledge (9999). If the program has `GVL_Simulation.bReset`, it sets it to
-   TRUE. Then it waits for `eActiveSequence` = 0.
-4. It runs the steps. The scenario stops at the first step that fails. The next scenario
-   runs.
+3. Before any commands, it requires `GVL_Simulation.bActive = TRUE` and a readable
+   `GVL_Simulation.bReset`. It waits until no sequence runs (`eActiveSequence` = 0 or 99),
+   sends ErrorAcknowledge (9999), requests reset, waits for `bReset` to clear, and then waits
+   for `eActiveSequence` = 0. A missing reset or inactive simulation fails the scenario.
+4. It runs the steps and stops the scenario at its first failure. It saves the original
+   value before each explicit `write` and restores it afterwards, on success or failure.
+   A failed scenario or a sequence still running is stopped with CancelProcess (1).
+   Diagnostics are captured before cleanup. If restoration/cancellation fails, subsequent
+   scenarios fail without sending further commands. The runner cannot recover from a
+   forced process termination or a lost PLC connection; check the runtime before restarting.
+   An optional `cleanup` list uses the same step format as `steps`. It runs after restoration
+   and cancellation, on both success and failure, with its own `--timeout` budget. Use it to
+   undo manual commands (for example, disable heater zones): CancelProcess does not undo
+   every manual command. Cleanup writes set final values; they are not restored afterwards.
+   The runner attempts the remaining cleanup steps after an error until the budget expires;
+   any cleanup failure fails the scenario and blocks later scenarios. Cleanup is validated
+   with the rest of the file before any commands are sent, and is not run for skipped
+   scenarios or when preparation failed before the scenario started.
 5. It shows one line for each scenario (`PASS`, `FAIL` or `SKIP`) and a summary. For a
    failure, it shows the step, the symbol, the expected value and the actual value. It also
    shows `eActiveSequence`, `sStatus` and `stLastError` of `PRG_Sequence.fbOrchestrator`.
 
-Exit code: 0 = all scenarios passed (`TEST PASSED`), 1 = a scenario failed or the PLC is not in
-Run, 2 = the command line or a scenario file is not correct.
+Exit code: 0 = at least one scenario passed and none failed (`TEST PASSED`), 1 = a scenario
+failed, no applicable scenario executed, or the PLC is not in Run; 2 = the command line or
+a scenario file is not correct. A run with only skipped scenarios does not pass.
 
 **CAUTION: A scenario sends real commands to the PLC. Use `test` only on a PLC in simulation.**
 

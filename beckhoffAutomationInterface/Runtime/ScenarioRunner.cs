@@ -32,7 +32,9 @@ namespace BeckhoffAutomationInterface.Runtime
         public const string StatusSymbol = "PRG_Sequence.fbOrchestrator.sStatus";                          // STRING(255)
         public const string LastErrorSourceSymbol = "PRG_Sequence.fbOrchestrator.stLastError.sSource";     // STRING(80)
         public const string LastErrorMessageSymbol = "PRG_Sequence.fbOrchestrator.stLastError.sMessage";   // STRING(255)
-        public const string SimulationResetSymbol = "GVL_Simulation.bReset";                               // BOOL, optional
+        public const string SimulationResetSymbol = "GVL_Simulation.bReset";                               // BOOL, required
+        public const string SimulationActiveSymbol = "GVL_Simulation.bActive";                             // BOOL, required
+        public const int CancelProcessCommand = 1;
 
         public const int ErrorAcknowledgeCommand = 9999;
         const int SequenceNone = 0, SequenceError = 99;   // E_Sequence.None, E_Sequence.Error
@@ -43,6 +45,7 @@ namespace BeckhoffAutomationInterface.Runtime
         readonly Action<int> _sleepMs;
         readonly Func<double> _nowS;
         int _nextIndex;
+        Dictionary<string, byte[]> _originalWrites;
 
         /// <summary>Optional: a note on the PLC type of a symbol, for an ADS size error (for
         /// example " (the PLC symbol is DINT, 4 bytes)").</summary>
@@ -74,6 +77,7 @@ namespace BeckhoffAutomationInterface.Runtime
             double prepareTimeoutS, Action<ScenarioResult> onResult)
         {
             var results = new List<ScenarioResult>();
+            string cleanupFailure = null;
             foreach (Scenario s in scenarios)
             {
                 ScenarioResult r;
@@ -83,13 +87,31 @@ namespace BeckhoffAutomationInterface.Runtime
                 else
                 {
                     double start = _nowS();
-                    string problem = Prepare(prepareTimeoutS);
-                    r = problem == null
-                        ? Run(s)
-                        : new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
-                    r.Seconds = _nowS() - start;
-                    if (r.Status == ScenarioStatus.Failed)
+                    string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
+                    r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
+                    if (problem == null)
+                    {
+                        _originalWrites = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+                        try
+                        {
+                            r = Run(s);
+                            if (r.Status == ScenarioStatus.Failed)
+                                r.Details.AddRange(Diagnostics()); // capture before cleanup changes the state
+                        }
+                        finally
+                        {
+                            cleanupFailure = Cleanup(r.Status == ScenarioStatus.Failed, prepareTimeoutS, s.CleanupSteps);
+                            _originalWrites = null;
+                        }
+                        if (cleanupFailure != null)
+                        {
+                            r.Status = ScenarioStatus.Failed;
+                            r.Message = (r.Message == null ? "" : r.Message + "; ") + cleanupFailure;
+                        }
+                    }
+                    else
                         r.Details.AddRange(Diagnostics());
+                    r.Seconds = _nowS() - start;
                 }
                 results.Add(r);
                 onResult?.Invoke(r);
@@ -98,11 +120,18 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         /// <summary>Puts the machine in its start state: no sequence runs (None, or stopped in Error),
-        /// errors acknowledged (9999), the simulation reset (GVL_Simulation.bReset, when the program
-        /// has it), and then no sequence at all. Returns null, or what went wrong.</summary>
+        /// errors acknowledged (9999), the active simulation reset and its acknowledgement awaited,
+        /// and then no sequence at all. Returns null, or what went wrong.</summary>
         public string Prepare(double timeoutS)
         {
-            string problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
+            string problem = RequireSimulation();
+            if (problem != null)
+                return problem;
+            // Check the reset symbol before sending even ErrorAcknowledge.
+            int resetError = _read(SimulationResetSymbol, 1, out byte[] unused);
+            if (resetError != 0)
+                return "cannot read " + SimulationResetSymbol + ": " + AdsError(resetError, SimulationResetSymbol);
+            problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
             if (problem != null)
                 return problem;
 
@@ -113,10 +142,75 @@ namespace BeckhoffAutomationInterface.Runtime
                 return string.Format("ErrorAcknowledge (9999, index {0}) was rejected", index);
 
             int err = _write(SimulationResetSymbol, new byte[] { 1 });
-            if (err != 0 && err != AdsClient.ErrorSymbolNotFound)
+            if (err != 0)
                 return "cannot write " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
 
+            double deadline = _nowS() + timeoutS;
+            while (true)
+            {
+                err = _read(SimulationResetSymbol, 1, out byte[] reset);
+                if (err != 0)
+                    return "cannot read " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
+                if (reset[0] == 0)
+                    break;
+                if (_nowS() >= deadline)
+                    return SimulationResetSymbol + " did not clear after " + ScenarioNumbers.Seconds(timeoutS);
+                _sleepMs(PollMs);
+            }
             return WaitForSequence(new[] { SequenceNone }, timeoutS);
+        }
+
+        string RequireSimulation()
+        {
+            int err = _read(SimulationActiveSymbol, 1, out byte[] active);
+            if (err != 0)
+                return "cannot read " + SimulationActiveSymbol + ": " + AdsError(err, SimulationActiveSymbol);
+            return active[0] == 1 ? null : "tests require " + SimulationActiveSymbol + " = TRUE; no commands sent";
+        }
+
+        string Cleanup(bool failed, double timeoutS, IReadOnlyList<ScenarioStep> steps)
+        {
+            string guard = RequireSimulation();
+            if (guard != null)
+                return "cleanup stopped: " + guard;
+            var problems = new List<string>();
+            // Restore explicit fault injections even when a later scenario step failed.
+            foreach (var entry in _originalWrites)
+            {
+                int err = _write(entry.Key, entry.Value);
+                if (err != 0)
+                    problems.Add("cannot restore " + entry.Key + ": " + AdsError(err, entry.Key));
+            }
+            int readError = _read(ActiveSequenceSymbol, 2, out byte[] sequence);
+            if (readError != 0)
+                problems.Add("cannot read " + ActiveSequenceSymbol + ": " + AdsError(readError, ActiveSequenceSymbol));
+            else if (failed || (BitConverter.ToInt16(sequence, 0) != SequenceNone && BitConverter.ToInt16(sequence, 0) != SequenceError))
+            {
+                string problem = Send(CancelProcessCommand, null, _nowS() + timeoutS, out bool accepted, out int index);
+                if (problem == null && !accepted)
+                    problem = "CancelProcess was rejected";
+                if (problem == null)
+                    problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
+                if (problem != null)
+                    problems.Add(problem);
+            }
+            // Explicit cleanup owns manual commands that CancelProcess does not undo.
+            // Cleanup writes are intentional final values, not new fault-injection snapshots.
+            _originalWrites = null;
+            double deadline = _nowS() + timeoutS;
+            foreach (ScenarioStep step in steps)
+            {
+                if (_nowS() >= deadline)
+                {
+                    problems.Add("explicit cleanup timeout after " + ScenarioNumbers.Seconds(timeoutS));
+                    break;
+                }
+                string problem = Execute(step, deadline, timeoutS);
+                if (problem != null)
+                    problems.Add("cleanup step " + step.Number + ": " + problem);
+                // Try the remaining cleanup steps even when one fails, within the deadline.
+            }
+            return problems.Count == 0 ? null : "cleanup failed; subsequent scenarios blocked: " + string.Join("; ", problems);
         }
 
         string WaitForSequence(int[] wanted, double timeoutS)
@@ -228,6 +322,15 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 case StepKind.Write:
                 {
+                    if (string.Equals(step.Symbol, SimulationActiveSymbol, StringComparison.OrdinalIgnoreCase))
+                        return "scenario cannot change " + SimulationActiveSymbol;
+                    if (_originalWrites != null && !_originalWrites.ContainsKey(step.Symbol))
+                    {
+                        int readError = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] original);
+                        if (readError != 0)
+                            return "cannot save " + step.Symbol + " before write: " + AdsError(readError, step.Symbol);
+                        _originalWrites.Add(step.Symbol, (byte[])original.Clone());
+                    }
                     int err = _write(step.Symbol, PlcValue.Encode(step.Type, step.Value));
                     return err == 0 ? null
                         : string.Format("{0} := {1}: {2}", step.Symbol, Comparison.Quote(step.Value), AdsError(err, step.Symbol));

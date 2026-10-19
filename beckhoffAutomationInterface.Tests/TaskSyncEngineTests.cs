@@ -84,7 +84,8 @@ namespace BeckhoffAutomationInterface.Tests
                 new[] { TemplateTask, new RtTaskState("SpectrometerTask", 100000, 3) },
                 new[] { TemplateRef, new PlcTaskRefState("SpectrometerTask", "TIRT^SpectrometerTask", new[] { "PRG_Spectrometer" }) });
 
-            TaskAction a = Assert.Single(plan.Actions);
+            Assert.Equal(new[] { TaskActionKind.SetTaskDef, TaskActionKind.SetLinkedTask }, plan.Actions.Select(a => a.Kind));
+            TaskAction a = plan.Actions[0];
             Assert.Equal(TaskActionKind.SetTaskDef, a.Kind);
             Assert.Equal("~ task     TIRT^SpectrometerTask: 10000 µs, priority 3 -> 1000 µs, priority 2", a.Description);
         }

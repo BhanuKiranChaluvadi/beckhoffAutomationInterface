@@ -15,6 +15,14 @@ namespace BeckhoffAutomationInterface.Tests
             "<Value Name=\"AmsNetId\" Type=\"BIN\">C7042AFA0101</Value></Key></Key></Key></Key></Key></TcRegistry>";
 
         [Fact]
+        public void RuntimeStateUsesSystemReconfigCommand()
+        {
+            Assert.Equal(16, RuntimeStateCommand.Command("config"));
+            Assert.Equal(2, RuntimeStateCommand.Command("run"));
+            Assert.Throws<System.ArgumentException>(() => RuntimeStateCommand.Command("stop"));
+        }
+
+        [Fact]
         public void UmRtNetId_IsReadFromTcRegistry()
         {
             Assert.Equal("199.4.42.250.1.1", RuntimeTargets.NetIdFromTcRegistry(TcRegistry));
@@ -31,13 +39,16 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData("umrt", "umrt")]
         [InlineData("UmRT", "umrt")]
         [InlineData(" local ", "local")]
+        [InlineData("199.4.42.250.1.1", "199.4.42.250.1.1")]
         public void Targets_AreUmrtOrLocal(string input, string expected)
         {
             Assert.Equal(expected, RuntimeTargets.Normalize(input));
         }
 
         [Theory]
-        [InlineData("199.4.42.250.1.1")]   // free Net IDs are out of scope (user decision)
+        [InlineData("256.4.42.250.1.1")]
+        [InlineData("1.2.3.4")]
+        [InlineData("1.2.3.4.5.-1")]
         [InlineData("plc42")]
         [InlineData(null)]
         public void OtherTargets_AreRejected(string input)

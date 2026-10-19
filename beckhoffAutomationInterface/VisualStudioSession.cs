@@ -197,7 +197,11 @@ namespace BeckhoffAutomationInterface
 
         public void Dispose()
         {
-            RestoreSilentMode();
+            // A target-fatal-error dialog can block this property setter before
+            // TryQuit's timeout is reached. Bound the restoration too; the watchdog
+            // only closes the shell whose process this session identified.
+            using (Watchdog("restoring TwinCAT silent mode", TimeSpan.FromMilliseconds(VS_QUIT_TIMEOUT_MS)))
+                RestoreSilentMode();
             Console.WriteLine("{0}: Closing Visual Studio...", Now());
             TryQuit(VS_QUIT_TIMEOUT_MS);
             EnsureExited();

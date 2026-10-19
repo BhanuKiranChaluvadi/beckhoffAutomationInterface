@@ -11,6 +11,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     static class TreeItemFactory
     {
+        internal const string CreationContextKey = "TwinCAT.CreateChild";
         public static ITcSmTreeItem GetOrCreate(ITcSysManager sysManager, ITcSmTreeItem parent, string name, int type, object vInfo, out bool isNew)
         {
             string path = parent.PathName + "^" + name;
@@ -23,7 +24,14 @@ namespace BeckhoffAutomationInterface.Sync
             catch (COMException)
             {
                 isNew = true;
-                return parent.CreateChild(name, type, "", vInfo);
+                try { return parent.CreateChild(name, type, "", vInfo); }
+                catch (COMException ex)
+                {
+                    // Preserve COM type/HRESULT: callers recover from expected name collisions.
+                    ex.Data[CreationContextKey] =
+                        $"TwinCAT CreateChild failed for '{path}' (type {type}, HRESULT 0x{ex.HResult:X8}): {ex.Message}";
+                    throw;
+                }
             }
         }
     }

@@ -99,10 +99,13 @@ namespace BeckhoffAutomationInterface.Sync
             }
             catch (Exception ex)
             {
-                Console.WriteLine("    (CompileProject before applying links.xml failed: {0})", ex.Message);
+                throw new InvalidOperationException("PLC compilation failed before applying links.xml; mappings were not changed.", ex);
             }
 
             ((ITcSysManager3)sysManager).ConsumeMappingInfo(xml);
+            var missing = VarLinksFile.MissingMappings(xml, ((ITcSysManager3)sysManager).ProduceMappingInfo());
+            if (missing.Count > 0)
+                throw new InvalidOperationException("links.xml read-back is incomplete: " + string.Join("; ", missing));
             return true;
         }
     }

@@ -441,6 +441,8 @@ never read from `.stconfig`. Reverse export also requires the project to already
 nothing to export from).
 
 **Caveats:**
+- `export io` preserves user CoE startup commands; `sync io` verifies them after import.
+  Fixed commands remain owned by TwinCAT. See [CoE startup commands](docs/coe-startup.md).
 - The non-ASCII round-trip caveat above applies to `export code` too (it reuses
   the same per-object exporter).
 - `export io` recovers each terminal's `Product` primarily from the trailing

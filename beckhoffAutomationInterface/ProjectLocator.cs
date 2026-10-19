@@ -60,6 +60,13 @@ namespace BeckhoffAutomationInterface
         {
             if (!string.IsNullOrEmpty(plcNameOverride))
                 return plcNameOverride;
+            var project = System.Xml.Linq.XDocument.Load(tsprojPath);
+            var names = project.Root?.Element("Project")?.Element("Plc")?.Elements("Project")
+                .Select(p => (string)p.Attribute("Name")).Where(n => !string.IsNullOrWhiteSpace(n)).ToArray();
+            if (names?.Length > 1)
+                throw new InvalidOperationException("Project contains multiple PLCs; select one with --plc.");
+            if (names?.Length == 1)
+                return names[0];
             return Path.GetFileNameWithoutExtension(tsprojPath);
         }
     }

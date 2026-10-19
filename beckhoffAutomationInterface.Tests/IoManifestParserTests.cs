@@ -23,6 +23,20 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void DirectEthercat111RetainsAdapterAndSubtype()
+        {
+            string path = WriteManifest("<IoTree><Device Name='NFPro bus' SubType='111' Adapter='000105a1c1ce'/></IoTree>");
+            var manifest = IoManifestParser.ParseManifest(path);
+            Assert.Equal(111, manifest.Devices[0].SubType);
+            Assert.False(manifest.Devices[0].OnPort);
+            Assert.Equal("000105A1C1CE", manifest.Devices[0].Adapter);
+            IoManifestWriter.ToXml(manifest).Save(path);
+            Assert.Equal(111, IoManifestParser.ParseManifest(path).Devices[0].SubType);
+            Assert.Throws<FormatException>(() => IoManifestParser.ParseManifest(WriteManifest("<IoTree><Device Name='Bus' SubType='111'/></IoTree>")));
+            Assert.Throws<FormatException>(() => IoManifestParser.ParseManifest(WriteManifest("<IoTree><Device Name='Bus' SubType='999'/></IoTree>")));
+        }
+
+        [Fact]
         public void MissingManifest_ReturnsEmptyList()
         {
             var devices = IoManifestParser.Parse(Path.Combine(_dir, "does-not-exist.xml"));

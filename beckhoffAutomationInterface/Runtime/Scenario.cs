@@ -30,6 +30,7 @@ namespace BeckhoffAutomationInterface.Runtime
         public List<string> Requires { get; set; } = new List<string>();
         public double TimeoutS { get; set; } = DefaultTimeoutS;
         public List<ScenarioStep> Steps { get; set; } = new List<ScenarioStep>();
+        public List<ScenarioStep> CleanupSteps { get; set; } = new List<ScenarioStep>();
     }
 
     enum StepKind { Send, WaitUntil, Check, Write, Wait }

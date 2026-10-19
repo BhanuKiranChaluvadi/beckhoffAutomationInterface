@@ -18,7 +18,7 @@ namespace BeckhoffAutomationInterface.Runtime
     /// Every problem gives one clear message with the file name and the step number.</summary>
     static class ScenarioFile
     {
-        static readonly string[] TopKeys = { "name", "tags", "requires", "timeoutS", "steps", "description", "comment" };
+        static readonly string[] TopKeys = { "name", "tags", "requires", "timeoutS", "steps", "cleanup", "description", "comment" };
         static readonly string[] ComparisonKeys = { "equals", "notEquals", "lessThan", "greaterThan", "tolerance" };
 
         static readonly IReadOnlyDictionary<StepKind, string[]> StepKeys = new Dictionary<StepKind, string[]>
@@ -93,6 +93,14 @@ namespace BeckhoffAutomationInterface.Runtime
                 scenario.Steps.Add(ParseStep(item, new Where(file, ++n)));
             if (n == 0)
                 throw at.Error("\"steps\" is empty");
+            if (root.TryGetValue("cleanup", out object cleanup))
+            {
+                if (!(cleanup is IEnumerable cleanupList) || cleanup is string || cleanup is IDictionary)
+                    throw at.Error("\"cleanup\" must be a list");
+                int cleanupNumber = 0;
+                foreach (object item in cleanupList)
+                    scenario.CleanupSteps.Add(ParseStep(item, new Where(file + " (cleanup)", ++cleanupNumber)));
+            }
             return scenario;
         }
 

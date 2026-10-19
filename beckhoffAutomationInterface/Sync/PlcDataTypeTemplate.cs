@@ -19,6 +19,19 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     class PlcDataTypeTemplate
     {
+        // Catalog descriptions can contain '/', ':' and other filename characters.
+        // Keep simple existing template names compatible, and encode other names without
+        // truncation or collisions. Never interpret a catalog name as a filesystem path.
+        internal static string FileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) throw new System.ArgumentException("A template name is required.", nameof(name));
+            if (name.Length <= 120 && System.Text.RegularExpressions.Regex.IsMatch(name, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*\z")
+                && !System.Text.RegularExpressions.Regex.IsMatch(name, @"\A(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                return name + ".xml";
+            using (var hash = System.Security.Cryptography.SHA256.Create())
+                return "product-" + System.BitConverter.ToString(hash.ComputeHash(System.Text.Encoding.UTF8.GetBytes(name))).Replace("-", "").ToLowerInvariant() + ".xml";
+        }
+
         public IReadOnlyList<XElement> DataTypes { get; }
         public IReadOnlyList<XElement> PlcDataTypes { get; }
 
@@ -38,9 +51,9 @@ namespace BeckhoffAutomationInterface.Sync
         /// ("EL3214.xml").</summary>
         public static PlcDataTypeTemplate Load(string templatesFolder, string name)
         {
-            string path = Path.Combine(templatesFolder, name + ".xml");
+            string path = Path.Combine(templatesFolder, FileName(name));
             if (!File.Exists(path))
-                path = Path.Combine(templatesFolder, WithoutRevision(name) + ".xml");
+                path = Path.Combine(templatesFolder, FileName(WithoutRevision(name)));
             if (!File.Exists(path))
                 return null;
 

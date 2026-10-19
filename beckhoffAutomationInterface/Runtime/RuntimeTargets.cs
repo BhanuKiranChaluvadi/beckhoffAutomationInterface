@@ -11,7 +11,8 @@ namespace BeckhoffAutomationInterface.Runtime
     /// The runtimes this tool may activate and verify on. User decision (2026-10-14): only two —
     ///   umrt  = the User Mode Runtime "UmRT_Default" on this PC,
     ///   local = this PC's own TwinCAT runtime.
-    /// Real machines are out of scope for now, so there is no free AMS Net ID option.
+    /// An explicit AMS Net ID uses an existing ADS route. It never creates a route
+    /// or changes credentials. Physical acceptance is separate from local simulation.
     /// </summary>
     static class RuntimeTargets
     {
@@ -27,14 +28,21 @@ namespace BeckhoffAutomationInterface.Runtime
         public static string Normalize(string name)
         {
             string n = (name ?? "").Trim().ToLowerInvariant();
-            if (!Names.Contains(n))
-                throw new ArgumentException(string.Format("unknown target '{0}'. Use one of: {1}.", name, string.Join(", ", Names)));
-            return n;
+            if (!Names.Contains(n) && !IsNetId(n))
+                throw new ArgumentException(string.Format("unknown target '{0}'. Use {1}, or a six-byte AMS Net ID.", name, string.Join(", ", Names)));
+            return IsNetId(n) ? string.Join(".", n.Split('.').Select(byte.Parse)) : n;
         }
+
+        internal static bool IsNetId(string name) => name != null && name.Split('.').Length == 6 &&
+            name.Split('.').All(s => s.Length > 0 && s.All(c => c >= '0' && c <= '9') && byte.TryParse(s, out _));
+
+        internal static bool IsUmRt(string target) => Normalize(target) == UmRt ||
+            (IsNetId(Normalize(target)) && File.Exists(Path.Combine(UmRtFolder, "TcRegistry.xml")) && Normalize(target) == NetId(UmRt));
 
         /// <summary>AMS Net ID of the target: UmRT from its own TcRegistry.xml, local from the ADS router.</summary>
         public static string NetId(string target)
         {
+            if (IsNetId(Normalize(target))) return Normalize(target);
             switch (Normalize(target))
             {
                 case UmRt:
@@ -48,12 +56,14 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         /// <summary>Folder whose CurrentProjectInfo.json describes the boot project on the target.</summary>
-        public static string BootFolder(string target) =>
-            Normalize(target) == UmRt ? Path.Combine(UmRtFolder, "Boot") : Path.Combine(TwinCatData, "Boot");
+        public static string BootFolder(string target) => IsNetId(Normalize(target))
+            ? throw new InvalidOperationException("Remote boot files must be accessed on the target IPC.")
+            : target == UmRt ? Path.Combine(UmRtFolder, "Boot") : Path.Combine(TwinCatData, "Boot");
 
         /// <summary>Folders that hold the target's license files (*.tclrs).</summary>
         public static IReadOnlyList<string> LicenseFolders(string target)
         {
+            if (IsNetId(Normalize(target))) return new string[0];
             if (Normalize(target) == UmRt)
                 return new[] { Path.Combine(UmRtFolder, "Target", "License") };
             return new[]
@@ -79,7 +89,16 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         /// <summary>"name (created …)" of the boot project on the target, or null when there is none.</summary>
-        public static string CurrentBootProject(string target) => DescribeBootFolder(BootFolder(target));
+        public static string CurrentBootProject(string target)
+        {
+            if (!IsNetId(Normalize(target))) return DescribeBootFolder(BootFolder(target));
+            using (var plc = new AdsClient(NetId(target), AdsClient.PortPlc1))
+            {
+                int error = plc.TryRead("GVL_BuildInfo.sGitCommit", 41, out byte[] commit);
+                if (error != 0) return "remote identity unavailable (ADS error " + error + "); preserve the target backup before activation";
+                return "remote PLC commit " + System.Text.Encoding.ASCII.GetString(commit).TrimEnd('\0');
+            }
+        }
 
         /// <summary>CurrentProjectInfo.json describes the last SYSTEM activation. When only the PLC
         /// changed (same system configuration, for example two machines of one family with the

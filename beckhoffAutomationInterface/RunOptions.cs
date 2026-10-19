@@ -44,7 +44,11 @@ namespace BeckhoffAutomationInterface
         Libraries = 2,
         Io = 4,
         Events = 8,
-        All = Code | Libraries | Io | Events,
+        Tasks = 16,
+        Safety = 32,
+        Native = 64,
+        Variants = 128,
+        All = Code | Libraries | Io | Events | Tasks | Safety | Native | Variants,
     }
 
     /// <summary>
@@ -245,6 +249,7 @@ namespace BeckhoffAutomationInterface
         /// <summary>DTE shell to automate: "xae", "vs2022", or null = first usable one
         /// (XAE preferred). See DteShellResolver.</summary>
         public string Shell { get; }
+        public string TargetPlatform { get; }
 
         /// <summary>Clean the solution before the build stage (--clean / .stconfig "clean").</summary>
         public bool Clean { get; }
@@ -265,7 +270,7 @@ namespace BeckhoffAutomationInterface
         public IReadOnlyList<string> Defines { get; }
 
         internal RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null)
+            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null, string targetPlatform = null)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -288,6 +293,7 @@ namespace BeckhoffAutomationInterface
             ExistingTsprojPath = existingTsprojPath;
             ConfigFileLoaded = configFileLoaded;
             Shell = shell;
+            TargetPlatform = targetPlatform;
             Clean = clean;
             SourceFolderExplicit = sourceFolderExplicit;
             Variant = variant;

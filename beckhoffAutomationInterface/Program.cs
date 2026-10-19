@@ -117,7 +117,7 @@ namespace BeckhoffAutomationInterface
             foreach (string st in Directory.EnumerateFiles(options.SourceFolder, "*.st", SearchOption.AllDirectories))
                 found.Add(st.Substring(options.SourceFolder.Length).TrimStart('\\', '/'));
 
-            foreach (string manifest in new[] { options.LibraryManifestPath, options.IoManifestPath, options.EventManifestPath, options.VarLinksManifestPath })
+            foreach (string manifest in new[] { options.LibraryManifestPath, options.IoManifestPath, options.EventManifestPath, options.VarLinksManifestPath, options.TaskManifestPath, options.SafetyManifestPath, options.VariantManifestPath, Path.Combine(options.SourceFolder, "native-project.zip") })
                 if (File.Exists(manifest))
                     found.Add(Path.GetFileName(manifest));
 
@@ -230,6 +230,7 @@ namespace BeckhoffAutomationInterface
                 string usage = args[0] == "verify" ? Runtime.RuntimeCommands.VerifyUsage
                              : args[0] == "activate" ? Runtime.RuntimeCommands.ActivateUsage
                              : args[0] == "test" ? Runtime.RuntimeCommands.TestUsage
+                             : args[0] == "runtime-state" ? Runtime.RuntimeStateCommand.Usage
                              : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
                              : null;
                 if (usage != null)
@@ -254,6 +255,9 @@ namespace BeckhoffAutomationInterface
                     break;
                 case "doctor":
                     Environment.Exit(Runtime.Doctor.Run());
+                    break;
+                case "runtime-state":
+                    Environment.Exit(Runtime.RuntimeStateCommand.Run(args));
                     break;
                 case "build":
                 case "check":
@@ -427,9 +431,10 @@ namespace BeckhoffAutomationInterface
                 }
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
-                                       || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException)
+                                       || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException
+                                       || ex is System.Runtime.InteropServices.COMException)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
+                Console.Error.WriteLine("ERROR: " + (ex.Data[TreeItemFactory.CreationContextKey] ?? ex.Message));
                 Environment.Exit(1);
             }
         }

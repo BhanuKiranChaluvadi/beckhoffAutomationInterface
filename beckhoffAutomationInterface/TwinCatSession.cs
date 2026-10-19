@@ -65,6 +65,7 @@ namespace BeckhoffAutomationInterface
                 ProjectShadowCopy shadow;
                 (Project, SysManager, shadow) = TwinCatProjectOpener.OpenExistingReadOnly(Vs.Dte, _options.TsprojFilePath);
                 Shadow = shadow;
+                SelectTargetPlatform();
                 _solutionSavedAs = true; // never save — this project is read-only, adopted as-is
                 return;
             }
@@ -72,6 +73,7 @@ namespace BeckhoffAutomationInterface
             (EnvDTE.Project project, ITcSysManager sysManager) = TwinCatProjectOpener.Open(Vs.Dte, _options);
             Project = project;
             SysManager = sysManager;
+            SelectTargetPlatform();
 
             if (!_solutionSavedAs)
             {
@@ -80,6 +82,17 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: Solution saved.", Now());
                 _solutionSavedAs = true;
             }
+        }
+
+        void SelectTargetPlatform()
+        {
+            if (_options.TargetPlatform == null) return;
+            // Beckhoff's documented platform selector; ADS target selection is separate.
+            var config = (ITcConfigManager)((ITcSysManager7)SysManager).ConfigurationManager;
+            config.ActiveTargetPlatform = _options.TargetPlatform;
+            if (config.ActiveTargetPlatform != _options.TargetPlatform)
+                throw new InvalidOperationException("TwinCAT did not select target platform " + _options.TargetPlatform);
+            Console.WriteLine("{0}: Target platform: {1}", Now(), config.ActiveTargetPlatform);
         }
 
         /// <summary>Closes Visual Studio (releasing the .tsproj for direct file edits).

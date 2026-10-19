@@ -21,6 +21,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\beckhoffAutomationInterface\beckhoffAutomationInterface.csproj" />
+    <Reference Include="Interop.TCatSysManager">
+      <HintPath>..\beckhoffAutomationInterface\Interop.TCatSysManager.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

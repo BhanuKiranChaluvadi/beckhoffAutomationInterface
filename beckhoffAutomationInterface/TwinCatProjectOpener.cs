@@ -44,9 +44,9 @@ namespace BeckhoffAutomationInterface
             }
             catch (COMException)
             {
-                Console.WriteLine("{0}: PLC project '{1}' missing from existing solution, creating it...", Now(), options.ProjectName);
+                Console.WriteLine("{0}: PLC project '{1}' missing from existing solution, creating it...", Now(), options.PlcProjectName);
                 ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
-                plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
+                plcConfig.CreateChild(options.PlcProjectName, 0, "", options.StandardPlcProjectTemplate);
             }
 
             return (project, sysManager);
@@ -122,16 +122,16 @@ namespace BeckhoffAutomationInterface
 
             // Add PLC project — fixes "PLC subsystem initialization failed" caused by the
             // empty <Project/> template which has no PLC configuration node.
-            Console.WriteLine("{0}: Adding PLC project '{1}'...", Now(), options.ProjectName);
+            Console.WriteLine("{0}: Adding PLC project '{1}'...", Now(), options.PlcProjectName);
             ITcSmTreeItem plcConfig = sysManager.LookupTreeItem("TIPC");
             if (plcConfig == null)
                 throw new InvalidOperationException("TIPC tree item not found. TwinCAT PLC node is missing from the project.");
 
-            ITcSmTreeItem plcProject = plcConfig.CreateChild(options.ProjectName, 0, "", options.StandardPlcProjectTemplate);
+            ITcSmTreeItem plcProject = plcConfig.CreateChild(options.PlcProjectName, 0, "", options.StandardPlcProjectTemplate);
             if (plcProject == null)
                 throw new InvalidOperationException("CreateChild returned null. PLC project could not be created from template: " + options.StandardPlcProjectTemplate);
 
-            Console.WriteLine("{0}: PLC project '{1}' added.", Now(), options.ProjectName);
+            Console.WriteLine("{0}: PLC project '{1}' added.", Now(), options.PlcProjectName);
             return (project, sysManager);
         }
     }

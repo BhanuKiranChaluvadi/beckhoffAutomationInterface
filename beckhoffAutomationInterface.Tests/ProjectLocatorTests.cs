@@ -100,7 +100,17 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void ResolvePlcName_DefaultsToTsprojBaseName_WhenNoOverrideGiven()
         {
-            Assert.Equal("PLC_NFL_SHARK", ProjectLocator.ResolvePlcName(@"C:\x\PLC_NFL_SHARK.tsproj", null));
+            string path = WriteTsproj("Empty", "PLC_NFL_SHARK.tsproj");
+            Assert.Equal("PLC_NFL_SHARK", ProjectLocator.ResolvePlcName(path, null));
+        }
+
+        [Fact]
+        public void ResolvePlcName_RejectsAmbiguousProject()
+        {
+            string path = WriteTsproj("Multiple", "Machine.tsproj");
+            File.WriteAllText(path, "<TcSmProject><Project><Plc><Project Name='A'/><Project Name='B'/></Plc></Project></TcSmProject>");
+            Assert.Throws<InvalidOperationException>(() => ProjectLocator.ResolvePlcName(path, null));
+            Assert.Equal("B", ProjectLocator.ResolvePlcName(path, "B"));
         }
     }
 }

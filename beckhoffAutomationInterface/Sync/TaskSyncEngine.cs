@@ -133,7 +133,11 @@ namespace BeckhoffAutomationInterface.Sync
                     continue;
                 }
 
-                if (!string.Equals(taskRef.LinkedTask, RtTaskPath(task.Name), StringComparison.OrdinalIgnoreCase))
+                // Changing TaskDef does not update the PLC's cached .TcTTO timing.
+                // Reassign even the same LinkedTask after a timing/priority change;
+                // otherwise a saved project fails when reopened for activation.
+                bool timingChanged = rt != null && (rt.CycleTime100ns != task.CycleTime100ns || rt.Priority != task.Priority);
+                if (timingChanged || !string.Equals(taskRef.LinkedTask, RtTaskPath(task.Name), StringComparison.OrdinalIgnoreCase))
                     plan.Actions.Add(new TaskAction(TaskActionKind.SetLinkedTask, task, null,
                         string.Format("~ plc task {0}: linked to '{1}' -> {2}", task.Name, taskRef.LinkedTask, RtTaskPath(task.Name))));
                 var calls = new HashSet<string>(taskRef.Calls, StringComparer.OrdinalIgnoreCase);

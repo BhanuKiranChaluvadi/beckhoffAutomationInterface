@@ -79,7 +79,8 @@ namespace BeckhoffAutomationInterface.Sync
                     ParseVariants(deviceEl),
                     ParseMac(deviceEl, "Adapter", "Device"),
                     (string)deviceEl.Attribute("Via"),
-                    ParseInt(deviceEl, "Port", "Device")))
+                    ParseInt(deviceEl, "Port", "Device"),
+                    ParseInt(deviceEl, "SubType", "Device")))
                 .ToList();
             CheckLayout(adapters, devices);
             return new IoManifest(adapters, devices);
@@ -113,6 +114,8 @@ namespace BeckhoffAutomationInterface.Sync
             var used = new Dictionary<string, string>();
             foreach (IoDeviceSpec device in devices)
             {
+                if (device.SubType == 111 && !device.OnPort && device.Adapter == null)
+                    throw new System.FormatException("Direct EtherCAT SubType 111 requires Adapter MAC: " + device.Name);
                 if (device.Via != null && device.Adapter != null)
                     throw new System.FormatException(string.Format(
                         "io-devices.xml: Device '{0}' has Via and Adapter. Use Via + Port for a device on a port of an <Adapter>, " +
@@ -184,7 +187,8 @@ namespace BeckhoffAutomationInterface.Sync
             ParseChildNodes(nodeEl),
             (string)nodeEl.Attribute("CreatePlcType"),
             ParseVariants(nodeEl),
-            ParseIdentity(nodeEl));
+            ParseIdentity(nodeEl),
+            CoeStartup.Parse(nodeEl), PdoConfiguration.Parse(nodeEl));
 
         static readonly string[] IdentityAttributes = { "VendorId", "ProductCode", "RevisionNo" };
 

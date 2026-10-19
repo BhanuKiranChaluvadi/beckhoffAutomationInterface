@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using System.Xml.Linq;
+
 namespace BeckhoffAutomationInterface.Sync
 {
     /// <summary>
@@ -34,9 +36,10 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>True for a SubType 111 device on a port of an &lt;Adapter&gt; (Via + Port).</summary>
         public bool OnPort => Via != null;
+        public int SubType { get; }
 
         public IoDeviceSpec(string name, bool disabled, List<IoNodeSpec> children, IReadOnlyList<string> variants = null, string adapter = null,
-                            string via = null, int? port = null)
+                            string via = null, int? port = null, int? subType = null)
         {
             Name = name;
             Disabled = disabled;
@@ -45,6 +48,9 @@ namespace BeckhoffAutomationInterface.Sync
             Adapter = adapter;
             Via = via;
             Port = port;
+            SubType = subType ?? (via != null ? 111 : 94);
+            if (SubType != 94 && SubType != 111) throw new System.FormatException("EtherCAT Device SubType must be 94 or 111.");
+            if (via != null && SubType != 111) throw new System.FormatException("Via requires EtherCAT SubType 111.");
         }
     }
 
@@ -126,8 +132,11 @@ namespace BeckhoffAutomationInterface.Sync
         /// Null = make the box from Product (all Beckhoff boxes).</summary>
         public EtherCatIdentity Identity { get; }
 
+        public IReadOnlyList<XElement> CoeCommands { get; }
+        public XElement ProcessData { get; }
+
         public IoNodeSpec(string name, string product, List<IoNodeSpec> children, string createPlcType = null, IReadOnlyList<string> variants = null,
-                          EtherCatIdentity identity = null)
+                          EtherCatIdentity identity = null, IReadOnlyList<XElement> coeCommands = null, XElement processData = null)
         {
             Name = name;
             Product = product;
@@ -135,6 +144,8 @@ namespace BeckhoffAutomationInterface.Sync
             CreatePlcType = createPlcType;
             Variants = variants;
             Identity = identity;
+            CoeCommands = coeCommands;
+            ProcessData = processData;
         }
     }
 

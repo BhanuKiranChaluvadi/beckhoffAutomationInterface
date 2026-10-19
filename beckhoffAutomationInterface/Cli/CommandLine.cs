@@ -22,17 +22,17 @@ namespace BeckhoffAutomationInterface.Cli
     static class CommandLine
     {
         public const string BuildUsage =
-            "build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants] [--define <NAME>]...";
+            "build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants] [--platform <name>] [--define <NAME>]...";
         public const string CheckUsage =
             "check parse|format|links <source> [--ignore <glob>]...\n  check events <source> --project <project>";
         public const string SyncUsage =
             "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--incremental] [--clean]\n" +
-            "       [--confirm-delete] [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants]";
+            "       [--confirm-delete] [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]";
         public const string ExportUsage =
-            "export code|libs|io|events|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
+            "export code|libs|io|events|tasks|safety|variants|native|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
             "  export object <ObjectName> <source> --project <project> [--plc <name>]";
         public const string InitUsage =
-            "init <source> --into <folder> [--name <name>] [--ignore <glob>]...";
+            "init <source> --into <folder> [--name <name>] [--plc <name>] [--platform <name>] [--ignore <glob>]...";
         // Parsed in Runtime/RuntimeCommands.Test (runtime command style); the text is here with the others.
         public const string TestUsage =
             "test --target umrt|local --scenarios <file-or-folder> [--variant <name>] [--variants <variants.xml> | --groups <G1,G2>]\n" +
@@ -104,6 +104,10 @@ namespace BeckhoffAutomationInterface.Cli
             ["libs"] = ReverseExports.Libraries,
             ["io"] = ReverseExports.Io,
             ["events"] = ReverseExports.Events,
+            ["tasks"] = ReverseExports.Tasks,
+            ["safety"] = ReverseExports.Safety,
+            ["native"] = ReverseExports.Native,
+            ["variants"] = ReverseExports.Variants,
             ["all"] = ReverseExports.All,
             ["links"] = ReverseExports.None, // links.xml only (ExportLinks)
         };
@@ -141,7 +145,7 @@ namespace BeckhoffAutomationInterface.Cli
 
         static RunOptions ParseBuild(string[] args, string shell, string cwd)
         {
-            Args a = Args.Read(args, 1, BuildUsage, new[] { "--plc", "--variant", "--define" }, new[] { "--clean", "--all-variants" });
+            Args a = Args.Read(args, 1, BuildUsage, new[] { "--plc", "--variant", "--define", "--platform" }, new[] { "--clean", "--all-variants" });
             string project = a.Positionals.Count == 1 ? a.Positionals[0] : throw new UsageException("'build' needs exactly one <project>.", BuildUsage);
             string defineProblem = Sync.CompilerDefines.Problem(a.GetAll("--define"));
             if (defineProblem != null)
@@ -222,7 +226,7 @@ namespace BeckhoffAutomationInterface.Cli
             if (!SyncModes.ContainsKey(mode))
                 throw new UsageException("unknown 'sync' mode '" + mode + "'.", SyncUsage);
 
-            Args a = Args.Read(args, 2, SyncUsage, new[] { "--project", "--ignore", "--variant" },
+            Args a = Args.Read(args, 2, SyncUsage, new[] { "--project", "--plc", "--ignore", "--variant", "--platform" },
                 new[] { "--incremental", "--clean", "--confirm-delete", "--confirm-delete-io", "--all-variants" });
             string source = SingleSource(a, "sync " + mode, SyncUsage);
             Config config = Config.Load(a, source, cwd);
@@ -234,6 +238,7 @@ namespace BeckhoffAutomationInterface.Cli
                 sourceFolder: source,
                 destinationFolder: dest,
                 projectName: name,
+                plcProjectName: ProjectLocator.ResolvePlcName(ResolveTsproj(project, SyncUsage), a.Get("--plc")),
                 incremental: a.Has("--incremental") || config.Incremental,
                 confirmDelete: a.Has("--confirm-delete"),
                 confirmDeleteIo: a.Has("--confirm-delete-io"));
@@ -241,7 +246,7 @@ namespace BeckhoffAutomationInterface.Cli
 
         static RunOptions ParseInit(string[] args, string shell, string cwd)
         {
-            Args a = Args.Read(args, 1, InitUsage, new[] { "--into", "--name", "--ignore" }, new string[0]);
+            Args a = Args.Read(args, 1, InitUsage, new[] { "--into", "--name", "--plc", "--ignore", "--platform" }, new string[0]);
             string source = SingleSource(a, "init", InitUsage);
             Config config = Config.Load(a, source, cwd);
             string into = a.Get("--into") ?? throw new UsageException("'init' needs --into <folder> (where the new solution is created).", InitUsage);
@@ -250,6 +255,7 @@ namespace BeckhoffAutomationInterface.Cli
                 sourceFolder: source,
                 destinationFolder: Path.GetFullPath(into),
                 projectName: a.Get("--name") ?? new DirectoryInfo(source).Name,
+                plcProjectName: a.Get("--plc"),
                 init: true);
         }
 
@@ -263,6 +269,9 @@ namespace BeckhoffAutomationInterface.Cli
             bool overwrite = false, string plcProjectName = null, string existingTsprojPath = null)
         {
             string source = Path.GetFullPath(sourceFolder ?? config.Source ?? ".");
+            string platform = a.Get("--platform");
+            if (platform != null && !new[] { "TwinCAT RT (x86)", "TwinCAT RT (x64)", "TwinCAT OS (x64)" }.Contains(platform))
+                throw new UsageException("Unsupported --platform. Use TwinCAT RT (x86), TwinCAT RT (x64), or TwinCAT OS (x64).", BuildUsage);
             return new RunOptions(
                 sourceFolder: source,
                 destinationFolder: destinationFolder ?? Path.GetFullPath("."),
@@ -289,7 +298,7 @@ namespace BeckhoffAutomationInterface.Cli
                 sourceFolderExplicit: sourceFolder != null || config.Source != null,
                 variant: a.Get("--variant"),
                 allVariants: a.Has("--all-variants"),
-                defines: a.GetAll("--define"));
+                defines: a.GetAll("--define"), targetPlatform: platform);
         }
 
         static string SingleSource(Args a, string command, string usage)

@@ -45,6 +45,24 @@ namespace BeckhoffAutomationInterface.Tests
 
         // ---------------------------------------------------------------- build
 
+        [Theory]
+        [InlineData("TwinCAT RT (x86)")]
+        [InlineData("TwinCAT RT (x64)")]
+        [InlineData("TwinCAT OS (x64)")]
+        public void TargetPlatformIsExplicitForBuildSyncAndInit(string platform)
+        {
+            Assert.Equal(platform, Parse("build", _tsproj, "--platform", platform).TargetPlatform);
+            Assert.Equal(platform, Parse("sync", "all", _source, "--project", _ownedSln, "--platform", platform).TargetPlatform);
+            Assert.Equal(platform, Parse("init", _source, "--into", _dir, "--platform", platform).TargetPlatform);
+            Assert.Null(Parse("build", _tsproj).TargetPlatform);
+        }
+
+        [Fact]
+        public void InvalidTargetPlatformIsRejectedBeforeXae()
+        {
+            Rejected("Unsupported --platform", () => Parse("build", _tsproj, "--platform", "wrong"));
+        }
+
         [Fact]
         public void Build_AdoptsTheProject()
         {
@@ -73,6 +91,18 @@ namespace BeckhoffAutomationInterface.Tests
             Rejected("exactly one <project>", () => Parse("build"));
             Rejected("unknown option --plc-name", () => Parse("build", _tsproj, "--plc-name", "X"));      // renamed to --plc
             Rejected("either --variant or --all-variants", () => Parse("build", _tsproj, "--variant", "A", "--all-variants"));
+        }
+
+        [Fact]
+        public void Init_IndependentPlcName_PersistsThroughSyncResolution()
+        {
+            RunOptions initial = Parse("init", _source, "--into", Path.Combine(_dir, "New"), "--name", "SAS", "--plc", "NFLite");
+            Assert.Equal("SAS", initial.ProjectName);
+            Assert.Equal("NFLite", initial.PlcProjectName);
+            Assert.Equal("TIPC^NFLite", initial.PlcItemPath);
+            File.WriteAllText(_ownedTsproj, "<TcSmProject><Project><Plc><Project Name='NFLite' PrjFilePath='NFLite/NFLite.plcproj'/></Plc></Project></TcSmProject>");
+            RunOptions synced = Parse("sync", "all", _source, "--project", _ownedSln);
+            Assert.Equal("NFLite", synced.PlcProjectName);
         }
 
         // ---------------------------------------------------------------- check

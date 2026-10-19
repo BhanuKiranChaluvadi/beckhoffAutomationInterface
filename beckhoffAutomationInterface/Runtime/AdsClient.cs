@@ -39,6 +39,8 @@ namespace BeckhoffAutomationInterface.Runtime
             uint length, byte[] data, out uint bytesRead);
         [DllImport(Dll)] static extern int AdsSyncWriteReqEx(int port, ref AmsAddr addr, uint indexGroup, uint indexOffset,
             uint length, byte[] data);
+        [DllImport(Dll)] static extern int AdsSyncWriteControlReqEx(int port, ref AmsAddr addr, ushort adsState,
+            ushort deviceState, uint length, byte[] data);
 
         readonly int _port;
         AmsAddr _addr;
@@ -56,6 +58,8 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         public void Dispose() => AdsPortCloseEx(_port);
+
+        public int TryWriteControl(ushort state) => AdsSyncWriteControlReqEx(_port, ref _addr, state, 0, 0, null);
 
         /// <summary>This PC's own AMS Net ID, as the local ADS router reports it.</summary>
         public static string LocalNetId()

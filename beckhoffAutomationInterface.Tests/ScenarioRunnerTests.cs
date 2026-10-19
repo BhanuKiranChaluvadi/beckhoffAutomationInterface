@@ -17,6 +17,8 @@ namespace BeckhoffAutomationInterface.Tests
         sealed class FakePlc
         {
             public double Time;
+            public bool CompleteReset = true;
+            public Func<string, int> WriteError = symbol => 0;
             public readonly Dictionary<string, byte[]> Values = new Dictionary<string, byte[]>();
             public readonly Dictionary<string, Func<double, byte[]>> ByTime = new Dictionary<string, Func<double, byte[]>>();
             public readonly List<string> Commands = new List<string>();
@@ -28,6 +30,8 @@ namespace BeckhoffAutomationInterface.Tests
             public FakePlc()
             {
                 Values[ScenarioRunner.StreamSymbol] = new byte[4096];
+                Values[ScenarioRunner.SimulationActiveSymbol] = new byte[] { 1 };
+                Values[ScenarioRunner.SimulationResetSymbol] = new byte[] { 0 };
                 SetDint(ScenarioRunner.AcceptedSymbol, 0);
                 SetDint(ScenarioRunner.RejectedSymbol, 0);
                 SetInt(ScenarioRunner.ActiveSequenceSymbol, 0);
@@ -58,6 +62,8 @@ namespace BeckhoffAutomationInterface.Tests
             {
                 if (!Values.ContainsKey(symbol))
                     return AdsClient.ErrorSymbolNotFound;
+                int error = WriteError(symbol);
+                if (error != 0) return error;
                 Writes.Add(symbol);
                 if (symbol != ScenarioRunner.StreamSymbol)
                 {
@@ -76,7 +82,12 @@ namespace BeckhoffAutomationInterface.Tests
                 return 0;
             }
 
-            public void Sleep(int ms) => Time += ms / 1000.0;
+            public void Sleep(int ms)
+            {
+                Time += ms / 1000.0;
+                if (CompleteReset && Values.ContainsKey(ScenarioRunner.SimulationResetSymbol))
+                    Values[ScenarioRunner.SimulationResetSymbol] = new byte[] { 0 };
+            }
 
             public ScenarioRunner Runner(int firstIndex = 100) => new ScenarioRunner(Read, Write, Sleep, () => Time, firstIndex);
         }
@@ -344,16 +355,18 @@ namespace BeckhoffAutomationInterface.Tests
 
             Assert.Null(plc.Runner().Prepare(5));
             Assert.Equal(new[] { "{\"command\":9999,\"index\":100,\"parameters\":{}}" }, plc.Commands);
-            Assert.Equal(new byte[] { 1 }, plc.Values[ScenarioRunner.SimulationResetSymbol]);
+            Assert.Equal(new byte[] { 0 }, plc.Values[ScenarioRunner.SimulationResetSymbol]);
+            Assert.True(plc.Time > 0);
         }
 
         [Fact]
-        public void Prepare_WithoutResetInput_SkipsIt()
+        public void Prepare_WithoutResetInput_RefusesBeforeWriting()
         {
             var plc = new FakePlc();
 
-            Assert.Null(plc.Runner().Prepare(5));
-            Assert.DoesNotContain(ScenarioRunner.SimulationResetSymbol, plc.Writes);
+            plc.Values.Remove(ScenarioRunner.SimulationResetSymbol);
+            Assert.Contains("cannot read " + ScenarioRunner.SimulationResetSymbol, plc.Runner().Prepare(5));
+            Assert.Empty(plc.Writes);
         }
 
         [Fact]
@@ -393,11 +406,12 @@ namespace BeckhoffAutomationInterface.Tests
             }, results[0].Details);
             Assert.Empty(results[1].Details);
             Assert.Equal("requires PCV_ETHERCAT (not a feature group of this machine)", results[2].Message);
-            // ErrorAcknowledge before each scenario that runs (2), plus the command of the first one
-            Assert.Equal(3, plc.Commands.Count);
+            // Acknowledge twice, failing command, and cleanup CancelProcess.
+            Assert.Equal(4, plc.Commands.Count);
             Assert.Contains("\"command\":9999", plc.Commands[0]);
             Assert.Contains("\"command\":200", plc.Commands[1]);
-            Assert.Contains("\"command\":9999", plc.Commands[2]);
+            Assert.Contains("\"command\":1,", plc.Commands[2]);
+            Assert.Contains("\"command\":9999", plc.Commands[3]);
         }
 
         [Fact]
@@ -411,6 +425,157 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(ScenarioStatus.Failed, results[0].Status);
             Assert.StartsWith("before the scenario: PRG_Sequence.fbOrchestrator.eActiveSequence = 5", results[0].Message);
             Assert.Equal("PRG_Sequence.fbOrchestrator.stLastError = (none)", results[0].Details[2]);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Prepare_RequiresActiveSimulationBeforeWriting(bool missing)
+        {
+            var plc = new FakePlc();
+            if (missing) plc.Values.Remove(ScenarioRunner.SimulationActiveSymbol);
+            else plc.Values[ScenarioRunner.SimulationActiveSymbol] = new byte[] { 0 };
+            Assert.Contains(ScenarioRunner.SimulationActiveSymbol, plc.Runner().Prepare(2));
+            Assert.Empty(plc.Writes);
+        }
+
+        [Fact]
+        public void Prepare_IdleSequenceDoesNotHideMissingResetAcknowledgement()
+        {
+            var plc = new FakePlc { CompleteReset = false };
+            Assert.Contains("did not clear", plc.Runner().Prepare(2));
+            Assert.InRange(plc.Time, 2, 2.2);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void RunAll_RestoresOriginalFaultInjectionAfterSuccessOrFailure(bool fail)
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.override", 7);
+            Scenario first = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 99 },
+                { ""do"": ""check"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""equals"": " + (fail ? "8" : "99") + " }");
+            Scenario second = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""equals"": 7 }");
+            var results = plc.Runner().RunAll(new[] { first, second }, null, 2, null);
+            Assert.Equal(fail ? ScenarioStatus.Failed : ScenarioStatus.Passed, results[0].Status);
+            Assert.Equal(ScenarioStatus.Passed, results[1].Status);
+            Assert.Equal(7, plc.Dint("MAIN.override"));
+        }
+
+        [Fact]
+        public void RunAll_FailedActiveSequenceIsCancelledBeforeNextScenario()
+        {
+            var plc = new FakePlc();
+            plc.Receiver = command => { if (command == 200) plc.SetInt(Seq, 3); if (command == 1) plc.SetInt(Seq, 0); return true; };
+            var results = plc.Runner().RunAll(new[] {
+                Load(@"{ ""do"": ""send"", ""command"": 200, ""expect"": ""rejected"" }"),
+                Load(@"{ ""do"": ""check"", ""symbol"": """ + Seq + @""", ""type"": ""INT"", ""equals"": 0 }")
+            }, null, 2, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal(ScenarioStatus.Passed, results[1].Status);
+            Assert.Contains(plc.Commands, command => command.Contains("\"command\":1,"));
+        }
+
+        [Fact]
+        public void RunAll_CleanupFailureBlocksFurtherCommands()
+        {
+            var plc = new FakePlc { Receiver = command => command != 1 };
+            var results = plc.Runner().RunAll(new[] {
+                Load(@"{ ""do"": ""send"", ""command"": 200, ""expect"": ""rejected"" }"),
+                Load(@"{ ""do"": ""send"", ""command"": 300 }")
+            }, null, 2, null);
+            Assert.All(results, r => Assert.Equal(ScenarioStatus.Failed, r.Status));
+            Assert.Contains("cleanup failed", results[1].Message);
+            Assert.DoesNotContain(plc.Commands, command => command.Contains("\"command\":300,"));
+        }
+
+        [Fact]
+        public void RunAll_RestoreFailureFailsAnOtherwisePassingScenarioAndBlocksTheNext()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.override", 7);
+            int writes = 0;
+            plc.WriteError = symbol => symbol == "MAIN.override" && ++writes > 1 ? 1793 : 0;
+            var results = plc.Runner().RunAll(new[] {
+                Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 99 }"),
+                Load(@"{ ""do"": ""send"", ""command"": 300 }")
+            }, null, 2, null);
+            Assert.All(results, r => Assert.Equal(ScenarioStatus.Failed, r.Status));
+            Assert.Contains("cannot restore MAIN.override", results[0].Message);
+            Assert.DoesNotContain(plc.Commands, command => command.Contains("\"command\":300,"));
+        }
+
+        [Fact]
+        public void RunAll_RepeatedWriteRestoresTheOriginalValueNotAnIntermediateValue()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.override", 7);
+            var scenario = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 8 },
+                { ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 9 }");
+            var runner = plc.Runner();
+            for (int i = 0; i < 2; i++)
+            {
+                Assert.Equal(ScenarioStatus.Passed, runner.RunAll(new[] { scenario }, null, 2, null)[0].Status);
+                Assert.Equal(7, plc.Dint("MAIN.override"));
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void RunAll_ExplicitCleanupRunsAfterSuccessOrFailure(bool fail)
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.manual", 0);
+            var scenario = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.manual"", ""type"": ""DINT"", ""equals"": " + (fail ? "1" : "0") + " }",
+                @"""cleanup"": [{ ""do"": ""write"", ""symbol"": ""MAIN.manual"", ""type"": ""DINT"", ""value"": 7 }],");
+            Assert.Equal(fail ? ScenarioStatus.Failed : ScenarioStatus.Passed, plc.Runner().RunAll(new[] { scenario }, null, 2, null)[0].Status);
+            Assert.Equal(7, plc.Dint("MAIN.manual"));
+        }
+
+        [Fact]
+        public void RunAll_ExplicitCleanupFailureStillAttemptsRemainingStepsAndFailsScenario()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.manual", 1);
+            var scenario = Load(@"{ ""do"": ""wait"", ""seconds"": 0 }", @"""cleanup"": [
+                { ""do"": ""check"", ""symbol"": ""MAIN.manual"", ""type"": ""DINT"", ""equals"": 0 },
+                { ""do"": ""write"", ""symbol"": ""MAIN.manual"", ""type"": ""DINT"", ""value"": 0 }],");
+            var result = plc.Runner().RunAll(new[] { scenario }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Contains("cleanup step 1", result.Message);
+            Assert.Equal(0, plc.Dint("MAIN.manual"));
+        }
+
+        [Fact]
+        public void RunAll_ExplicitCleanupHasABoundedTimeout()
+        {
+            var plc = new FakePlc();
+            var scenario = Load(@"{ ""do"": ""wait"", ""seconds"": 0 }", @"""cleanup"": [
+                { ""do"": ""wait"", ""seconds"": 100 }, { ""do"": ""send"", ""command"": 300 }],");
+            Assert.Equal(ScenarioStatus.Failed, plc.Runner().RunAll(new[] { scenario }, null, 2, null)[0].Status);
+            Assert.InRange(plc.Time, 2, 2.3);
+            Assert.DoesNotContain(plc.Commands, command => command.Contains("\"command\":300,"));
+        }
+
+        [Fact]
+        public void CleanupSchemaIsValidatedBeforeExecution()
+        {
+            Assert.Throws<ScenarioFormatException>(() => Load(@"{ ""do"": ""wait"", ""seconds"": 0 }", @"""cleanup"": {},"));
+            Assert.Throws<ScenarioFormatException>(() => Load(@"{ ""do"": ""wait"", ""seconds"": 0 }", @"""cleanup"": [{ ""do"": ""send"" }],"));
+        }
+
+        [Fact]
+        public void ScenarioExitCode_RequiresAtLeastOnePassAndNoFailure()
+        {
+            var pass = new ScenarioResult { Status = ScenarioStatus.Passed };
+            var skip = new ScenarioResult { Status = ScenarioStatus.Skipped };
+            var fail = new ScenarioResult { Status = ScenarioStatus.Failed };
+            Assert.Equal(1, RuntimeCommands.ScenarioExitCode(new ScenarioResult[0]));
+            Assert.Equal(1, RuntimeCommands.ScenarioExitCode(new[] { skip }));
+            Assert.Equal(1, RuntimeCommands.ScenarioExitCode(new[] { pass, fail }));
+            Assert.Equal(0, RuntimeCommands.ScenarioExitCode(new[] { pass, skip }));
         }
 
         // ------------------------------------------------------------------ size guard

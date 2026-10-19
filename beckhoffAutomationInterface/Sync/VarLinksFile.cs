@@ -91,6 +91,45 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     static class VarLinksFile
     {
+        // Native mapping import can silently discard unresolved variables. Read every
+        // requested connection back, including offsets for packed digital outputs.
+        internal static List<string> MissingMappings(string expected, string actual)
+        {
+            var have = MappingRows(XDocument.Parse(actual)).ToArray();
+            var missing = new List<string>();
+            foreach (var want in MappingRows(XDocument.Parse(expected)))
+            {
+                // TwinCAT can serialize a connection in either direction. Offsets
+                // belong to endpoints and must move with them when A/B are exchanged.
+                bool found = have.Any(row => (want.Size == null || row.Size == want.Size)
+                    && ((row.A == want.A && row.B == want.B
+                         && row.OffsetA == want.OffsetA && row.OffsetB == want.OffsetB)
+                        || (row.A == want.B && row.B == want.A
+                            && row.OffsetA == want.OffsetB && row.OffsetB == want.OffsetA)));
+                if (!found) missing.Add(want.A + " <-> " + want.B);
+            }
+            return missing;
+        }
+
+        static IEnumerable<(string A, string B, int OffsetA, int OffsetB, int? Size)> MappingRows(XDocument doc)
+        {
+            if (doc.Root == null || doc.Root.Name != "VarLinks")
+                throw new InvalidDataException("Expected a VarLinks mapping document.");
+            foreach (var ownerA in doc.Root.Elements("OwnerA"))
+                foreach (var ownerB in ownerA.Elements("OwnerB"))
+                    foreach (var link in ownerB.Elements("Link"))
+                    {
+                        string prefix = (string)ownerA.Attribute("Prefix") ?? (string)ownerA.Attribute("Name");
+                        string group = (string)link.Attribute("GrpA");
+                        string a = (string)link.Attribute("VarA"), b = (string)link.Attribute("VarB");
+                        string io = (string)ownerB.Attribute("Name");
+                        if (new[] { prefix, io, a, b }.Any(string.IsNullOrWhiteSpace))
+                            throw new System.IO.InvalidDataException("Mapping has an empty endpoint.");
+                        yield return (prefix + "^" + (group == null ? "" : group + "^") + a, io + "^" + b,
+                            (int?)link.Attribute("OffsA") ?? 0, (int?)link.Attribute("OffsB") ?? 0, (int?)link.Attribute("Size"));
+                    }
+        }
+
         /// <summary>Raw file content, unparsed — exactly what ConsumeMappingInfo expects. Null if
         /// "links.xml" doesn't exist (no-op for callers, same as an empty &lt;Links&gt; section).</summary>
         public static string LoadRawXml(string path) =>

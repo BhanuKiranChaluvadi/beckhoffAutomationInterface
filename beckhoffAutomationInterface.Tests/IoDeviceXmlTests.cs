@@ -1,4 +1,4 @@
-﻿using BeckhoffAutomationInterface.Sync;
+using BeckhoffAutomationInterface.Sync;
 using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
@@ -10,6 +10,16 @@ namespace BeckhoffAutomationInterface.Tests
     /// </summary>
     public class IoDeviceXmlTests
     {
+        [Fact]
+        public void ExistingDeviceMustMatchThePinnedCatalogRevision()
+        {
+            var expected = new EtherCatIdentity(2, 123, 22);
+            Assert.True(IoSyncEngine.SameIdentity(expected, new EtherCatIdentity(2, 123, 22)));
+            Assert.False(IoSyncEngine.SameIdentity(expected, new EtherCatIdentity(2, 123, 24)));
+            Assert.False(IoSyncEngine.SameIdentity(expected, new EtherCatIdentity(2, 124, 22)));
+            Assert.False(IoSyncEngine.SameIdentity(expected, new EtherCatIdentity(3, 123, 22)));
+            Assert.False(IoSyncEngine.SameIdentity(expected, null));
+        }
         // Adapter after CreateChild(name, 109) + the ConsumeXml of IoDeviceXml.AdapterConsumeXml.
         const string AdapterXml =
             "<?xml version=\"1.0\"?><TreeItem><ItemName>Device 1 (RT-Ethernet Adapter)</ItemName><PathName>TIID^Device 1 (RT-Ethernet Adapter)</PathName>" +
@@ -132,11 +142,11 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(0x916u, marposs.VendorId);
             Assert.Equal(0x4000u, marposs.ProductCode);
             Assert.Equal(0x10002u, marposs.RevisionNo);
-            Assert.Same(marposs, IoManifestWriter.ThirdPartyIdentity(marposs));
+            Assert.Same(marposs, IoManifestWriter.ExportIdentity(marposs));
 
             EtherCatIdentity cu2508 = IoDeviceXml.EtherCatIdentityOf(Cu2508BoxXml);
             Assert.Equal(EtherCatIdentity.BeckhoffVendorId, cu2508.VendorId);
-            Assert.Null(IoManifestWriter.ThirdPartyIdentity(cu2508));   // Beckhoff boxes keep Product only
+            Assert.Same(cu2508, IoManifestWriter.ExportIdentity(cu2508)); // Beckhoff revision is pinned too
 
             Assert.Null(IoDeviceXml.EtherCatIdentityOf(OnPortXml));      // a device, not an EtherCAT slave
             Assert.Null(IoDeviceXml.EtherCatIdentityOf("not xml"));

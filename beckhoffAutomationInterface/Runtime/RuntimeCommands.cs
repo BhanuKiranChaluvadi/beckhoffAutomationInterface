@@ -55,7 +55,7 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ verify
 
         internal const string VerifyUsage =
-            "Usage: beckhoffAutomationInterface verify --target umrt|local --expect <expect.json> [--variant <name>] [--timeout <s>]";
+            "Usage: beckhoffAutomationInterface verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout <s>]";
 
         public static int Verify(string[] args)
         {
@@ -64,7 +64,7 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 a = CommandArgs.Parse(args, new[] { "--target", "--expect", "--variant", "--timeout" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--expect") == null)
-                    throw new ArgumentException("'verify' needs --target umrt|local and --expect <expect.json>.");
+                    throw new ArgumentException("'verify' needs --target umrt|local|<AMS-Net-ID> and --expect <expect.json>.");
             }
             catch (ArgumentException ex)
             {
@@ -160,7 +160,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 a = CommandArgs.Parse(args,
                     new[] { "--target", "--scenarios", "--variant", "--variants", "--groups", "--tags", "--junit", "--timeout" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--scenarios") == null)
-                    throw new ArgumentException("'test' needs --target umrt|local and --scenarios <file or folder>.");
+                    throw new ArgumentException("'test' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
                 if (a.Get("--groups") != null && a.Get("--variants") != null)
                     throw new ArgumentException("use --groups or --variants, not both.");
                 timeoutS = 60;
@@ -240,9 +240,12 @@ namespace BeckhoffAutomationInterface.Runtime
             int skipped = results.Count(r => r.Status == ScenarioStatus.Skipped);
             int passed = results.Count - failed - skipped;
             string label = variant ?? target;
-            Console.WriteLine(failed == 0
+            Console.WriteLine(ScenarioExitCode(results) == 0
                 ? string.Format("{0}: TEST PASSED — {1}: {2} passed, {3} skipped, in {4}.", Now(), label, passed, skipped, ScenarioNumbers.Seconds(results.Sum(r => r.Seconds)))
                 : string.Format("{0}: TEST FAILED — {1}: {2} of {3} failed ({4} passed, {5} skipped).", Now(), label, failed, results.Count, passed, skipped));
+
+            if (passed == 0 && failed == 0)
+                Console.Error.WriteLine("TEST FAILED: no applicable scenario executed (all skipped).");
 
             string junit = a.Get("--junit");
             if (junit != null)
@@ -258,8 +261,12 @@ namespace BeckhoffAutomationInterface.Runtime
                     return 1;
                 }
             }
-            return failed == 0 ? 0 : 1;
+            return ScenarioExitCode(results);
         }
+
+        internal static int ScenarioExitCode(IReadOnlyCollection<ScenarioResult> results) =>
+            results.Any(r => r.Status == ScenarioStatus.Passed) &&
+            results.All(r => r.Status != ScenarioStatus.Failed) ? 0 : 1;
 
         static void PrintResult(ScenarioResult r, string root)
         {
@@ -302,7 +309,7 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ activate
 
         internal const string ActivateUsage =
-            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
+            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
 
         /// <summary>
         /// Builds one variant and activates it on the target, then waits for the PLC to run.
@@ -318,13 +325,15 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout", "--define" }, new[] { "--yes" });
                 if (a.Positional == null || a.Get("--target") == null)
-                    throw new ArgumentException("'activate' needs a project path and --target umrt|local.");
+                    throw new ArgumentException("'activate' needs a project path and --target umrt|local|<AMS-Net-ID>.");
                 string defineProblem = Sync.CompilerDefines.Problem(a.GetAll("--define"));
                 if (defineProblem != null)
                     throw new ArgumentException(defineProblem);
                 target = RuntimeTargets.Normalize(a.Get("--target"));
                 netId = RuntimeTargets.NetId(target);
                 tsprojPath = ProjectLocator.ResolveTsprojPath(a.Positional);
+                if (a.GetAll("--define").Contains("SIMULATION", StringComparer.OrdinalIgnoreCase) && !RuntimeTargets.IsUmRt(target))
+                    throw new ArgumentException("SIMULATION activation is restricted to the known local UmRT instance.");
             }
             catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is FormatException
                                        || ex is System.IO.IOException)
@@ -387,7 +396,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     sys14.SetTargetNetId(netId);
                     Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
 
-                    if (target == RuntimeTargets.UmRt)
+                    if (RuntimeTargets.IsUmRt(target))
                     {
                         // UmRT has no EtherCAT adapter: an enabled master keeps TwinCAT in Config.
                         // Disable the I/O devices for this activation only — the project is attached
@@ -437,6 +446,11 @@ namespace BeckhoffAutomationInterface.Runtime
                     using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
                         running = WaitForPlcRun(target, netId, plc, timeoutS);
                 }
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException || ex is UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("ACTIVATE FAILED: TwinCAT rejected the request: " + ex.Message);
+                return 1;
             }
             finally
             {
