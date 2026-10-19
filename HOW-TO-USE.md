@@ -668,3 +668,7 @@ Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 For each command that opens TwinCAT: `--shell xae|vs2022`.
 For `init`, `sync`, `build`, `check`, `export`: `--config <folder>`, `--no-config`.
 Add `--help` after a command to see its usage.
+# Release artifacts
+
+Use `bai package`, `bai libraries`, `bai toolchain` and `bai esi` for reusable offline
+release operations. See [commands and examples](docs/release-artifacts.md).

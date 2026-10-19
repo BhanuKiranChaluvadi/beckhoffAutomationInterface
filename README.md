@@ -1,5 +1,9 @@
 # Beckhoff Automation Interface — ST → TwinCAT Sync Engine
 
+Offline release commands: `package create|verify`, `libraries lock|verify`,
+`toolchain capture|verify`, and `esi install|verify`.
+See [release artifacts](docs/release-artifacts.md) for arguments and evidence limits.
+
 Syncs a folder of IEC 61131-3 Structured Text (`.st`) source files into a
 persistent TwinCAT 3 PLC project via the Beckhoff Automation Interface (COM),
 then builds the project and reports pass/fail — a closed-loop

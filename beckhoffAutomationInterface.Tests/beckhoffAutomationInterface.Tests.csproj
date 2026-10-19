@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\beckhoffAutomationInterface\beckhoffAutomationInterface.csproj" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="Interop.TCatSysManager">
       <HintPath>..\beckhoffAutomationInterface\Interop.TCatSysManager.dll</HintPath>
     </Reference>

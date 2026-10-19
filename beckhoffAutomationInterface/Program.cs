@@ -131,6 +131,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("Usage: beckhoffAutomationInterface <command> [args]");
             Console.WriteLine();
             Console.WriteLine("Commands:");
+            Console.WriteLine("  package create|verify / libraries lock|verify / toolchain capture|verify");
+            Console.WriteLine("      Offline release artifacts; no XAE or runtime access. Use '<command> --help'.");
+            Console.WriteLine("  esi install|verify   Prepare or verify an EtherCAT catalog; existing files are never replaced.");
             Console.WriteLine("  build  <path> [--plc X] [--clean] [--variant V | --all-variants]");
             Console.WriteLine("      Compile an existing PLC project and report pass/fail.");
             Console.WriteLine("      <path> may be a .tsproj file, or a folder containing exactly one.");
@@ -243,6 +246,12 @@ namespace BeckhoffAutomationInterface
             RunOptions options = null;
             switch (args[0])
             {
+                case "package":
+                case "libraries":
+                case "toolchain":
+                case "esi":
+                    Environment.Exit(Release.ArtifactCommands.Run(args));
+                    break;
                 // Runtime commands: new CLI style, no legacy-flag translation (see Runtime/).
                 case "verify":
                     Environment.Exit(Runtime.RuntimeCommands.Verify(args));
@@ -268,7 +277,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, doctor.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, package, libraries, toolchain, esi.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;
