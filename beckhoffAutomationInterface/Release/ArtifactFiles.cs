@@ -98,7 +98,8 @@ namespace BeckhoffAutomationInterface.Release
         }
         internal static Dictionary<string, Dictionary<string, object>> Inventory(string root)
         {
-            root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+            root = Path.GetFullPath(root);
+            string prefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             NoLinks(root);
             if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
             var result = new Dictionary<string, Dictionary<string, object>>(Names);
@@ -110,7 +111,7 @@ namespace BeckhoffAutomationInterface.Release
                     if (Directory.Exists(path)) pending.Push(path);
                     else
                     {
-                        var name = Relative(path.Substring(root.Length + 1).Replace('\\', '/'));
+                        var name = Relative(path.Substring(prefix.Length).Replace('\\', '/'));
                         if (result.ContainsKey(name)) throw new InvalidDataException("Duplicate path: " + name);
                         result.Add(name, FileRecord(name, path));
                     }

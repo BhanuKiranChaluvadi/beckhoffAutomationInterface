@@ -88,6 +88,25 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<InvalidDataException>(() => LibraryBaseline.Verify(baseline, Capture(p)));
         }
         [Theory]
+        [InlineData("*")] [InlineData("1.2.3.4")]
+        public void LibraryManifestRejectsAmbiguousCachedVersions(string version)
+        {
+            string p = Project();
+            string manifest = Write("libraries.xml", "<Libraries><Library Company='Vendor' Name='Library' Version='" + version + "'/></Libraries>");
+            LibraryBaseline.Capture(p, "Machine", "TwinCAT RT (x64)", "Variant", manifest);
+            Write("project/Plc/_Libraries/Vendor/Library/2.0.0.0/Library.compiled-library", "other version");
+            Assert.Throws<InvalidDataException>(() => LibraryBaseline.Capture(p, "Machine", "TwinCAT RT (x64)", "Variant", manifest));
+        }
+        [Fact]
+        public void InventoryHandlesTrailingDirectorySeparators()
+        {
+            Write("inventory/file", "bytes");
+            var normal = Inventory(Path.Combine(root, "inventory"));
+            var trailing = Inventory(Path.Combine(root, "inventory") + Path.DirectorySeparatorChar);
+            Same(normal, trailing);
+            Assert.Single(trailing); Assert.True(trailing.ContainsKey("file"));
+        }
+        [Theory]
         [InlineData("duplicate-machine")] [InlineData("duplicate-library")] [InlineData("hash")] [InlineData("size")]
         [InlineData("path")] [InlineData("schema")] [InlineData("empty")]
         public void LibraryBaselineRejectsInvalidRecords(string fault)
@@ -175,6 +194,17 @@ namespace BeckhoffAutomationInterface.Tests
             EsiCatalog.Execute(system, devices, user, false);
             Assert.Equal("vendor", File.ReadAllText(Path.Combine(user, "vendor.xml")));
             Assert.Throws<InvalidDataException>(() => EsiCatalog.Execute(system, devices, system, true));
+        }
+        [Theory]
+        [InlineData(false)] [InlineData(true)]
+        public void EsiRejectsParentFileConflictsBeforeAnyCopy(bool plannedConflict)
+        {
+            string system = Path.Combine(root, "system"), devices = Path.Combine(root, "devices"), user = Path.Combine(root, "user");
+            Write("system/first.xml", "first"); Write("devices/parent.xml/child.xml", "child");
+            if (plannedConflict) Write("system/parent.xml", "conflicting planned file");
+            else Write("user/parent.xml", "conflicting installed file");
+            Assert.Throws<IOException>(() => EsiCatalog.Execute(system, devices, user, true));
+            Assert.False(File.Exists(Path.Combine(user, "first.xml")));
         }
         [Fact]
         public void CliRejectsUnknownDuplicateAndMissingOptions()

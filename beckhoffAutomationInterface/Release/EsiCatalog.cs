@@ -32,6 +32,15 @@ namespace BeckhoffAutomationInterface.Release
             foreach (var file in planned)
             {
                 string target = Path.Combine(destination, file.Key); NoLinks(target);
+                string relativeParent = file.Key;
+                int slash;
+                while ((slash = relativeParent.LastIndexOf('/')) >= 0)
+                {
+                    relativeParent = relativeParent.Substring(0, slash);
+                    if (planned.ContainsKey(relativeParent)) throw new IOException("ESI path is both a file and directory: " + relativeParent);
+                }
+                for (var parent = Path.GetDirectoryName(target); parent != null; parent = Path.GetDirectoryName(parent))
+                    if (File.Exists(parent)) throw new IOException("ESI parent path is a file: " + parent);
                 if (Directory.Exists(target)) throw new IOException("ESI file path is a directory: " + target);
                 if (File.Exists(target)) CheckHash(Hash(target), Text(file.Value, "sha256"));
                 else if (!install) throw new FileNotFoundException("ESI file is not installed: " + target);

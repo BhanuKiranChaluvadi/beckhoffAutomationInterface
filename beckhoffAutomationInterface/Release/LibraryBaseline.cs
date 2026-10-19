@@ -66,7 +66,8 @@ namespace BeckhoffAutomationInterface.Release
                     string prefix = (string)required.Attribute("Company") + "/" + (string)required.Attribute("Name") + "/";
                     string requested = (string)required.Attribute("Version");
                     var matches = files.Keys.Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToArray();
-                    if (matches.Length == 0 || (!string.IsNullOrEmpty(requested) && requested != "*" && matches.Any(n => n.Split('/')[2] != requested)))
+                    if (matches.Length == 0 || matches.Select(n => n.Split('/')[2]).Distinct(StringComparer.Ordinal).Count() != 1 ||
+                        (!string.IsNullOrEmpty(requested) && requested != "*" && matches.Any(n => n.Split('/')[2] != requested)))
                         throw new InvalidDataException("Resolved library does not satisfy manifest: " + prefix);
                 }
             return new Dictionary<string, object> { ["machine"] = machine, ["twinCatVersion"] = version, ["targetPlatform"] = platform,
