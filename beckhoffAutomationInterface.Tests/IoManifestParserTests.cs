@@ -100,6 +100,18 @@ namespace BeckhoffAutomationInterface.Tests
             IoAdapterSpec adapter = Assert.Single(IoManifestParser.ParseManifest(path).Adapters);
             Assert.Equal("Ethernet 5", adapter.DeviceDesc);
             Assert.True(adapter.Disabled);
+            Assert.Null(adapter.DeviceName);
+        }
+
+        [Fact]
+        public void Adapter_DeviceName_IsReadAndChecked()
+        {
+            string path = WriteManifest(@"<IoTree><Adapter Name=""A"" Mac=""000105B0417E"" Ports=""8"" DeviceName=""\DEVICE\{AB446E9A-DA48-4A47-9290-BFF2E4154EB4}"" /></IoTree>");
+            Assert.Equal(@"\DEVICE\{AB446E9A-DA48-4A47-9290-BFF2E4154EB4}", Assert.Single(IoManifestParser.ParseManifest(path).Adapters).DeviceName);
+
+            string bad = WriteManifest(@"<IoTree><Adapter Name=""A"" Mac=""000105B0417E"" Ports=""8"" DeviceName=""{AB446E9A-DA48-4A47-9290-BFF2E4154EB4}"" /></IoTree>");
+            var ex = Assert.Throws<System.FormatException>(() => IoManifestParser.ParseManifest(bad));
+            Assert.Contains("DeviceName", ex.Message);
         }
 
         [Theory]

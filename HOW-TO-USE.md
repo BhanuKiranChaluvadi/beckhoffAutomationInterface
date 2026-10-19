@@ -318,6 +318,7 @@ with a CU2508 port multiplier. Each EtherCAT device is on one port of the adapte
 | `Mac` | `<Adapter>` | The MAC address of the network card, 12 hex digits (`-` and `:` are allowed). |
 | `Ports` | `<Adapter>` | The number of ports. A CU2508 has 8. |
 | `DeviceDesc` | `<Adapter>` | Optional. The description of the network card in XAE. |
+| `DeviceName` | `<Adapter>` | Optional, but necessary for a real machine. The Windows name of the network card, `\DEVICE\{GUID}` (XAE: Adapter tab, Device Name). TwinCAT connects to the card by this name, not by the MAC. Without it, activation fails with "Failed to connect to network adapter". The GUID belongs to the Windows installation of that PC. |
 | `Disabled` | `<Adapter>` | Optional. `true` = the adapter is disabled. |
 | `Via` | `<Device>` | The `Name` of the `<Adapter>` that the device is on. |
 | `Port` | `<Device>` | The port of that adapter, from 1 to `Ports`. |

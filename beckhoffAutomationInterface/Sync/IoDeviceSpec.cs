@@ -73,19 +73,25 @@ namespace BeckhoffAutomationInterface.Sync
         /// <summary>Number of ports (8 for a CU2508). The ports exist in ESL mode only.</summary>
         public int Ports { get; }
 
-        /// <summary>Pnp/DeviceDesc, the adapter's description in XAE; null = leave it as it is.
-        /// Optional: TwinCAT finds the adapter by its MAC.</summary>
+        /// <summary>Pnp/DeviceDesc, the adapter's description in XAE; null = leave it as it is.</summary>
         public string DeviceDesc { get; }
+
+        /// <summary>Pnp/DeviceName, the Windows name of the network card ("\DEVICE\{GUID}");
+        /// null = leave it as it is. TwinCAT connects to the card by this name, not by the MAC:
+        /// with an empty name, activation fails with "Failed to connect to network adapter"
+        /// (Google, 2026-10-19). The GUID belongs to the Windows installation of that PC.</summary>
+        public string DeviceName { get; }
 
         public bool Disabled { get; }
 
-        public IoAdapterSpec(string name, string mac, int ports, string deviceDesc = null, bool disabled = false)
+        public IoAdapterSpec(string name, string mac, int ports, string deviceDesc = null, bool disabled = false, string deviceName = null)
         {
             Name = name;
             Mac = mac;
             Ports = ports;
             DeviceDesc = deviceDesc;
             Disabled = disabled;
+            DeviceName = deviceName;
         }
     }
 

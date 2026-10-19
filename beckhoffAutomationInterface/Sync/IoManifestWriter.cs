@@ -112,7 +112,8 @@ namespace BeckhoffAutomationInterface.Sync
                 if (IoDeviceXml.KindOf(xml) == IoDeviceKind.Adapter)
                 {
                     adapters.Add(new IoAdapterSpec(device.Name, IoSyncEngine.AdapterOf(xml) ?? "000000000000",
-                        IoDeviceXml.PortCountOf(xml), IoDeviceXml.DeviceDescOf(xml), device.Disabled == DISABLED_STATE.SMDS_DISABLED));
+                        IoDeviceXml.PortCountOf(xml), IoDeviceXml.DeviceDescOf(xml), device.Disabled == DISABLED_STATE.SMDS_DISABLED,
+                        IoDeviceXml.DeviceNameOf(xml)));
                     portOids[device.Name] = IoDeviceXml.PortOidsOf(xml);
                     continue;
                 }
@@ -206,6 +207,8 @@ namespace BeckhoffAutomationInterface.Sync
                     new XAttribute("Ports", adapter.Ports));
                 if (adapter.DeviceDesc != null)
                     el.Add(new XAttribute("DeviceDesc", adapter.DeviceDesc));
+                if (adapter.DeviceName != null)
+                    el.Add(new XAttribute("DeviceName", adapter.DeviceName));
                 if (adapter.Disabled)
                     el.Add(new XAttribute("Disabled", "true"));
                 root.Add(el);

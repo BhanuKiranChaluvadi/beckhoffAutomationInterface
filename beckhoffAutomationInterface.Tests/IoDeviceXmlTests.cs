@@ -107,6 +107,11 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.False(IoDeviceXml.AdapterMatches(new IoAdapterSpec("A", "000105992C32", 8, "Ethernet 6"), AdapterXml));
             Assert.Equal("Ethernet 5 (TwinCAT-Intel PCI Ethernet Adapter (Gig", IoDeviceXml.DeviceDescOf(AdapterXml));
             Assert.Null(IoDeviceXml.DeviceDescOf(NewAdapterXml));
+            Assert.Equal(@"\DEVICE\{B031B203-E423-45B3-89B7-350F7AB392F9}", IoDeviceXml.DeviceNameOf(AdapterXml));
+            Assert.Null(IoDeviceXml.DeviceNameOf(NewAdapterXml));
+            Assert.True(IoDeviceXml.AdapterMatches(new IoAdapterSpec("A", "000105992C32", 8, deviceName: @"\DEVICE\{B031B203-E423-45B3-89B7-350F7AB392F9}"), AdapterXml));
+            Assert.True(IoDeviceXml.AdapterMatches(new IoAdapterSpec("A", "000105992C32", 8, deviceName: @"\DEVICE\{b031b203-e423-45b3-89b7-350f7ab392f9}"), AdapterXml)); // GUID case
+            Assert.False(IoDeviceXml.AdapterMatches(new IoAdapterSpec("A", "000105992C32", 8, deviceName: @"\DEVICE\{AB446E9A-DA48-4A47-9290-BFF2E4154EB4}"), AdapterXml));
         }
 
         [Fact]
@@ -118,6 +123,9 @@ namespace BeckhoffAutomationInterface.Tests
                 IoDeviceXml.AdapterConsumeXml(new IoAdapterSpec("A", "000105992C32", 8)));
             Assert.Contains("<Pnp><DeviceDesc>Ethernet &amp; 5</DeviceDesc><DeviceData>",
                 IoDeviceXml.AdapterConsumeXml(new IoAdapterSpec("A", "000105992C32", 8, "Ethernet & 5")));
+            // Google, 2026-10-19: without the DeviceName, XAE cannot connect to the card.
+            Assert.Contains(@"<Pnp><DeviceDesc>EtherCAT</DeviceDesc><DeviceName>\DEVICE\{B031B203-E423-45B3-89B7-350F7AB392F9}</DeviceName><DeviceData>000105992c32</DeviceData></Pnp>",
+                IoDeviceXml.AdapterConsumeXml(new IoAdapterSpec("A", "000105992C32", 8, "EtherCAT", deviceName: @"\DEVICE\{B031B203-E423-45B3-89B7-350F7AB392F9}")));
             Assert.Equal("<TreeItem><DeviceDef><AddressInfo><TcCom><ObjectId>#x03010011</ObjectId></TcCom></AddressInfo></DeviceDef></TreeItem>",
                 IoDeviceXml.PortConsumeXml(50397201));
         }

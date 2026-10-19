@@ -66,7 +66,7 @@ namespace BeckhoffAutomationInterface.Tests
                 string source = Path.Combine(dir, "source.xml");
                 File.WriteAllText(source, @"
 <IoTree>
-  <Adapter Name=""Device 1 (RT-Ethernet Adapter)"" Mac=""000105992C32"" Ports=""8"" DeviceDesc=""Ethernet 5"" />
+  <Adapter Name=""Device 1 (RT-Ethernet Adapter)"" Mac=""000105992C32"" Ports=""8"" DeviceDesc=""Ethernet 5"" DeviceName=""\DEVICE\{B031B203-E423-45B3-89B7-350F7AB392F9}"" />
   <Adapter Name=""Spare"" Mac=""000105992C33"" Ports=""2"" Disabled=""true"" />
   <Device Name=""BH1"" Via=""Device 1 (RT-Ethernet Adapter)"" Port=""1"">
     <Box Name=""Box 1 (CU2508)"" Product=""CU2508-0000-0000"" />
@@ -105,7 +105,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var lines = new List<string>();
             foreach (IoAdapterSpec a in manifest.Adapters)
-                lines.Add($"A|{a.Name}|{a.Mac}|{a.Ports}|{a.DeviceDesc}|{a.Disabled}");
+                lines.Add($"A|{a.Name}|{a.Mac}|{a.Ports}|{a.DeviceDesc}|{a.DeviceName}|{a.Disabled}");
             foreach (IoDeviceSpec d in manifest.Devices)
             {
                 lines.Add($"D|{d.Name}|{d.Disabled}|{Join(d.Variants)}|{d.Adapter}|{d.Via}|{d.Port}");

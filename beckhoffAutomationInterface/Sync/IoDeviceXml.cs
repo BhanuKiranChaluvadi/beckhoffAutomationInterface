@@ -78,6 +78,13 @@ namespace BeckhoffAutomationInterface.Sync
             return string.IsNullOrEmpty(value) ? null : value;
         }
 
+        /// <summary>Pnp/DeviceName ("\DEVICE\{GUID}"); null when absent or empty.</summary>
+        public static string DeviceNameOf(string deviceXml)
+        {
+            string value = (string)Parse(deviceXml)?.Element("DeviceDef")?.Element("AddressInfo")?.Element("Pnp")?.Element("DeviceName");
+            return string.IsNullOrEmpty(value) ? null : value;
+        }
+
         /// <summary>DeviceDef/AddressInfo/TcCom/ObjectId ("#x03010011"); null when the device has no TcCom address.</summary>
         public static uint? TcComObjectIdOf(string deviceXml)
         {
@@ -110,7 +117,7 @@ namespace BeckhoffAutomationInterface.Sync
         public static string FormatObjectId(uint oid) => "#x" + oid.ToString("x8", CultureInfo.InvariantCulture);
 
         /// <summary>True when the adapter already has the declared MAC, port count, ESL mode,
-        /// TcpIpPort 0 and (when declared) DeviceDesc, so a second sync changes nothing.</summary>
+        /// TcpIpPort 0 and (when declared) DeviceDesc and DeviceName, so a second sync changes nothing.</summary>
         public static bool AdapterMatches(IoAdapterSpec spec, string adapterXml)
         {
             XElement ethernet = Parse(adapterXml)?.Element("EthernetAdapter");
@@ -118,7 +125,8 @@ namespace BeckhoffAutomationInterface.Sync
                 && PortCountOf(adapterXml) == spec.Ports
                 && (string)ethernet?.Element("PortSelectionType") == "Esl"
                 && (string)ethernet?.Element("TcpIpPort") == "0"
-                && (spec.DeviceDesc == null || DeviceDescOf(adapterXml) == spec.DeviceDesc);
+                && (spec.DeviceDesc == null || DeviceDescOf(adapterXml) == spec.DeviceDesc)
+                && (spec.DeviceName == null || string.Equals(DeviceNameOf(adapterXml), spec.DeviceName, System.StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>The ConsumeXml that gives an adapter its MAC, ESL mode and ports.</summary>
@@ -127,6 +135,8 @@ namespace BeckhoffAutomationInterface.Sync
             var pnp = new XElement("Pnp");
             if (spec.DeviceDesc != null)
                 pnp.Add(new XElement("DeviceDesc", spec.DeviceDesc));
+            if (spec.DeviceName != null)
+                pnp.Add(new XElement("DeviceName", spec.DeviceName));
             pnp.Add(new XElement("DeviceData", spec.Mac.ToLowerInvariant()));
             return new XElement("TreeItem",
                 new XElement("DeviceDef", new XElement("AddressInfo", pnp)),

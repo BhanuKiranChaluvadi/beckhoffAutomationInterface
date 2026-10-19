@@ -98,8 +98,15 @@ namespace BeckhoffAutomationInterface.Sync
             int? ports = ParseInt(el, "Ports", "Adapter");
             if (ports == null || ports < 1)
                 throw new System.FormatException(string.Format("io-devices.xml: Adapter '{0}' needs Ports=\"n\" (n >= 1; 8 for a CU2508).", name));
-            return new IoAdapterSpec(name, mac, ports.Value, (string)el.Attribute("DeviceDesc"), (bool?)el.Attribute("Disabled") ?? false);
+            string deviceName = (string)el.Attribute("DeviceName");
+            if (deviceName != null && !DeviceNamePattern.IsMatch(deviceName))
+                throw new System.FormatException(string.Format(
+                    @"io-devices.xml: Adapter '{0}' has DeviceName=""{1}"". Use the form \DEVICE\{{GUID}}, as in XAE (Adapter tab, Device Name).", name, deviceName));
+            return new IoAdapterSpec(name, mac, ports.Value, (string)el.Attribute("DeviceDesc"), (bool?)el.Attribute("Disabled") ?? false, deviceName);
         }
+
+        static readonly System.Text.RegularExpressions.Regex DeviceNamePattern = new System.Text.RegularExpressions.Regex(
+            @"^\\DEVICE\\\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$");
 
         /// <summary>The Via/Port rules: Via and Adapter are exclusive, Via names an &lt;Adapter&gt;,
         /// 1 &lt;= Port &lt;= Ports, one device per port, and no name is used twice.</summary>
