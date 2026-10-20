@@ -9,6 +9,7 @@ You keep the PLC code as `.st` text files and XML manifests in git. The tool doe
 - It activates a project on a runtime and reads live PLC values over ADS (`activate`, `verify`).
 - It runs test scenarios against a PLC in simulation (`test`).
 - It makes and checks offline release artifacts (`package`, `libraries`, `toolchain`, `esi`).
+- It makes a release bundle and installs a compiled package with rollback (`release`, `package install`).
 
 The tool uses the TwinCAT Automation Interface (COM). You do not use the XAE window. The tool
 never shows a Yes/No dialog box and never waits for a person.
@@ -116,7 +117,7 @@ Type `bai --help` for the list of commands. Type `bai <command> --help` for the 
 |---|---|
 | 0 | The command is done and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, `TEST PASSED`, no problem found). |
 | 1 | A problem: compile error, failed check, failed scenario, missing project, wrong command line (most commands), or `activate`/`runtime-state --state` without `--yes`. |
-| 2 | Only `test`, `machine`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
+| 2 | Only `test`, `machine`, `release`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
 | 3 | Only `machine test`: another run holds the UmRT lock. Nothing was changed. |
 
 ### `init`: make a new project
@@ -426,6 +427,40 @@ bai esi install|verify --system-directory <folder> --devices <folder> --user-dir
 | `esi verify` | Checks the catalog folders. It writes no file. |
 
 Exit code: 0 = pass, 1 = a check or file operation failed, 2 = wrong arguments.
+
+### `release` and `package install`: make a release and update a machine
+
+```
+bai release build --machines <M[,M]> [--tag <tag> | --working-tree] [--bundle <new-folder>]
+    --bai-sha256 <hash> --twincat-version <version> --toolchain <zip> --toolchain-sha256 <hash>
+    --library-lock <json> --library-lock-sha256 <hash> [--platform <name>] [--manifest <file>]
+    [--esi-directory <folder>] [--user-esi-directory <folder>]
+bai release lock --machines <M[,M]> --twincat-version <version> --output <new-json> [--work <folder>] [--platform <name>]
+bai package preflight --current <zip> --current-sha256 <hash> --service-project <folder> --report <new-folder>
+    [--target local|umrt|<AMS-Net-ID>] [--rehearsal]
+bai package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash>
+    --service-project <folder> --evidence <new-folder> [--target local|umrt] [--rehearsal] --yes
+bai package install ... --target <AMS-Net-ID> --ssh <user@host> --yes
+bai package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>
+```
+
+Run `release` in the PLC repository. It reads `bai.machines.json`.
+
+| Command | What it does |
+|---|---|
+| `release build` | Makes a release bundle in a new folder. The default folder is `<work>\release\<machines>-<version>[-dirty]-<time>`. With `--tag`, the tag must be on `HEAD`. Without `--tag`, the version is `git describe`, and `HEAD` must be on the server (push it first). Without `--working-tree`, the repository must be clean. `--working-tree` also builds the uncommitted and untracked files of the build inputs and keeps `working-tree.patch`. This gives a `DevelopmentValidation` package: use it only for a rehearsal on UmRT. The tool checks its own SHA256, the toolchain archive against the installed TwinCAT files (before and after the build), the library lock and the release manifests. It copies the source, the tool and the ESI files into the bundle. The tool copy builds each machine with the `machine build --release` steps (always fresh, no SIMULATION). Then the tool checks the compiled project and writes `packages\<M>.zip` and `<M>.zip.sha256`. It never activates. When a step fails, `release.json` has status `Failed` and the reason. |
+| `release lock` | Makes a candidate library lock from built machines. The default folder is the `work` of `bai.machines.json`. For a bundle, give `--work <bundle>\build`. Examine the lock one time and keep its SHA256. Do not make it again for each release. |
+| `package preflight` | Checks the package that is installed now. The saved service project must agree with its `project.zip`. The live identity must agree with the package, and the online-change counter must be 0. It writes no runtime value. |
+| `package install` | Installs a compiled package without XAE. It verifies both packages and does the preflight. Then it sets Config, copies the boot files, sets Run and verifies the live identity. It keeps the old image, `*.bootdata` and the event journal. When a step after Config fails, it puts the old image back and verifies the old identity. A machine accepts only a `ReleaseCandidate`. `--rehearsal` (UmRT only) also accepts a development package. With `--ssh`, the target is TwinCAT/BSD: the tool copies the package and a helper over SSH. The BSD host needs `python3`, a known host key and `doas` for the helper. Without `--yes`, nothing changes. |
+| `package drift` | Compares a saved service project with a `project.zip`. It ignores the XML format. Code, values, element order and comments must agree. Exit code 0 = same, 1 = drift, 2 = error. |
+
+Only one update can run at a time. The lock is `C:\bai\lock\umrt.lock` (UmRT),
+`%ProgramData%\Beckhoff\TwinCAT\3.1\boot-update.lock` (local) or `plc-release.lock` on the BSD
+host. The evidence folder of `install` has `install.json`, `preflight\`, `transaction.json` and
+one log for each step. These commands do not prove that the hardware is ready: physical
+acceptance is a separate step.
+
+Exit code: 0 = pass, 1 = refused or failed (the evidence gives the reason), 2 = wrong arguments.
 
 ### What the tool never does
 

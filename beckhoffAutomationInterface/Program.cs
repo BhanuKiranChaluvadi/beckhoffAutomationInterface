@@ -130,6 +130,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  package create|verify / libraries lock|verify / toolchain capture|verify");
             Console.WriteLine("      Offline release artifacts; no XAE or runtime access. Use '<command> --help'.");
             Console.WriteLine("  esi install|verify   Prepare or verify an EtherCAT catalog; existing files are never replaced.");
+            Console.WriteLine("  release build|lock   Build a machine release bundle with evidence and packages (no activation).");
+            Console.WriteLine("  package preflight|install|drift");
+            Console.WriteLine("      Check and install a compiled package on a machine or UmRT, with rollback. Use '<command> --help'.");
             Console.WriteLine("  build  <path> [--plc X] [--clean] [--variant V | --all-variants]");
             Console.WriteLine("      Compile an existing PLC project and report pass/fail.");
             Console.WriteLine("      <path> may be a .tsproj file, or a folder containing exactly one.");
@@ -257,6 +260,9 @@ namespace BeckhoffAutomationInterface
                 case "esi":
                     Environment.Exit(Release.ArtifactCommands.Run(args));
                     break;
+                case "release":
+                    Environment.Exit(Release.ReleaseCommands.Run(args, shell));
+                    break;
                 // Runtime commands: new CLI style, no legacy-flag translation (see Runtime/).
                 case "verify":
                     Environment.Exit(Runtime.RuntimeCommands.Verify(args));
@@ -285,7 +291,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, package, libraries, toolchain, esi.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, release, package, libraries, toolchain, esi.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;
