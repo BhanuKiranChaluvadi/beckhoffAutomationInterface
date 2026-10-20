@@ -5,7 +5,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>Variants attribute in io-devices.xml (tasks/2026-10-14-variants-closed-loop, Task 9).</summary>
+    /// <summary>Variants attribute in io-devices.xml.</summary>
     public class IoVariantRulesTests : System.IDisposable
     {
         readonly string _dir;

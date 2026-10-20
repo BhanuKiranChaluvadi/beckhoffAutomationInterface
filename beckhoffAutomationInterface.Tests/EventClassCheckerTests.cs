@@ -36,7 +36,7 @@ namespace BeckhoffAutomationInterface.Tests
             // Real projects store Event Classes as ordinary <DataType> entries in the
             // TOP-LEVEL <DataTypes> pool -- NOT nested under <Project>/<System>, despite
             // the "SYSTEM > Type System > Event Classes" UI path suggesting otherwise
-            // (confirmed against a real reference project, see tasks/todo.md Task 3).
+            // (confirmed against a real reference project).
             File.WriteAllText(_tsprojPath, @"
 <TcSmProject TcSmVersion=""1.0"">
   <DataTypes>

@@ -5,7 +5,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// Provenance tracking (tasks/todo.md Task 5): every StPouSource carries its
+    /// Provenance tracking: every StPouSource carries its
     /// originating .st file name and 1-based section start lines, so build errors
     /// can be mapped back to real source locations (Task 6).
     /// </summary>

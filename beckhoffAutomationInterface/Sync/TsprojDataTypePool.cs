@@ -10,7 +10,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// &lt;DataTypes&gt; pool — the single shared XML pool that both "Create PLC Data
     /// Type" terminal types (TsprojPlcDataTypeEditor) and Event Classes
     /// (TsprojEventClassEditor, EventClassChecker) live in, confirmed by inspecting a
-    /// working reference project (see tasks/todo.md Task 3): despite the "SYSTEM ▸
+    /// working reference project: despite the "SYSTEM ▸
     /// Type System" UI path suggesting otherwise, Event Classes are NOT nested under
     /// &lt;Project&gt;/&lt;System&gt; — they're ordinary &lt;DataType&gt; entries in this
     /// same top-level pool.

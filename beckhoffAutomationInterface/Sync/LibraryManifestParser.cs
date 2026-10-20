@@ -15,7 +15,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// </code>
     /// Library references are not IEC 61131-3 source code, so they don't fit the
     /// .st convention used for POUs/DUTs/GVLs — they're config data, synced the
-    /// same way the ELT/soup01 tutorial samples in example/ do it via
+    /// same way Beckhoff's Automation Interface samples do it via
     /// ITcPlcLibraryManager.
     /// </summary>
     static class LibraryManifestParser

@@ -38,7 +38,7 @@
 
         /// <summary>Bare file name of the originating .st file (e.g. "FB_Motor.st").
         /// Set by StFileParser.ParseFile on every source it emits — provenance for
-        /// mapping build errors back to .st source (tasks/todo.md Tasks 5-6).</summary>
+        /// mapping build errors back to .st source.</summary>
         public string SourceFileName { get; set; } = "";
 
         /// <summary>1-based line in the source file where this object's section header

@@ -4,7 +4,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>Adopted projects are attached as a temp copy, because TwinCAT saves the project by
-    /// itself during variant builds and activation (tasks/2026-10-14-variants-closed-loop, Task 15c).</summary>
+    /// itself during variant builds and activation.</summary>
     public class ProjectShadowCopyTests : System.IDisposable
     {
         readonly string _dir;

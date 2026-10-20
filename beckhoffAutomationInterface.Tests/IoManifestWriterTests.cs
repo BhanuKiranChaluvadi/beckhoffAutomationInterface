@@ -7,7 +7,7 @@ namespace BeckhoffAutomationInterface.Tests
     /// The COM-free core of IoManifestWriter — DeriveProduct(name, itemSubTypeName, ...),
     /// the one piece with no exact read-back API. Test data is real device Names taken
     /// directly from the live PLC_NFL_SHARK_V2 production project's on-disk .xti item
-    /// names (tasks/2026-07-15-reverse-export-scaffold/, live validation 2026-07-16) —
+    /// names (live validation 2026-07-16) —
     /// not synthetic examples — including the case that disproved a pure regex-code
     /// approach: "Box 40 (EX260-SEC1)" would truncate to "EX260" under a bare
     /// "prefix+digits" regex, which is wrong; the whole hyphenated string is the real

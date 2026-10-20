@@ -5,7 +5,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>Variants stage (tasks/2026-10-14-variants-closed-loop, Task 6) — the COM-free parts.</summary>
+    /// <summary>Variants stage — the COM-free parts.</summary>
     public class VariantSyncTests
     {
         static VariantManifest M(string[] variants, params (string group, string[] members)[] groups)

@@ -5,8 +5,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// Shell selection for the Automation Interface (tasks/2026-10-14-variants-closed-loop,
-    /// Task 1). The registry is faked, so these tests describe real PC setups without
+    /// Shell selection for the Automation Interface. The registry is faked, so these tests describe real PC setups without
     /// touching the real registry.
     /// </summary>
     public class DteShellResolverTests

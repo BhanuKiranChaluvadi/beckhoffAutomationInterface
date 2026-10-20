@@ -3,8 +3,8 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>Output-pane fallback for empty error texts (tasks/2026-10-14-variants-closed-loop,
-    /// Task 4). Sample lines are real TwinCAT 3.1.4026 build output.</summary>
+    /// <summary>Output-pane fallback for empty error texts. Sample lines are real
+    /// TwinCAT 3.1.4026 build output.</summary>
     public class BuildOutputParserTests
     {
         [Fact]

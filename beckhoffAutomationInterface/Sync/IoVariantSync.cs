@@ -27,7 +27,7 @@ namespace BeckhoffAutomationInterface.Sync
 
     /// <summary>
     /// Applies the io-devices.xml Variants attributes to the project (Io stage). Proven by the
-    /// Task 8 spike (docs/ideas/variant-io-spike.md):
+    /// Task 8 spike:
     ///   write: ITcSmTreeItem9.PvDisable = true, then per variant (CurrentProjectVariant = v) Disabled;
     ///   read:  ITcSysManager14.ProjectVariantItems — every per-variant item as one XML.
     /// Read before write: a second run changes nothing.

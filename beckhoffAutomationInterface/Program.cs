@@ -10,8 +10,8 @@ namespace BeckhoffAutomationInterface
 {
     /// <summary>
     /// CLI entry point: parses arguments, then either runs a read-only preflight that
-    /// needs no Visual Studio (--parse-only, --format-check, --check-events, the
-    /// --incremental baseline check), or hands off to SyncPipeline for everything else.
+    /// needs no Visual Studio (check parse, check format, check events), or hands off
+    /// to SyncPipeline for everything else.
     ///
     /// Kept deliberately thin — pipeline orchestration and per-stage business logic live
     /// in SyncPipeline.cs (see its own doc comment for why the split): this class owns
@@ -21,9 +21,8 @@ namespace BeckhoffAutomationInterface
     {
         /// <summary>Parses every .st file under the source folder, collecting each parsed
         /// StPouSource plus a human-readable failure message (file-relative path + parser
-        /// exception) per file that didn't parse. Shared by --parse-only and --check-links
-        /// so both preflights pay for exactly one parse pass, not one each.</summary>
-        static List<Sync.StPouSource> ParseAllStFiles(string stSourceFolder, IgnoreRules ignore, out List<string> failures, out int filesOk)
+        /// exception) per file that didn't parse.</summary>
+        internal static List<Sync.StPouSource> ParseAllStFiles(string stSourceFolder, IgnoreRules ignore, out List<string> failures, out int filesOk)
         {
             failures = new List<string>();
             filesOk = 0;
@@ -48,7 +47,7 @@ namespace BeckhoffAutomationInterface
         /// Studio, aggregating and printing all parser failures, naming-convention lint
         /// warnings, and unlinked %I/%Q variables (all non-blocking — only parse failures
         /// affect the exit code). Returns a process exit code (0 = all parsed, 1 = one or
-        /// more failed). Used by the --parse-only preflight.</summary>
+        /// more failed). Used by 'check parse'.</summary>
         static int ParseOnly(RunOptions options, IgnoreRules ignore)
         {
             List<Sync.StPouSource> parsed = ParseAllStFiles(options.SourceFolder, ignore, out List<string> failures, out int filesOk);
@@ -78,9 +77,8 @@ namespace BeckhoffAutomationInterface
         }
 
         /// <summary>Prints the %I/%Q &lt;-&gt; &lt;Links&gt; report (see Sync/LinkChecker.cs), never
-        /// affecting the caller's exit code — used both as a non-blocking note inside
-        /// --parse-only and as the whole point of the dedicated --check-links preflight.</summary>
-        static LinkCheckReport PrintLinkCheck(RunOptions options, IReadOnlyList<Sync.StPouSource> parsed)
+        /// affecting the caller's exit code — a non-blocking part of 'check parse'.</summary>
+        static void PrintLinkCheck(RunOptions options, IReadOnlyList<Sync.StPouSource> parsed)
         {
             var links = IoManifestParser.ParseLinks(options.IoManifestPath);
             var varLinks = VarLinksFile.Parse(options.VarLinksManifestPath);
@@ -100,8 +98,6 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("    ({0} links.xml entry(s) reference nested/FB-instance variables and can't be statically verified)",
                     report.Unresolvable.Count);
             }
-
-            return report;
         }
 
         /// <summary>Lists the source-relative paths of files a reverse export would
@@ -124,8 +120,8 @@ namespace BeckhoffAutomationInterface
             return found;
         }
 
-        /// <summary>Prints the top-level usage (docs/ideas/cli-subcommand-redesign.md, "Final CLI
-        /// spec"). '<command> --help' prints that command's own usage line.</summary>
+        /// <summary>Prints the top-level usage. '<command> --help' prints that command's own
+        /// usage line.</summary>
         static void PrintTopLevelUsage()
         {
             Console.WriteLine("Usage: beckhoffAutomationInterface <command> [args]");
@@ -138,14 +134,14 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("      Compile an existing PLC project and report pass/fail.");
             Console.WriteLine("      <path> may be a .tsproj file, or a folder containing exactly one.");
             Console.WriteLine();
-            Console.WriteLine("  check  parse|format|links <source-path>");
+            Console.WriteLine("  check  parse|format <source-path>");
             Console.WriteLine("  check  events <source-path> --project <path>");
             Console.WriteLine("      Read-only preflight checks against .st source (and, for 'events', the project).");
             Console.WriteLine();
-            Console.WriteLine("  sync   code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--incremental] [--clean] [...]");
+            Console.WriteLine("  sync   code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--clean] [...]");
             Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
             Console.WriteLine();
-            Console.WriteLine("  export code|libs|io|events|all|links <source-path> --project <path> [--plc X] [--overwrite]");
+            Console.WriteLine("  export code|libs|io|events|tasks|safety|variants|native|links|all <source-path> --project <path> [--plc X] [--overwrite]");
             Console.WriteLine("  export object <ObjectName> <source-path> --project <path> [--plc X]");
             Console.WriteLine("      Regenerate .st source (or manifests) FROM an existing project (reverse export);");
             Console.WriteLine("      'object' writes just the one named live PLC object back to .st.");
@@ -162,6 +158,9 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("      Run scenario files (send commands, wait for and check PLC values) over ADS. Exit 0 = all");
             Console.WriteLine("      passed, 1 = a scenario failed, 2 = wrong command line or invalid scenario file.");
             Console.WriteLine();
+            Console.WriteLine("  runtime-state --target umrt|local|<AMS-Net-ID> [--expect config|run] [--state config|run --yes]");
+            Console.WriteLine("      Read the runtime state (Config/Run) over ADS; with --state and --yes, switch it. No XAE.");
+            Console.WriteLine();
             Console.WriteLine("  doctor");
             Console.WriteLine("      Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state,");
             Console.WriteLine("      boot projects and license expiry.");
@@ -169,11 +168,16 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("  init   <source> --into <folder> [--name X]");
             Console.WriteLine("      Bootstrap a brand-new TwinCAT solution/PLC project.");
             Console.WriteLine();
+            Console.WriteLine("  machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel]");
+            Console.WriteLine("  machine test  [<Machine>...] [--fresh] [--tags a,b] [--junit <file>]");
+            Console.WriteLine("      Build (and test on UmRT in simulation) the machines of bai.machines.json in a PLC");
+            Console.WriteLine("      repository: source assembly, build identity, one TwinCAT session per machine.");
+            Console.WriteLine();
             Console.WriteLine("Global option (any command that opens TwinCAT):");
             Console.WriteLine("  --shell xae|vs2022   DTE shell to automate. Default: TwinCAT XAE shell if installed,");
             Console.WriteLine("                       else Visual Studio 2022. Also settable as 'shell=' in .stconfig.");
             Console.WriteLine();
-            Console.WriteLine("Run '<command> --help' for that command's usage; README.md has the full flag reference.");
+            Console.WriteLine("Run '<command> --help' for that command's usage; README.md has the full reference.");
         }
 
         /// <summary>Removes "flag value" from args and returns the value (null when absent).
@@ -235,6 +239,7 @@ namespace BeckhoffAutomationInterface
                              : args[0] == "test" ? Runtime.RuntimeCommands.TestUsage
                              : args[0] == "runtime-state" ? Runtime.RuntimeStateCommand.Usage
                              : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
+                             : args[0] == "machine" ? "Usage: beckhoffAutomationInterface " + Machines.MachineCommands.Usage
                              : null;
                 if (usage != null)
                 {
@@ -268,6 +273,9 @@ namespace BeckhoffAutomationInterface
                 case "runtime-state":
                     Environment.Exit(Runtime.RuntimeStateCommand.Run(args));
                     break;
+                case "machine":
+                    Environment.Exit(Machines.MachineCommands.Run(args, shell));
+                    break;
                 case "build":
                 case "check":
                 case "export":
@@ -277,7 +285,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, package, libraries, toolchain, esi.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, package, libraries, toolchain, esi.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;
@@ -289,7 +297,7 @@ namespace BeckhoffAutomationInterface
             IgnoreRules ignore = IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns);
 
             // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser
-            // issues surface in seconds (not after a ~40s VS round-trip). Run with --parse-only.
+            // issues surface in seconds (not after a ~40s VS round-trip). 'check parse'.
             if (options.ParseOnly)
             {
                 Environment.Exit(ParseOnly(options, ignore));
@@ -305,25 +313,10 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(0);
             }
 
-            // Read-only "declared vs linked" %I/%Q preflight (see Sync/LinkChecker.cs) — no
-            // Visual Studio, no existing project needed at all (unlike --check-events below,
-            // which reads the live .tsproj). A full .st parse isn't free the way an XML file
-            // read is, so — unlike the events check — this is NOT run informationally on
-            // every normal invocation, only when explicitly requested here or via
-            // --parse-only (see PrintLinkCheck, folded into ParseOnly's own output above).
-            if (options.CheckLinks)
-            {
-                List<Sync.StPouSource> parsed = ParseAllStFiles(options.SourceFolder, ignore, out List<string> parseFailures, out int _);
-                foreach (string f in parseFailures)
-                    Console.WriteLine(f);
-                LinkCheckReport linkReport = PrintLinkCheck(options, parsed);
-                Environment.Exit(parseFailures.Count > 0 || linkReport.Unlinked.Count > 0 ? 1 : 0);
-            }
-
             // Read-only "declared vs actual" Event Class preflight (reads the .tsproj
             // directly, no VS session needed). Informational on a normal run — the Events
             // stage creates anything missing via TsprojEventClassEditor later. Under
-            // --check-events it's the whole run: report and exit, code 1 if anything is
+            // 'check events' it's the whole run: report and exit, code 1 if anything is
             // missing (usable as a fast CI/pipeline gate).
             int missingEventClassCount = 0;
             if (File.Exists(options.TsprojFilePath))
@@ -345,20 +338,10 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(missingEventClassCount > 0 ? 1 : 0);
             }
 
-            // Fail fast (before opening Visual Studio) if --incremental has nothing to diff
-            // against — no point paying the ~30-40s VS round-trip just to refuse.
-            // Only relevant when the Code stage will actually run.
-            if (options.Incremental && options.Stages.HasFlag(SyncStages.Code) && SyncState.Read(options.SyncStatePath) == null)
-            {
-                Console.Error.WriteLine("ERROR: --incremental requested but no baseline found at '{0}'.", options.SyncStatePath);
-                Console.Error.WriteLine("Run a full sync (without --incremental) first to establish one.");
-                Environment.Exit(1);
-            }
-
             // Reverse-export overwrite guard: regenerating the source tree is destructive
-            // if --source already holds hand-edited files. Refuse unless --overwrite
-            // (CLI-only, like --init/--confirm-delete*) — safe-by-default, so a mistyped
-            // --source can't silently clobber real work. The forward direction is
+            // if the source folder already holds hand-edited files. Refuse unless --overwrite
+            // (CLI-only, like --confirm-delete-io) — safe-by-default, so a mistyped
+            // source path can't silently clobber real work. The forward direction is
             // unaffected. Runs before Visual Studio ever opens.
             if (options.IsReverseExport && !options.Overwrite)
             {
@@ -384,7 +367,7 @@ namespace BeckhoffAutomationInterface
                 Environment.Exit(1);
             }
 
-            // Reverse export, and a plain --tsproj given for --build/CI use, both target
+            // Reverse export, and a .tsproj given to 'build' (CI use), both target
             // an ALREADY-EXISTING project, read-only — neither bootstraps (there'd be
             // nothing to export from / compile) and neither needs a .sln (see
             // TwinCatSession.EnsureOpen). Only the resolved .tsproj file's existence is
@@ -401,11 +384,8 @@ namespace BeckhoffAutomationInterface
                     Environment.Exit(1);
                 }
             }
-            // Creating a NEW project is explicit (--init), never a silent fallback: a
-            // mistyped --dest/--name used to quietly bootstrap a fresh empty project
-            // (and once planted one inside the real project's own folder tree — see
-            // tasks/archive/2026-07-14-post-review-hardening/). In CI, a wrong path now
-            // fails loudly instead of green-building an empty project.
+            // Creating a NEW project is explicit ('init'), never a silent fallback: a
+            // mistyped path must fail loudly, not green-build a fresh empty project.
             else if (!File.Exists(options.SolutionFilePath) && !options.Init)
             {
                 Console.Error.WriteLine("ERROR: solution not found at:");

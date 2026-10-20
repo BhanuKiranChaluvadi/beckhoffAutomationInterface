@@ -36,8 +36,8 @@ namespace BeckhoffAutomationInterface.Sync
     ///
     /// The optional Variants="A,B" attribute (Device/Box/Terminal) puts an item in those
     /// project variants only (see variants.xml and IoVariantRules); no attribute = all
-    /// variants. NOT allowed on &lt;Link&gt;: TwinCAT stores links once for all variants
-    /// (docs/ideas/variant-io-spike.md), and a link to an item that is disabled in a
+    /// variants. NOT allowed on &lt;Link&gt;: TwinCAT stores links once for all variants,
+    /// and a link to an item that is disabled in a
     /// variant is harmless.
     ///
     /// Two network layouts (both may be in one file):

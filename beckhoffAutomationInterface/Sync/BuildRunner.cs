@@ -44,7 +44,7 @@ namespace BeckhoffAutomationInterface.Sync
 
     /// <summary>
     /// Triggers a solution build via the Visual Studio DTE and reports pass/fail
-    /// using the DTE's error list. Validated in docs/ideas/st-source-twincat-sync.md:
+    /// using the DTE's error list. Validated live:
     /// dte.ToolWindows.ErrorList.ErrorItems gives a reliable signal.
     ///
     /// The build is kicked off ASYNCHRONOUSLY (Build(false)) and then polled to

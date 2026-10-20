@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>build --variant / --all-variants (tasks/2026-10-14-variants-closed-loop, Task 7).</summary>
+    /// <summary>build --variant / --all-variants.</summary>
     public class VariantBuildPlanTests
     {
         static readonly string[] Two = { "MachineA", "MachineB" };

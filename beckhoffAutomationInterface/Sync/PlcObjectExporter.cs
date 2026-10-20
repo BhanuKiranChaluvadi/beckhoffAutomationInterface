@@ -9,8 +9,8 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>
     /// Exports a live PLC object's current text back to a .st file — the read-side
     /// counterpart of PouSyncEngine's write side, using the same
-    /// ITcPlcDeclaration/ITcPlcImplementation properties (see the ProduceXml() spike
-    /// findings in docs/ideas/st-plc-bidirectional-sync.md: ProduceXml() only returns
+    /// ITcPlcDeclaration/ITcPlcImplementation properties (ProduceXml() spike
+    /// finding: ProduceXml() only returns
     /// metadata, DeclarationText/ImplementationText are the real source).
     ///
     /// Supports DUTs (STRUCT/ENUM/ALIAS) and GVLs — for these, DeclarationText already

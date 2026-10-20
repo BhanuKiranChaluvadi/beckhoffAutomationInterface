@@ -195,7 +195,7 @@ step GitHub shows you, but skip it — see Part 4.
     name **without** the extension.
 29. Confirm `C:\tools\beckhoffAutomationInterface\...\beckhoffAutomationInterface.exe`
     already exists on the bench PC (this tool, built once — see
-    [plc-ci-setup-guide.md](plc-ci-setup-guide.md) §3 if not).
+    [README.md](../README.md), section 1, if not).
 30. Commit and push this file to `main`/`master`:
     ```powershell
     git add .github/workflows/plc-build.yml
@@ -222,6 +222,4 @@ step GitHub shows you, but skip it — see Part 4.
 
 ---
 
-Done. For troubleshooting and the manual pre-CI validation build, see
-[plc-ci-setup-guide.md](plc-ci-setup-guide.md) — this document only covers
-the runner install itself in more granular steps.
+Done. For tool problems, see [README.md](../README.md), section 9.

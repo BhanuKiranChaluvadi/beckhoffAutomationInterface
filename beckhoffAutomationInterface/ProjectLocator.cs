@@ -8,8 +8,7 @@ namespace BeckhoffAutomationInterface
     /// Resolves the single positional path argument accepted by the new subcommand CLI
     /// (e.g. `build &lt;path&gt;`) to a concrete .tsproj file — replacing the two separate
     /// project-targeting mechanisms the legacy flat-flag CLI required (--tsproj directly,
-    /// or --source/--dest/--name plus the Dest\Name\Name.sln convention). See
-    /// docs/ideas/cli-subcommand-redesign.md for the migration this is the first slice of.
+    /// or --source/--dest/--name plus the Dest\Name\Name.sln convention).
     /// Read-only: never creates or modifies anything on disk.
     /// </summary>
     static class ProjectLocator

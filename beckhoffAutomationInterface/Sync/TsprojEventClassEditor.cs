@@ -21,8 +21,8 @@ namespace BeckhoffAutomationInterface.Sync
     /// Content comes from event-classes/&lt;Name&gt;.xml (same file schema as
     /// PlcDataTypeTemplate — only &lt;DataTypes&gt; is populated), copied verbatim from a
     /// working reference project with its REAL GUID, not a freshly generated one --
-    /// see tasks/todo.md Task 3 for why a freshly generated GUID was the likely cause
-    /// of this being wrongly written off as a dead end.
+    /// a freshly generated GUID was the likely cause of this being wrongly written
+    /// off as a dead end.
     ///
     /// MUST be called while the project is NOT open in Visual Studio, same as
     /// TsprojPlcDataTypeEditor. See Sync/TsprojDataTypePool.cs for the shared

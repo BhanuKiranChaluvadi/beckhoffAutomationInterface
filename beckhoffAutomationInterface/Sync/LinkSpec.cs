@@ -6,8 +6,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// roots (the engine prepends them), so the manifest reads cleanly, e.g.:
     ///   PlcVar   = "Shark Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor"
     ///   IoChannel= "Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input"
-    /// Format confirmed against Beckhoff's official EtherCATLinking.cs sample
-    /// (example/.../Scripting.CSharp.Scripts/Scripts/EtherCATLinking.cs).
+    /// Format confirmed against Beckhoff's official EtherCATLinking.cs sample.
     /// </summary>
     class LinkSpec
     {

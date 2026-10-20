@@ -16,7 +16,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// here) and the safety-gated flags --init/--confirm-delete/--confirm-delete-io,
     /// which RunOptions.Parse never even attempts to read from this file — seeing
     /// "key=value" support here does not mean every flag is safe to default. See
-    /// RunOptions.Parse for the wiring and tasks/plan.md history for why.
+    /// Cli/CommandLine.cs (Config) for the wiring.
     /// </summary>
     static class StConfigFile
     {

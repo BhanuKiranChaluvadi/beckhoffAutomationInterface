@@ -1,1 +1,0 @@
-Rename the Orders Xml File simply to Orders.xml to activate the Machine-dependent Version

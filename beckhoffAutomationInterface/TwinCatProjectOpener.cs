@@ -58,7 +58,7 @@ namespace BeckhoffAutomationInterface
         /// entirely (see RunOptions.ExistingTsprojPath / --tsproj). This is the reverse-
         /// export "adopt a pre-existing project" path: such a project's on-disk layout
         /// can't be assumed, and it may have NO .sln at all — confirmed live against
-        /// PLC_NFL_SHARK_V2 (tasks/2026-07-15-reverse-export-scaffold/), whose .tsproj sits
+        /// PLC_NFL_SHARK_V2, whose .tsproj sits
         /// loose with no wrapping solution.
         ///
         /// Mirrors BootstrapNew's own dte.Solution.Create() call (an unsaved, in-memory

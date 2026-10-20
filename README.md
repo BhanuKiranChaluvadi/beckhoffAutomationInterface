@@ -1,820 +1,834 @@
-# Beckhoff Automation Interface — ST → TwinCAT Sync Engine
+# bai: Beckhoff Automation Interface tool
 
-Offline release commands: `package create|verify`, `libraries lock|verify`,
-`toolchain capture|verify`, and `esi install|verify`.
-See [release artifacts](docs/release-artifacts.md) for arguments and evidence limits.
+`bai` (`beckhoffAutomationInterface.exe`) is a command-line tool for TwinCAT 3 PLC projects.
+You keep the PLC code as `.st` text files and XML manifests in git. The tool does these tasks:
 
-Syncs a folder of IEC 61131-3 Structured Text (`.st`) source files into a
-persistent TwinCAT 3 PLC project via the Beckhoff Automation Interface (COM),
-then builds the project and reports pass/fail — a closed-loop
-"edit `.st` → sync → build → get errors" workflow without ever touching the
-TwinCAT XAE UI by hand.
+- It puts the `.st` files and manifests into a TwinCAT project (`init`, `sync`).
+- It compiles the project and maps each error to the `.st` file and line (`build`).
+- It writes `.st` files and manifests from an existing project (`export`).
+- It activates a project on a runtime and reads live PLC values over ADS (`activate`, `verify`).
+- It runs test scenarios against a PLC in simulation (`test`).
+- It makes and checks offline release artifacts (`package`, `libraries`, `toolchain`, `esi`).
 
-The tool is idempotent: re-running it against the same source/destination
-only creates what's missing, updates what changed, and leaves everything
-else untouched.
+The tool uses the TwinCAT Automation Interface (COM). You do not use the XAE window. The tool
+never shows a Yes/No dialog box and never waits for a person.
 
-> **New here?** Start with [HOW-TO-USE.md](HOW-TO-USE.md) — short, task-by-task steps for every
-> command. This README is the full reference.
+## Contents
 
-> **Deletion is opt-in, not automatic.** A normal (non-`--incremental`) sync
-> never deletes PLC objects for `.st` files you've removed or renamed — they
-> linger harmlessly in the TwinCAT project. Only `--incremental --confirm-delete`
-> actually removes objects, and only on an exact, unambiguous name match (see
-> "Incremental sync" below). If you delete/rename a file and expect the old
-> PLC object gone, you must use that combination — it is not automatic.
+1. [Install and build](#1-install-and-build)
+2. [Words](#2-words)
+3. [Quick start](#3-quick-start)
+4. [Command reference](#4-command-reference)
+5. [The source folder](#5-the-source-folder)
+6. [Manifest files](#6-manifest-files)
+7. [Runtime test files](#7-runtime-test-files)
+8. [Limits](#8-limits)
+9. [Problems and fixes](#9-problems-and-fixes)
+10. [Test the tool](#10-test-the-tool)
 
-## Prerequisites
+## 1. Install and build
 
-See [beckhoffAutomationInterface/REQUIREMENTS.md](beckhoffAutomationInterface/REQUIREMENTS.md)
-for full details and verification commands. Summary:
+### Requirements
 
-- **Windows** (COM automation is Windows-only)
-- **.NET SDK 6.0+** (to run `dotnet build`; the app itself targets .NET Framework 4.8)
-- **Visual Studio 2022 (17.x)**, any edition, with the *.NET desktop development* workload
-- **Beckhoff TwinCAT 3.1 XAE**, installed *after* Visual Studio so it registers into it
-  (Build 4026+ recommended)
+| Item | Requirement |
+|---|---|
+| Operating system | Windows 10 or 11. COM automation works only on Windows. |
+| TwinCAT | TwinCAT 3.1 XAE, build 4024 or later (4026 recommended). Variants need 4024 or later. |
+| DTE shell | The TwinCAT XAE shell (default). Visual Studio 2022 (17.x) with TwinCAT integration also works (`--shell vs2022`). Visual Studio 2026 is not supported. |
+| .NET | .NET SDK 6.0 or later to build. The tool targets .NET Framework 4.8, x64. |
+| Runtime commands | `activate`, `verify`, `test` and `runtime-state` need a TwinCAT runtime: UmRT_Default on this PC, the local runtime, or an AMS Net ID. UmRT needs a license. |
 
-If TwinCAT was installed before VS 2022 (or vice versa), repair the TwinCAT VS
-integration as Administrator:
+If you install Visual Studio 2022 after TwinCAT, repair the TwinCAT integration (as Administrator):
+
 ```powershell
 MsiExec.exe /f{23005E9B-9FED-4C05-B4EB-6AC0ECC0BA7F}
 ```
 
-## Build
+The repository contains `Interop.TCatSysManager.dll` (namespace `Interop.TCatSysManager`). To make
+it again, use `TlbImp.exe` from the Windows SDK:
 
 ```powershell
-cd beckhoffAutomationInterface
-dotnet build -c Debug -f net48
+TlbImp.exe "C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\TypeLib\3.4\TCatSysManager.tlb" /out:Interop.TCatSysManager.dll
 ```
 
-The executable ends up at `beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe`.
-
-## Running the executable
-
-This is a standalone `.exe` — no `dotnet run`, no project file needed at
-runtime. Every invocation starts with a command: `build`, `sync`, `check`,
-`export`, or `init`. Run bare or with `--help` to list them:
+### Build and unit tests
 
 ```powershell
-.\beckhoffAutomationInterface.exe --help
+dotnet build beckhoffAutomationInterface -c Debug -f net48
+dotnet test beckhoffAutomationInterface.Tests
 ```
 
-Run it directly, from anywhere, pointing at whatever folders you want:
+The tool is `beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe`.
+It is a standalone `.exe`. In this README, the short name is `bai`:
 
 ```powershell
-# Full path, from any directory:
-C:\path\to\beckhoffAutomationInterface\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
-
-# Or cd into the output folder first and use a relative path:
-cd beckhoffAutomationInterface\bin\Debug\net48
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
+Set-Alias bai "C:\path\to\beckhoffAutomationInterface\bin\Debug\net48\beckhoffAutomationInterface.exe"
+bai --help
+bai doctor
 ```
 
-**First time trying the tool at all?** Point it at the bundled `ST\sample`
-project instead of a real one — it's a small, self-contained demo
-(`FB_Motor`/`I_Motor`, a couple of DUTs, one GVL) safe to bootstrap and
-throw away, and a good way to confirm your TwinCAT/Visual Studio COM setup
-works before running against anything real:
+`doctor` shows the DTE shells, the TwinCAT version, the state of each runtime, the boot projects
+and the license expiry dates. It changes nothing.
+
+## 2. Words
+
+| Word | Meaning |
+|---|---|
+| Source folder | The folder with the `.st` files and the manifests. Example: `ST\sample`. |
+| Project | A TwinCAT solution that `init` made: `<folder>\<name>\<name>.sln`, with the `.tsproj` in `<folder>\<name>\<name>\`. |
+| Adopted project | A TwinCAT project that the tool did not make. `build`, `export`, `activate` and `check events` open it read-only and never save it. `sync` refuses it. |
+| Variant | One machine of a machine family. One project can hold all variants (TwinCAT variant management). |
+| Feature group | A named set of variants in `variants.xml`. It becomes a PLC compiler define. |
+| Target | The runtime that runs the PLC: `umrt` (UmRT_Default on this PC), `local` (the TwinCAT runtime of this PC), or an AMS Net ID. |
+
+## 3. Quick start
+
+Try the tool on the small sample in `ST\sample` first.
 
 ```powershell
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\sample" --into "C:\some\scratch\folder"
+bai check parse ST\sample                            # read all .st files (no TwinCAT, seconds)
+bai init ST\sample --into C:\bai\work                # make C:\bai\work\sample\sample.sln, sync all, build
+# change .st files, then:
+bai sync all ST\sample --project C:\bai\work\sample  # send the changes, then build
+bai build C:\bai\work\sample                         # build only
 ```
 
-`init` is required the first time (creates a new solution/TwinCAT/PLC
-project at `<into>\<name>\<name>.sln`); every later run uses `sync --project`
-to reopen and reconcile the existing one — see [Commands](#commands) below for the full command
-reference, and the sections further down for the manifests
-(`libraries.xml`/`io-devices.xml`/`events.xml`) and the typical day-to-day
-workflow.
+A second `sync` with no changes reports `0 created, 0 updated, 0 deleted`.
 
-## Directory layout
+## 4. Command reference
 
-```
-beckhoffAutomationInterface/   # the C# tool (Program.cs, SyncPipeline.cs, Sync/, etc.)
-ST/                            # .st source trees, one subfolder per PLC project
-  sample/                      # small self-contained demo — safe first project to try the tool on
-    *.st                       # PROGRAMs, FUNCTION_BLOCKs, INTERFACEs, DUTs, GVLs (any subfolders)
-    libraries.xml              # PLC library references to sync (Tc2_Standard, etc.)
-    io-devices.xml             # EtherCAT I/O hardware tree + PLC-variable links (optional)
-  VariantSample/               # two machine variants (variants.xml, expect.json)
-  VariantIoSample/             # per-variant I/O (Variants="..." in io-devices.xml)
-example/                       # reference material from Beckhoff/community samples
-docs/                          # design notes
-```
+Type `bai --help` for the list of commands. Type `bai <command> --help` for the usage of one command.
 
-A `.st` file's path relative to its `ST/<Project>/` root is mirrored as a PLC
-folder in the TwinCAT project (e.g. `<source>/App/Shark/PRG_MAIN.st` becomes
-`Shark Project ▸ App ▸ Shark ▸ PRG_MAIN`).
+### Global options
 
-## Running it
-
-Every subcommand takes the folder of `.st` files (or, for `build`, the PLC
-project itself) as a **positional path** — the first argument after the
-command name. `init` also takes `--into`, the folder under which it creates
-`<name>\<name>.sln` (`<name>` is the source folder's own name unless you pass
-`--name`). `sync` takes `--project`: the `.sln` that `init` created, its
-folder, or its `.tsproj`. `sync` only accepts a project that `init` created; it
-refuses an adopted project (use `build`/`export --project` for those).
-
-```powershell
-cd beckhoffAutomationInterface\bin\Debug\net48
-
-# First-ever run for a project: `init` explicitly allows creating the
-# solution/TwinCAT/PLC project. Without it (i.e. using `sync`), a missing
-# solution is a hard error (exit 1) — so a mistyped path fails loudly
-# instead of silently building a fresh empty project.
-.\beckhoffAutomationInterface.exe init "C:\path\to\ST\Shark" --into "C:\path\to\TwinCAT-projects-root"
-
-# Full run: sync .st files, libraries, IO devices/links, events, then build
-# and report. Takes several minutes for a large source tree.
-.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark" --project "C:\path\to\TwinCAT-projects-root\Shark"
-
-# Bare invocation or --help prints usage and exits.
-.\beckhoffAutomationInterface.exe
-.\beckhoffAutomationInterface.exe --help
-```
-
-### Commands
-
-The pipeline is made of six stages. `sync <mode>` runs **exactly one**
-stage (or `all` for every stage in order) then exits — this is how
-one-time per-project setup (device tree, Create PLC Data Type, Event
-Classes) runs in isolation without touching code or compiling. `build`
-compiles only, without syncing anything first.
-
-| Command | What it does | Visual Studio? |
+| Option | Commands | Meaning |
 |---|---|---|
-| `init <path> --into <folder> [--name N]` | Create the solution/TwinCAT/PLC project, then run `sync all`. The only command that may create a project. | opens VS |
-| `sync code <path>` | `.st` files → PLC POUs (parse, lint, drift warnings, sync, save). No build. | opens VS |
-| `sync libs <path>` | `libraries.xml` → PLC library references. | opens VS |
-| `sync io <path>` | `io-devices.xml` → device/box/terminal tree, "Create PLC Data Type" `.tsproj` templates, and `<Links>`. Undeclared items are only **warned** about unless `--confirm-delete-io`. | opens VS, closes it for the `.tsproj` edit, reopens only if links need it |
-| `sync events <path>` | `events.xml` + `event-classes/*.xml` → missing Event Classes written directly into the `.tsproj`. | **no VS at all** — pure file edit, the fastest mode |
-| `sync variants <path>` | `variants.xml` → TwinCAT project variants and groups; switches on the PLC's variant defines (see [Machine variants](#machine-variants)). No manifest = nothing to do. | opens VS |
-| `sync safety <path>` | `safety.xml` → TwinSAFE project: sets the EtherCAT box/module object ids the safety files refer to (direct `.tsproj` edit), copies the safety folder unchanged next to the `.tsproj` (byte-equal check), adds it under `TISC` once, and fails unless the logic terminal shows its Standard In/Out channels. No manifest = nothing to do. See HOW-TO-USE.md, "The safety project". | opens VS, closes it for the `.tsproj` edit/copy only when something must change |
-| `sync tasks <path>` | `tasks.xml` → real-time tasks (`TIRT^<Name>`, cycle time, priority) and PLC task references with their program calls. Adds what is missing, sets a wrong cycle time/priority/linked task, reads the project again to check. Extra tasks and calls are only **warned** about, never deleted. No manifest = nothing to do (the template's `PlcTask` stays). See HOW-TO-USE.md, "The tasks". | opens VS |
-| `sync all <path>` | Every stage above, in order, then build. | opens VS |
-| `activate <path> --target umrt\|local [--variant V] --yes` | Build one variant and activate it on UmRT_Default or this PC's runtime, then wait for the PLC to reach Run. Without `--yes` it only shows the target's current boot project (changes nothing). See [Closed loop on a runtime](#closed-loop-on-a-runtime). | opens VS (only with `--yes`) |
-| `verify --target umrt\|local --expect <expect.json> [--variant V]` | Read live PLC values over ADS and compare them with `expect.json`. Exit 0 = all as expected. | no VS |
-| `test --target umrt\|local --scenarios <file\|folder> [--variants <variants.xml> [--variant V] \| --groups G1,G2] [--tags a,b] [--junit F]` | Run JSON scenario files over ADS: send client commands into the command receiver, wait for and check PLC values. Exit 0 = all passed, 1 = a scenario failed, 2 = wrong command line or scenario file. See HOW-TO-USE.md, section 10.3. | no VS |
-| `check parse\|format\|links <path>` / `check events <path> --project P` | Fast checks without a build: parse the `.st` files, check their formatting, check `io-devices.xml` links, or check `events.xml` against the project. | `parse`/`format`/`links`: no VS |
-| `export code\|libs\|io\|events\|links\|all <path> --project P` / `export object <Name> <path> --project P` | Write the project's content back to `.st` and manifests (see [Reverse export](#reverse-export-adopting-an-existing-project)). | opens VS (except `events`) |
-| `doctor` | Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state, boot projects, license expiry. | no VS |
-| `build <path> [--plc X] [--clean] [--variant V \| --all-variants]` | Open, compile, report errors mapped back to `.st file:line` (or plain compiler output for a native, non-`.st`-managed project). A project with variants is built **once per variant** (see [Machine variants](#machine-variants)). **Exit code 0 = BUILD PASSED, 1 = failed or timed out.** `<path>` may be a `.tsproj` file directly, or a folder containing exactly one. | opens VS |
+| `--shell xae\|vs2022` | each command that opens TwinCAT | The DTE shell. Default: the XAE shell if it is installed, else Visual Studio 2022. Also `shell=` in `.stconfig`. |
+| `--config <folder>` | `init`, `sync`, `build`, `check`, `export` | Read `.stconfig` from this folder. |
+| `--no-config` | `init`, `sync`, `build`, `check`, `export` | Do not read `.stconfig`. |
+| `--help`, `-h` | all | Show the usage. Exit code 0. |
 
-Stage execution order for `sync all`: variants → code → libs → tasks → io-tree → `.tsproj`
-edits (io templates + events) → safety → io links → build. Visual Studio is opened
-lazily by the first stage that needs it and closed for the `.tsproj` edits.
+`bai` with no arguments shows the usage and gives exit code 1.
 
-> **Known gap:** unlike the old flat-flag CLI, `sync` runs exactly one mode
-> per invocation — there's no current way to compose an arbitrary subset
-> (e.g. only `io` and `events` in one run) other than `all`
-> (every stage) or separate invocations (each reopening Visual Studio). Not
-> a blocker for the common cases below, but a real regression if you relied
-> on combining specific stages — see `docs/ideas/cli-subcommand-redesign.md`.
+### Exit codes
 
-```powershell
-# One-time setup, in isolation (no code sync, no build) — two invocations,
-# each opening/closing Visual Studio once (see "Known gap" above):
-.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
+| Code | Meaning |
+|---|---|
+| 0 | The command is done and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, `TEST PASSED`, no problem found). |
+| 1 | A problem: compile error, failed check, failed scenario, missing project, wrong command line (most commands), or `activate`/`runtime-state --state` without `--yes`. |
+| 2 | Only `test`, `machine`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
+| 3 | Only `machine test`: another run holds the UmRT lock. Nothing was changed. |
 
-# Only push ST code changes into the project, don't compile:
-.\beckhoffAutomationInterface.exe sync code "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-
-# CI pipeline: compile only, fail the job on errors. Works for a project
-# this tool manages via .st source, or an arbitrary native one (no .st tree,
-# no .sln) — either way, never bootstraps: a wrong path exits 1 instead of
-# green-building nothing.
-.\beckhoffAutomationInterface.exe build "C:\...\SomeProject"
-if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
-```
-
-### Other flags
-
-These apply within the subcommands noted. An old flag (for example `--dest`,
-`--plc-name`, `--sync-code`) is an error that names the replacement.
-
-| Flag | Applies to | Default | Purpose |
-|---|---|---|---|
-| `--into <folder>` | `init` | — (required) | Folder under which `<name>\<name>.sln` is created |
-| `--name <name>` | `init` | source path's folder name | Project/solution name |
-| `--project <path>` | `sync`, `check events`, `export *` | `project=` in `.stconfig` | `sync`: the `.sln` that `init` created, its folder, or its `.tsproj`. `check events`/`export`: any existing `.tsproj`, or a folder containing exactly one (attached read-only). |
-| `--plc <name>` | `build`, `export *` | the `.tsproj`'s own base name | The real PLC project name inside `TIPC`, if it differs — check the project's own `.plcproj` file name if unsure |
-| `--shell xae\|vs2022` | every command that opens TwinCAT | `xae` if installed, else `vs2022` | Which DTE shell to automate. `xae` = TwinCAT XAE shell (`TcXaeShell.DTE.17.0`, present on every TwinCAT engineering PC); `vs2022` = Visual Studio 2022 with TwinCAT integrated. The tool checks that the shell's exe exists before it starts. Also `shell=` in `.stconfig`. |
-| `--clean` | `build`, `sync` | off | Clean the solution before the build stage, so no stale result can pass. Also `clean=true` in `.stconfig`. |
-| `--ignore <glob>` | `sync`, `check` | none | Exclude `.st` files matching this glob pattern (repeatable). Merged with a `.stignore` file in the source folder, if present. |
-| `--incremental` | `sync` | off | Sync only `.st` files changed/deleted since the last recorded sync (see below) instead of the whole source folder. Requires the source folder to be a git repo with a prior full sync's baseline. |
-| `--confirm-delete` | `sync code`, `sync all` | off | With `--incremental`: actually delete PLC objects whose `.st` file was deleted (see below). CLI-only. |
-| `--variant <V>` / `--all-variants` | `build`, `sync` | all variants | Build one variant only, or (the default) every variant in turn. See [Machine variants](#machine-variants). |
-| `--confirm-delete-io` | `sync io`, `sync all` | off | Actually delete IO tree items not declared in `io-devices.xml`. Without it they are only warned about — never deleted. |
-| `--overwrite` | `export *` | off | Allow reverse export to overwrite existing files in the source folder. Required when it already contains `.st` files or manifests (safe-by-default, CLI-only — never from `.stconfig`). |
-| `--config <path>` | all | source path's folder | Look for a `.stconfig` defaults file in this folder instead (see below). |
-| `--no-config` | all | off | Ignore any `.stconfig` defaults file for this run only. |
-
-The `githooks/` incremental worker is unaffected by `init`: it always
-targets an already-bootstrapped project (the `sync` reopen path).
-
-### Default options (`.stconfig`)
-
-Retyping `--project` (and other options) on every invocation gets old
-fast. Drop a `.stconfig` file at the **top level of your source folder** —
-the same place a `.stignore` file already lives — and the tool loads it
-automatically:
+### `init`: make a new project
 
 ```
-# ST\Shark\.stconfig
-project=C:\path\to\TwinCAT-projects-root\Shark
-incremental=true
+bai init <source> --into <folder> [--name <name>] [--plc <name>] [--platform <name>] [--ignore <glob>]...
 ```
 
-```powershell
-.\beckhoffAutomationInterface.exe sync all "C:\path\to\ST\Shark"
-# resolves project/etc. from ST\Shark\.stconfig — only the source path still needed
-```
+- Makes `<folder>\<name>\<name>.sln` with a TwinCAT project and a PLC project. Then it runs
+  `sync all` (all stages and a build).
+- `--name`: the project name. Default: the name of the source folder.
+- `--plc`: the PLC project name, if it must be different from `--name`.
+- The PLC project name must contain only letters, digits and `_`. The tool refuses a name like
+  `my-plc` before TwinCAT starts.
+- `--platform`: `TwinCAT RT (x86)`, `TwinCAT RT (x64)` or `TwinCAT OS (x64)`.
+- Only `init` can make a project. All other commands refuse a project that does not exist.
 
-**Discovery order:** `--config <path>` (look there instead), else the
-resolved source path, else the process's current directory if neither is
-given. Use `--config` to keep `.stconfig` somewhere other than inside the
-source folder — that file can then set its own `source` key too, since at
-that point the source path hasn't been resolved from the command line yet.
-
-**Precedence:** an explicit command-line flag (or positional path) always
-wins; `.stconfig` only fills in what you didn't type; anything neither
-specifies falls back to the built-in default.
-
-**Supported keys:** `source`, `project`, `shell`, and the booleans `clean`,
-`incremental` (`true`/`1`/`yes`, case-insensitive, is true; anything else is
-false). Any other key is an error. A key from the old CLI (`dest`, `name`,
-`plc-name`, `sync-code`, `parse-only`, ...) is an error that names its
-replacement, so an old file can never be half-applied by accident. The
-command (`sync code`, `check parse`, ...) always chooses the stage; a
-defaults file cannot.
-
-**`--confirm-delete`, `--confirm-delete-io`, `--overwrite`, `--plc` and
-`--yes` can never come from `.stconfig`.** Only a real command-line flag
-counts. They exist so that their effect cannot happen by accident; a
-defaults file that set them would defeat that.
-
-Pass `--no-config` to ignore `.stconfig` for one invocation without
-deleting or renaming it. When a `.stconfig` was actually loaded, the tool
-prints a one-line note before the usual `Source=/Dest=/Project=` line, so
-the behavior is never silent.
-
-See [`.stconfig.example`](.stconfig.example) at the repo root for a fully
-annotated template — copy it to `.stconfig` in your launch folder and edit.
-
-### Ignoring source files
-
-Add a `.stignore` file at the root of the source folder to permanently exclude `.st`
-files from every sync (one gitignore-style glob pattern per line, `#`
-comments and blank lines allowed):
+### `sync`: send the source to the project
 
 ```
-# .stignore
+bai sync code|libs|io|events|variants|safety|tasks|all <source> --project <project>
+         [--clean] [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]
+```
+
+`--project` is the `.sln` that `init` made, its folder, or its `.tsproj`. `sync` accepts only a
+project that `init` made.
+
+| Mode | What it sends | Opens TwinCAT |
+|---|---|---|
+| `code` | `.st` files to POUs, DUTs and GVLs. No build. | Yes |
+| `libs` | `libraries.xml` to library references | Yes |
+| `io` | `io-devices.xml` to the I/O tree, PLC data types, CoE and PDO settings, and links | Yes |
+| `events` | `events.xml` to event classes (direct `.tsproj` edit) | No |
+| `variants` | `variants.xml` to project variants and groups | Yes |
+| `safety` | `safety.xml` to the TwinSAFE project | Yes |
+| `tasks` | `tasks.xml` to real-time tasks and PLC task calls | Yes |
+| `all` | All stages, then a build | Yes |
+
+Order of `sync all`: variants, code, libraries, tasks, I/O tree, `.tsproj` edits (I/O templates
+and events), safety, I/O links, build. A missing manifest means "nothing to do" for its stage.
+
+| Option | Meaning |
+|---|---|
+| `--clean` | Clean the solution before the build. Also `clean=true` in `.stconfig`. |
+| `--confirm-delete-io` | Delete I/O items that `io-devices.xml` does not declare. Without it, the tool only shows a warning. It also lets the tool delete and make again a device of the wrong network layout. |
+| `--ignore <glob>` | Skip `.st` files that match. You can use it more than one time. |
+| `--variant`, `--all-variants` | The variants to build at the end (see `build`). |
+| `--platform` | The build platform (see `init`). |
+| `--confirm-delete` | Accepted, but has no effect. Scripts of the PLC repository still pass it. |
+
+What `sync code` does with old objects:
+
+- It never deletes a PLC object, METHOD or PROPERTY. If the `.st` source of a synced name is
+  gone, it shows a `[drift]` warning with the name. Delete the old object in TwinCAT. The list
+  of synced names is in `.st-known-names` in the source folder.
+- If two `.st` files define the same object, it stops before it changes anything.
+
+### `build`: compile
+
+```
+bai build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants] [--platform <name>] [--define <NAME>]...
+```
+
+- `<project>`: a `.tsproj`, a `.sln`, or a folder with exactly one `.tsproj`. It can be an
+  adopted project.
+- `--plc`: the PLC project name in `TIPC`, if it is not the `.tsproj` name. The name of the
+  `.plcproj` file is the PLC project name.
+- A project with variants: the tool builds each variant one after the other, with a clean. It
+  shows one result for each variant and a summary. `--variant <name>` builds one variant.
+- `--define NAME`: add a PLC compiler define for this build only (for example `SIMULATION`).
+  You can use it more than one time. `sync` and `init` do not accept it, because they save the
+  project.
+- The tool builds a temporary copy of the project folder. Your project files do not change.
+- Each error shows the `.st` file and line. For a project without `.st` source, it shows the
+  compiler text.
+- A build that does not finish in 15 minutes stops with `TIMEOUT`. The tool closes the shell.
+- Exit code 0 = `BUILD PASSED`. Exit code 1 = errors, a failed variant, or a timeout.
+
+### `check`: fast checks without TwinCAT
+
+```
+bai check parse|format <source> [--ignore <glob>]...
+bai check events <source> --project <project>
+```
+
+| Mode | What it does | Exit code 1 when |
+|---|---|---|
+| `parse` | Reads all `.st` files. Shows parse errors, objects in two files, naming warnings, and the link report (`[check-links]`: each `AT %I*`/`%Q*` variable of a GVL or PROGRAM against the links in `io-devices.xml` and `links.xml`). | a file cannot be parsed, or one object is in two files. Unlinked variables do not change the exit code. |
+| `format` | Shows mixed line endings, spaces at line end, a missing newline at file end, and empty lines at file end. It changes no file. | never: the exit code is always 0 (report only) |
+| `events` | Compares the event classes of `events.xml` with the `.tsproj`. | an event class is missing |
+
+Naming warnings (never errors): `FB_` (function block), `PRG_` (program), `I_` (interface),
+`F_` (function), `E_` (enum), `ST_` (struct), `T_` (alias), `GVL_` (global variable list).
+METHODs and PROPERTYs are not checked.
+
+### `export`: write source from a project
+
+```
+bai export code|libs|io|events|tasks|safety|variants|native|links|all <source> --project <project> [--plc <name>] [--overwrite]
+bai export object <ObjectName> <source> --project <project> [--plc <name>]
+```
+
+| Mode | What it writes into `<source>` |
+|---|---|
+| `code` | All POUs, DUTs and GVLs as `.st` files, in the folders of the PLC project |
+| `libs` | `libraries.xml`. A library outside the Beckhoff `Tc<N>_*` names becomes an XML comment for review. |
+| `io` | `io-devices.xml`: devices, adapters, boxes, CoE startup lists and PDO configuration. Lines marked `! verify` need a check of `Product` against the real hardware. |
+| `events` | `events.xml` and `event-classes\*.xml` (no TwinCAT window) |
+| `tasks` | `tasks.xml` |
+| `safety` | `safety.xml` and a byte-equal copy of the safety project in `safety\<Name>\` |
+| `variants` | `variants.xml` |
+| `native` | `native-project.zip`: a verified snapshot of the native project files |
+| `links` | `links.xml`: the current variable links |
+| `all` | All of the above |
+| `object <Name>` | One object (with its METHODs and PROPERTYs) as one `.st` file |
+
+- The tool opens the project read-only and never saves it. TwinCAT can change a version stamp
+  in the `.tsproj` when it opens it. This change has no effect; `git checkout` removes it.
+- If `<source>` already has `.st` files or manifests, the tool refuses. Add `--overwrite`.
+- Characters that are not ASCII can change in a round trip, because TwinCAT keeps POU text in
+  a legacy code page.
+- After the export, commit the folder to git and use `sync`. To rebuild an exported project
+  with links, keep the PLC instance name: `links.xml` contains it.
+
+### `activate`: run a project on a target
+
+```
+bai activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]
+```
+
+**CAUTION: Activation replaces the boot project of the target.**
+
+- Without `--yes`, the tool shows the boot project that is on the target now. It changes nothing
+  and gives exit code 1.
+- With `--yes`, the tool selects the variant, sets the target, builds, activates, restarts
+  TwinCAT and waits until the PLC is in Run (`--timeout`, default 60 s). A failed build stops
+  before the activation, so the running program stays.
+- The tool works on a temporary copy. Your project files do not change.
+- On `umrt`, the tool disables the EtherCAT devices, because UmRT has no EtherCAT adapter.
+- `--define SIMULATION` starts the PLC in simulation for a test run.
+- If the PLC stays in Config, the tool checks the license of the target and tells you if it
+  is the cause.
+
+### `verify`: check live values once
+
+```
+bai verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout <s>]
+```
+
+The tool waits until the PLC is in Run (`--timeout`, default 60 s). Then it reads the values of
+`expect.json` (section 7) over ADS. Each check shows `OK` or `FAIL`, the actual value and the
+expected value. Exit code 0 = `VERIFY PASSED`. It needs no TwinCAT window.
+
+### `test`: run scenarios
+
+```
+bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>]
+         [--variants <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout <s>]
+```
+
+**CAUTION: A scenario sends real commands to the PLC. Use `test` only on a PLC in simulation.**
+
+| Option | Meaning |
+|---|---|
+| `--scenarios` | One scenario file, or a folder. The tool reads all `*.json` files in the folder and its subfolders. |
+| `--variants`, `--variant` | Read the feature groups of the variant from `variants.xml`. If the file has one variant, `--variant` is not necessary. |
+| `--groups` | The feature groups, for example `PCV_MODBUS,SPECTROMETER_PLC`. Use it instead of `--variants`. |
+| `--tags` | Run only the scenarios that have one of these tags. |
+| `--junit` | Write the results as JUnit XML (one test case for each scenario). |
+| `--timeout` | The time for the PLC to go to Run, and for the machine to become idle before each scenario. Default: 60 s. |
+
+What the tool does:
+
+1. It reads all scenario files first. If a file is not correct, it shows `file: step n:` and the
+   problem. It sends nothing (exit code 2).
+2. It skips a scenario if the machine does not have all its `requires` groups. Without
+   `--variants` or `--groups`, it skips each scenario that has `requires`.
+3. Before each scenario, it requires `GVL_Simulation.bActive = TRUE` and a readable
+   `GVL_Simulation.bReset`. It waits until no sequence runs (`eActiveSequence` = 0 or 99). It
+   sends ErrorAcknowledge (9999), sets `bReset`, waits until `bReset` is FALSE, and waits for
+   `eActiveSequence` = 0.
+4. It runs the steps and stops the scenario at the first failure. It keeps the value before each
+   `write` step and writes it back after the scenario. It stops a failed scenario, or a sequence
+   that still runs, with CancelProcess (1). It records the diagnostics before this cleanup.
+5. It runs the optional `cleanup` steps last, also after a failure, with their own `--timeout`.
+   A cleanup failure fails the scenario. After a failed cleanup or restore, the tool sends no
+   more commands: the remaining scenarios fail.
+6. It shows one line for each scenario (`PASS`, `FAIL` or `SKIP`) and a summary. For a failure,
+   it shows the step, the symbol, the expected and actual value, and `eActiveSequence`, `sStatus`
+   and `stLastError` of `PRG_Sequence.fbOrchestrator`.
+
+Exit code: 0 = at least one scenario passed and none failed (`TEST PASSED`). 1 = a scenario
+failed, no scenario ran, or the PLC is not in Run. 2 = wrong command line or scenario file.
+The tool cannot recover from a lost PLC connection. Check the runtime before you start again.
+
+### `runtime-state`: read or change the runtime state
+
+```
+bai runtime-state --target umrt|local|<AMS-Net-ID> [--expect config|run] [--state config|run --yes]
+```
+
+- No option: show the state (Config or Run). Exit code 0.
+- `--expect config|run`: exit code 0 if the runtime is in that state, else 1.
+- `--state config|run --yes`: switch the runtime and wait until it is in that state (45 s
+  maximum). Without `--yes`, it changes nothing and gives exit code 1.
+- It uses the system service over ADS. It needs no TwinCAT window and no compiler.
+
+### `doctor`: show the PC state
+
+```
+bai doctor
+```
+
+It shows the DTE shells, the TwinCAT version, the state of the local runtime and UmRT, the boot
+projects and the license expiry dates. It changes nothing. Exit code 0.
+
+### `machine build` and `machine test`: the machines of a PLC repository
+
+```
+bai machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>] [--manifest <file>] [--work <folder>]
+bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout <s>] [--manifest <file>] [--work <folder>]
+```
+
+Run these commands in a PLC repository that has a `bai.machines.json` file. The tool finds the
+file in the current folder or in a parent folder (or use `--manifest`). No machine name = all
+machines of the file.
+
+```json
+{ "work": "C:/bai/work", "lock": "C:/bai/lock/umrt.lock",
+  "preCheck": ["python", "Tools/check_interlock_sources.py"],
+  "buildInputs": ["Lib", "App", "Machines", "Safety", "Tools"],
+  "families": { "NFLite": {
+      "plc": "NFLite", "platform": "TwinCAT RT (x64)", "sources": ["Lib", "App/NFLite"],
+      "shared": "Machines/NFLite", "buildInfo": "App/NFLite/Version/GVL_BuildInfo.st",
+      "tests": "Tests/Integration/NFLite", "machines": ["Shark", "UVM", "SAS", "Google"],
+      "simulationGas": { "provenance": "Machines/simulation-models.provenance.json", "program": "PRG_GAS_SIMULATION",
+                         "cycleTimeUs": 100000, "generator": ["python", "Tools/generate_app_gas_model.py", "{model}",
+                         "App/NFLite", "{src}/App/NFLite/Simulation/GVL_SimulationGasModel.st"] } } } }
+```
+
+`machine build` does these steps for each machine:
+
+1. It puts the source folder together in `<work>\<family>\<Machine>\src`: the `sources`, the
+   shared manifests of `shared` (`libraries.xml`, `events.xml`, `event-classes\`,
+   `plc-data-types\`), and the files of `shared\<Machine>\`: `variants.xml`, `io-devices.xml`
+   (with its `Base` file and the `Set`/`Replace`/`Add` changes resolved, and `${PLC_INSTANCE}`
+   replaced), `tasks.xml`, `safety.xml` with its TwinSAFE files (byte for byte), and the
+   simulation gas model (`simulation-gas.json`, checked against the provenance file).
+2. It writes the build identity (git tag, commit, dirty flag, machine, UTC time) into the copy
+   of `buildInfo`. The file in git does not change.
+3. It reads all `.st` files (as `check parse`). A parse error stops the machine before TwinCAT starts.
+4. In ONE TwinCAT session, it makes a new project (`init`) or syncs the kept project, and builds
+   the variant of the machine. Each declared link must resolve.
+
+The project is kept between runs. The tool builds a fresh project when you give `--fresh`, when
+a manifest changed, when a `.st` file or an object was deleted or renamed, when the kept project
+has I/O items that the manifest does not have, or when the last run did not end. When the shell
+crashes or stops (RPC error or time-out), the tool keeps the failed folder in
+`<work>\<family>\_failed\` and builds once more, fresh. A compile error is not tried again.
+
+| Option | Meaning |
+|---|---|
+| `--simulation` | Build with the compiler define `SIMULATION`, in `<work>\<family>\<Machine>-sim`. |
+| `--release` | A build for a real machine: the tree must be clean, `HEAD` must have a tag, the manifests must not have `SIMULATION` or a test adapter address. Always fresh. A refused release gives exit code 2. |
+| `--parallel` | Build two machines at the same time (one process and one shell for each machine, about 1 GB RAM each). |
+
+`machine test` holds the lock file (one run on UmRT_Default at a time), runs `preCheck` once,
+then for each machine: `machine build --simulation`, activation on UmRT_Default in the same
+TwinCAT session (no second shell), `verify` with the machine's `expect.json` and the compiled
+build identity, and `test` with the scenarios of `tests` and the feature groups of the machine.
+The JUnit result is `<work>\<family>\<Machine>-sim\test-results.xml`. With `--junit <file>` and
+more than one machine, the tool adds the machine name to the file name.
+
+**CAUTION: `machine test` replaces the boot project of UmRT_Default.**
+
+The log of each machine is `<work>\<family>\<Machine>[-sim].log`. The log of the run before is
+`<Machine>[-sim].previous.log`.
+
+Exit codes: 0 = all machines passed all steps, 1 = a step failed, 2 = wrong command line,
+manifest or machine name, or a refused release (nothing was built), 3 = another run holds the
+UmRT lock.
+
+### Release artifacts: `package`, `libraries`, `toolchain`, `esi`
+
+These commands work offline. They need no XAE and no runtime. Add `--json` for a result in
+JSON. A new archive or baseline file never overwrites an existing file.
+
+```
+bai package create --directory <payload> --metadata <json> --output <new-zip> [--json]
+bai package verify --package <zip> [--sha256 <hash>] [--json]
+bai libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json>
+bai libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <hash> [--json]
+bai toolchain capture --components <folder> --xae-shell <folder> --version <version> --archive <new-zip> [--json]
+bai toolchain verify --archive <zip> --sha256 <hash> --version <version> [--installed] [--json]
+bai esi install|verify --system-directory <folder> --devices <folder> --user-directory <folder> [--report <new-json>] [--json]
+```
+
+| Command | What it does |
+|---|---|
+| `package create` | Makes a PLC package ZIP from a payload folder (`boot\`, `project.zip`, `evidence.json`, and `identity.expect.json` for schema 2). The metadata JSON has the package fields but no `files` field. `status` must be `Packaged` and `deploymentApproved` must be false. The tool writes the inventory and `release.json`, then verifies the package. |
+| `package verify` | Checks a schema 1 or schema 2 package: the inventory, sizes, SHA256 hashes, boot files and identity data. It refuses unlisted files, duplicate names, links and unsafe paths. Without `--sha256`, it checks only the internal integrity. A pass is not a deployment approval. |
+| `libraries lock` | Reads the compiled TMC (platform and variant) and records all `_Libraries` files, also the dependencies, in a new lock file. The project must have one PLC. Omit `--variant` for a project with no variants. `--manifest` also checks the names and versions of `libraries.xml`. |
+| `libraries verify` | Compares the project with an approved lock file. Never make an approved lock file again only to pass a check. |
+| `toolchain capture` | Archives the TwinCAT `Components` folder and the XAE shell folder. Give the real folders; the tool does not guess. The archive does not install Windows parts, register COM or supply licenses. |
+| `toolchain verify` | Checks an archive. `--installed` also compares it with the folders on this PC. |
+| `esi install` | Copies ESI catalog files into the system and user folders. It checks all conflicts first and never replaces a different file. Open a new XAE session after the install. |
+| `esi verify` | Checks the catalog folders. It writes no file. |
+
+Exit code: 0 = pass, 1 = a check or file operation failed, 2 = wrong arguments.
+
+### What the tool never does
+
+- It never makes a project, except with `init`.
+- It never saves an adopted project.
+- It never deletes PLC objects, tasks or task calls. It deletes I/O items only with
+  `--confirm-delete-io`.
+- It never writes over source files on `export`, except with `--overwrite`.
+- It never activates, and never changes the runtime state, except with `--yes` or with
+  `machine test` (only on UmRT_Default).
+- It never reads `--confirm-delete-io`, `--overwrite`, `--plc` or `--yes` from `.stconfig`.
+
+## 5. The source folder
+
+### Layout
+
+The tool reads all `.st` files under the source folder. The folder of a file becomes a PLC
+folder: `<source>\App\Shark\PRG_MAIN.st` becomes `<PLC> Project > App > Shark > PRG_MAIN`.
+One file can hold one object, or one object with its METHODs and PROPERTYs. The manifests
+(section 6) are at the top level of the source folder.
+
+### `.stignore`: skip files
+
+One pattern on each line. `#` starts a comment.
+
+```
+# A file name, at any depth
+FB_Scratch.st
 *_deprecated.st
+# A full folder: the trailing /** is necessary
 Lib/Legacy/**
+# The files of one folder, but not its subfolders
+Lib/WorkInProgress/*.st
+# A folder name at any depth
+**/Generated/**
 ```
 
-A pattern with no `/` matches the file name at any depth; a pattern with `/`
-is matched against the whole source-relative path. `*` matches within a path
-segment, `**` matches across segments — so **to ignore an entire folder**,
-the pattern needs a trailing `/**` (e.g. `Lib/Legacy/**`); a bare folder name
-with no `/` only matches a *file* by that exact name, not a folder. Use
-`--ignore <glob>` for one-off, per-invocation exclusions on top of
-`.stignore`.
+- A pattern with no `/` matches the file name at any depth.
+- A pattern with `/` matches the full path, from the source folder.
+- `*` does not cross `/`. `**` crosses `/`. `?` is one character. Case is not important.
+- There is no `!pattern`. `--ignore <glob>` adds patterns for one run.
 
-See [`.stignore.example`](.stignore.example) at the repo root for a fuller,
-annotated sample covering each pattern shape (single file, name pattern,
-whole folder, one folder's direct files but not its subfolders, a folder at
-any depth) — copy it to `.stignore` in your source folder and edit.
+### `.stconfig`: default options
 
-### Incremental sync
-
-Every successful `.st` sync (full or `--incremental`) records the current git
-commit SHA in `.st-sync-state` at the root of the source folder (requires it
-to be inside a git repo; skipped silently otherwise). A later run with
-`--incremental` reads that SHA, computes `git diff --name-status` against it,
-and parses/syncs ONLY the changed `.st` files instead of the whole folder —
-much faster once a project has many objects.
-
-```powershell
-# First run: full sync, establishes the baseline in .st-sync-state
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-
-# Later runs, after committing .st changes: only re-syncs what changed
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark" --incremental
-```
-
-By default, `git diff`-reported deletions are only **warned** about, never
-acted on — `.st-sync-state`'s baseline still advances, but the corresponding
-PLC object(s) are left in place. Add `--confirm-delete` to actually remove
-them:
-
-```powershell
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark" --incremental --confirm-delete
-```
-
-`--confirm-delete` is conservative by design: it only deletes an object when
-the deleted file's name (without extension) matches **exactly one** live PLC
-object, using the official `ITcSmTreeItem.DeleteChild()` API. It skips (and
-reports why) anything ambiguous — zero matches, more than one match, or a
-standalone `<Owner>.<Method>.st` file (deleting an individual method isn't
-supported; remove it manually). `--incremental` refuses to run (exit code 1)
-if no baseline exists yet — run a full sync first.
-
-### Automatic sync on commit (git hook)
-
-A `post-commit` hook in [`githooks/`](githooks/) can trigger `--incremental`
-automatically, detached (so `git commit` returns immediately) — sync output
-goes to `githooks/logs/<timestamp>.log`, not the terminal.
-
-One-time setup:
-
-```powershell
-git config core.hooksPath githooks
-```
-
-The hook (`githooks/post-commit`) is a fast no-op unless the commit touched
-`*.st` files, then launches `githooks/run-incremental-sync.ps1` hidden/
-detached. Set `$env:BECKHOFF_ST_SOURCE` to your `.st` source folder (without it the
-script logs "SKIPPED"). The TwinCAT project must already exist under
-`$env:BECKHOFF_TWINCAT_DEST` (default `C:\Users\<you>\Documents\TwinCAT`). It passes `--project <dest>\<source folder name>` (e.g.
-`...\TwinCAT\Shark`), so the project must have been created with that name.
-A wrong path fails loudly ("project not found"); it never creates a project.
-
-### Exporting manual PLC-side edits
-
-Some objects can only be created manually via the XAE UI (e.g. IO-scanned
-DUTs, Event Classes) but should still live in `.st` source once created.
-`export object <ObjectName>` finds that live object, reads its current text,
-and writes it to the correct mirrored `.st` file path (creating folders as
-needed) — the read-side counterpart of the normal sync, using the same
-`DeclarationText`/`ImplementationText` properties `PouSyncEngine` writes.
-
-```powershell
-.\beckhoffAutomationInterface.exe export object T_Beckhoff_AmbientSensor "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
-```
-
-`export object` now supports every PLC object kind synced from `.st` source: DUTs
-(STRUCT/ENUM/ALIAS), GVLs, and FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE
-objects — including their child METHODs and PROPERTIES, stitched back
-together in tree order with the correct terminators
-(`END_FUNCTION_BLOCK`/`END_PROGRAM`/`END_FUNCTION`/`END_INTERFACE`/
-`END_METHOD`/`END_PROPERTY`/`END_GET`/`END_SET`) re-added, since none of
-these are ever stored in `Declaration`/`ImplementationText`. Errors refuse
-cleanly if the name isn't found, or matches more than one object.
-
-**Known caveat**: non-ASCII characters can be lossy on round-trip (see the
-Phase 1 spike findings in `docs/ideas/st-plc-bidirectional-sync.md`) —
-TwinCAT appears to store POU text internally in a legacy codepage, so rare
-special characters in comments/strings may not survive an export exactly.
-
-### Reverse export (adopting an existing project)
-
-`export object <name>` above writes **one** object back to `.st`. `export
-code|libs|io|events|all` is the whole-project version: point one at an
-**existing** TwinCAT project (`--project`) and it regenerates the entire
-source tree (the positional path), so you can start managing a project you
-already have as git-tracked `.st` source. This is the reverse of the normal
-sync — a **one-time bootstrap**, not the ongoing flow (once the tree exists,
-edit `.st` and sync forward with `sync` as usual).
-
-| Command | Generates |
-|---|---|
-| `export code` | every POU/DUT/GVL → mirrored `.st` files under the source path |
-| `export libs` | library references → `libraries.xml` |
-| `export io` | the `TIID` device/box/terminal tree → `io-devices.xml` |
-| `export events` | `.tsproj` Event Classes → `events.xml` + `event-classes/*.xml` (no Visual Studio needed) |
-| `export all` | all of the above **plus** `export links` (`links.xml`) |
-
-```powershell
-# One-time: bootstrap a fresh source tree from an existing project, then commit it.
-.\beckhoffAutomationInterface.exe export all "C:\...\ST\Shark-new" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
-cd "C:\...\ST\Shark-new"; git init; git add -A; git commit -m "Import Shark from TwinCAT"
-# From here on, edit .st and sync FORWARD as normal (see "Typical workflow").
-```
-
-**Adopting an ARBITRARY pre-existing project** (one this tool didn't bootstrap
-itself) just needs `--project` pointed at the right place, since a real
-project's PLC-project name (inside `TIPC`) commonly differs from its
-`.tsproj`/solution file name, and it may not even have a `.sln` at all:
-
-| Flag | Purpose |
-|---|---|
-| `--project <path>` | The `.tsproj` file (or a folder containing exactly one) to attach to (read-only, never saved) — no `.sln` resolution involved. Works whether or not the project has a `.sln` at all. |
-| `--plc <name>` | The real PLC-project name inside `TIPC`, if it differs from the `.tsproj` file's own base name — check the project's own `.plcproj` file name if unsure. |
-
-```powershell
-# A project with NO .sln at all (check its own .plcproj file name for --plc):
-.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\SomeProject\SomeProject.tsproj" --plc RealPlcProjectName
-
-# A project that DOES have a matching .sln, but a differently-named PLC project inside:
-.\beckhoffAutomationInterface.exe export all "C:\...\ST\new" --project "C:\...\Projects\SomeProject" --plc RealPlcProjectName
-```
-
-**`--plc` also works with `build` alone — no `export`
-required.** This is the path for CI compiling a PLC project that's natively
-hosted (its own `.tsproj`/`.plcproj` checked into git directly, no `.st`
-source tree, possibly no `.sln` at all) rather than one this tool manages:
-
-```powershell
-# CI: compile an arbitrary pre-existing project, no reverse export involved.
-.\beckhoffAutomationInterface.exe build "C:\...\SomeProject" --plc RealPlcProjectName
-if ($LASTEXITCODE -ne 0) { throw "PLC build failed" }
-```
-
-Both forms attach to the project **read-only** — no `Project.Save()`/
-`Solution.SaveAs()` is ever called on this path, regardless of whether a
-`.sln` already exists (confirmed live: hashing the `.tsproj`/`.sln` before and
-after showed byte-identical content in both cases). One caveat found during
-live validation: merely *opening* a project this way can still cause TwinCAT
-itself to silently bump one auto-generated version-stamp field (e.g. a
-`ProductVersion`/`ProgramVersion` attribute reflecting your installed TwinCAT
-build) — confirmed cosmetic via `git diff` (no logic/content change) both
-times it was observed. If the project is git-tracked, a quick `git status`/
-`git diff` after a reverse-export run will show this clearly if it occurs, and
-it's safe to `git checkout --` away.
-
-**Safety — `--overwrite`:** to avoid clobbering hand-edited source, reverse
-export **refuses** (exit 1) if the source path already contains any `.st`
-files or manifests. Pass `--overwrite` to regenerate in place, or point the
-source path at an empty folder. `--overwrite` and `--plc` are CLI-only and
-never read from `.stconfig`. Reverse export also requires the project to already exist
-(it never bootstraps — a missing project is a hard error, since there is
-nothing to export from).
-
-**Caveats:**
-- `export io` preserves user CoE startup commands; `sync io` verifies them after import.
-  Fixed commands remain owned by TwinCAT. See [CoE startup commands](docs/coe-startup.md).
-- The non-ASCII round-trip caveat above applies to `export code` too (it reuses
-  the same per-object exporter).
-- `export io` recovers each terminal's `Product` primarily from the trailing
-  `"(Product)"` in its **Name** — TwinCAT's own default naming convention when
-  a device is dragged from the ESI catalog (confirmed live against 30 real
-  terminals, including non-Beckhoff/hyphenated catalog strings like a Festo
-  `EX260-SEC1`, which a bare product-code pattern would truncate wrongly).
-  Falls back to a pattern embedded in Name (TwinCAT's other auto-naming style,
-  e.g. `EK1100_1.1`), then to `ItemSubTypeName` — see `Sync/IoManifestWriter.cs`.
-  Anything not lifted from the Name parenthetical is listed as `! verify` in
-  the output — **review those `io-devices.xml` `Product` attributes against
-  the real hardware before relying on the manifest for a forward sync.**
-- A library reference whose name isn't in Beckhoff's own `Tc<N>_*` namespace
-  (e.g. a custom/third-party library) is left as an XML comment in
-  `libraries.xml` for manual review rather than guessed, since its real
-  Company/Version can't be recovered from what TwinCAT exposes.
-
-### Naming-convention linting
-
-Every parse (`--parse-only` or a full sync) runs a naming-convention linter
-over the parsed objects and prints warnings — it never blocks the sync or
-rewrites anything. It checks the prefix convention already used throughout
-this codebase:
-
-| Kind | Expected prefix | Example |
-|---|---|---|
-| `FUNCTION_BLOCK` | `FB_` | `FB_HeatZone` |
-| `PROGRAM` | `PRG_` | `PRG_MAIN` |
-| `INTERFACE` | `I_` | `I_Tunable` |
-| `FUNCTION` | `F_` | `F_ClampSpeed` |
-| `ENUM` (`TYPE ... : (...)`) | `E_` | `E_CTRL_MODE` |
-| `STRUCT` | `ST_` | `ST_HeatZoneConfig` |
-| Alias (`TYPE X : Y;`) | `T_` | `T_Beckhoff_AmbientSensor` |
-| GVL | `GVL_` | `GVL_HeatZone` |
-
-Known false positives (safe to ignore): the default TwinCAT template's own
-`MAIN` program, and alias-of-a-struct types conventionally kept under the
-`ST_` prefix instead of `T_` (e.g. `ST_MFC_Telemetry : ST_MFCTelemetry`) to
-signal they represent the same struct shape. METHODs and PROPERTIES have no
-naming convention and are never checked.
-
-### Checking %I/%Q ↔ IO links
-
-`io-devices.xml`'s `<Links>` section (see "Manifests" below for the full
-sync mechanism) maps a declared `%I`/`%Q` variable to a physical IO channel;
-nothing enforces that every variable you declare actually has one.
-`check links` (or, more lightly, every `check parse`) parses all `.st`
-source, finds every
-`AT %I*`/`AT %Q*` declaration in a **GVL or PROGRAM**, and cross-checks it
-against `<Links>`:
-
-```powershell
-.\beckhoffAutomationInterface.exe check links "C:\...\ST\Shark"
-```
+Put `.stconfig` in the source folder, or give its folder with `--config`.
 
 ```
-2026-07-15 ...: [check-links] 34 declared, 0 linked, 34 unlinked, 0 stale link(s).
-    ! UNLINKED PRG_DIGITAL_INPUT.IO_DoorLT (%I) — App/Shark/Programs/PRG_DIGITAL_INPUT.st
-    ! UNLINKED GVL_Safety.SafetyOk (%I) — App/Shark/GVL_Safety.st
-    ...
+project=C:\bai\work\Shark
+shell=xae
+clean=true
 ```
 
-It reports two things: declared variables with **no matching `<Link>`**
-(exit code 1 under `check links` if any exist — a stale-configuration gate
-usable in CI), and `<Link>` entries whose `PlcVar` matches **no** declared
-variable (a stale/typo'd entry, e.g. left over after a rename) — these are
-always informational only, never affecting the exit code.
+Then `bai sync all ST\Shark` is sufficient.
 
-**Scope limit:** only `GVL`/`PROGRAM`-level declarations are checked. A
-`FUNCTION_BLOCK`'s own `AT %I*/%Q*` member (or a `STRUCT`/DUT member) is
-resolvable only through wherever that block is actually *instantiated*
-(e.g. `PRG_MAIN.fbMotor.bEnable`), which can't be determined from static
-source alone — those declarations exist and sync normally, they're just not
-covered by this check.
+- Keys: `source`, `project`, `shell`, `clean`. Another key is an error.
+- `source` is necessary only when the file is not in the source folder.
+- Relative paths are relative to the folder of the file.
+- `true`, `1` and `yes` are true (any case). All other values are false.
+- An option on the command line always wins. The command (`sync code`, `check parse`, ...)
+  always selects the stage.
+- The tool says when it loaded the file. `--no-config` ignores it.
 
-### Variable links (`links.xml`)
+## 6. Manifest files
 
-**`io-devices.xml`'s `<Links>` section is the recommended, permanent way to
-declare links** — it's the whole reason `.st`/manifest source exists in this
-project at all: plain text, hand-readable, git-diffable, easy to review in a
-PR. `links.xml`, covered below, is a **discovery aid** for finding out a
-real channel path you don't already know — not a second permanent source of
-truth to maintain alongside it. Once you know the real `IoChannel`, write it
-into `io-devices.xml` as a normal `<Link>` entry (see above) and treat
-`links.xml` as disposable (it's `.gitignore`d by default).
+All manifests are optional and are at the top level of the source folder. A second `sync` with
+no change changes nothing.
 
-**Recommended workflow when you don't yet know the real wiring:**
-1. Link the variable to hardware once by hand in the TwinCAT IDE (drag the
-   channel onto the variable in Solution Explorer, or right-click the
-   variable → "Link To...") — this is where your knowledge of the actual
-   panel wiring comes in; nothing here can be derived automatically.
-2. Save, then run:
-   ```powershell
-   .\beckhoffAutomationInterface.exe export links "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark\Shark.tsproj"
-   ```
-   which writes the current mapping to `links.xml` via
-   `ITcSysManager.ProduceMappingInfo` — the same thing "Export Variable
-   Mapping" does.
-3. Read the `IoChannel`-equivalent path back out of `links.xml` (each
-   `<Link>`'s `OwnerB`/`VarB`) and transcribe it into a proper `<Link
-   PlcVar="..." IoChannel="..."/>` entry in `io-devices.xml` — now it's
-   readable, reviewable, and lives with the rest of the project's manifests.
-4. Delete (or just leave — it's gitignored) `links.xml`.
+### `libraries.xml`
 
-If you have a whole batch of variables to link at once, skip step 3's
-transcription and just keep `links.xml` as-is for that run — both
-mechanisms coexist (`links.xml` applies first, then `io-devices.xml`'s
-`<Links>` on top, neither replaces the other) — but transcribing back to
-`io-devices.xml` is still worth doing before committing, for the same
-readability reason.
+```xml
+<Libraries>
+  <Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />
+</Libraries>
+```
 
-**Schema, if you ever need to hand-author or read `links.xml` directly.**
-Live testing (2026-07-15, TwinCAT 3.1) found `ConsumeMappingInfo` is picky
-about the exact shape:
+`sync libs` adds the missing references and removes the references that the file does not list.
+
+### `io-devices.xml`
+
+```xml
+<IoTree>
+  <Device Name="Device 1 (EtherCAT)" Disabled="false" Adapter="02000000B101">
+    <Box Name="Term 1 (EK1100)" Product="EK1100">
+      <Terminal Name="Term 2 (EL1008)" Product="EL1008" />
+      <Terminal Name="Term 3 (EL2008)" Product="EL2008" Variants="MachineA" />
+    </Box>
+  </Device>
+  <Links>
+    <Link PlcVar="sample Instance^PlcTask Inputs^GVL_Shark.bMotorRunSensor"
+          IoChannel="Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)^Channel 1^Input" />
+  </Links>
+</IoTree>
+```
+
+Devices, boxes and terminals:
+
+- `<Box>` and `<Terminal>` are the same. They can be nested to any depth. Put E-bus terminals
+  under their coupler (for example EK1100), not under another terminal.
+- `Product` is the Beckhoff type name. `Disabled="true"` disables the device.
+- An enabled EtherCAT master with no linked variable stops the build with a modal dialog box.
+  If the links cannot be made, the tool disables the master so the build can pass.
+- `Variants="A,B"` (on `<Device>`, `<Box>`, `<Terminal>`): the item is enabled only in these
+  variants. No attribute = all variants. A child cannot be in a variant where its parent is not.
+  `Variants` on `<Link>` is an error: TwinCAT keeps one set of links for all variants.
+
+Network layout. There are two layouts. You can use both in one file.
+
+- **One EtherCAT master for each device:** `<Device Name="BH 1" Adapter="02000000B101">`.
+  `Adapter` is the MAC address (12 hex digits). Two enabled masters with the same (empty) adapter
+  fail the build with no error text. On a PC with no EtherCAT card, use test addresses.
+- **One adapter with ports (CU2508):** declare the adapter before the devices, then put each
+  device on a port.
+
+  ```xml
+  <Adapter Name="Device 1 (RT-Ethernet Adapter)" Mac="000105992C32" Ports="8"
+           DeviceName="\DEVICE\{GUID}" />
+  <Device Name="BH1" Via="Device 1 (RT-Ethernet Adapter)" Port="1">
+    <Box Name="Box 1 (CU2508)" Product="CU2508-0000-0000" />
+  </Device>
+  ```
+
+  `Mac`: 12 hex digits (`-` and `:` are permitted). `DeviceDesc` and `Disabled` are optional.
+  `DeviceName` is the Windows name of the network card (XAE: Adapter tab). A real machine needs
+  it, else the activation fails with "Failed to connect to network adapter". `Via` and `Port`
+  go together. `Via` and `Adapter` are not permitted on the same device. One device for each
+  port. `Product="CU2508"` makes the "Configuration Port" box, which is not the correct one.
+- TwinCAT cannot change a device from one layout to the other. `sync io` then stops. Add
+  `--confirm-delete-io` to delete the device and make it again (with its links).
+
+Boxes that are not Beckhoff boxes. Give the three numbers from the ESI file (`<Vendor><Id>`,
+`<Type ProductCode RevisionNo>`), or from the `.xti` file of the box:
+
+```xml
+<Box Name="Box 11 (MARPOSS P3XF STANDARD)" Product="MARPOSS P3XF STANDARD"
+     VendorId="#x00000916" ProductCode="#x00004000" RevisionNo="#x00010002" />
+```
+
+Give all three or none, as `#x...`, `0x...` or decimal. The tool makes the box from the numbers
+and compares its type name with `Product`. The ESI file must be installed
+(`C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Config\Io\EtherCAT`).
+
+CoE startup list. An optional `<CoE>` under a `<Box>` or `<Terminal>`, in the native TwinCAT
+`InitCmd` format:
+
+```xml
+<Terminal Name="Term 4 (EL3174)" Product="EL3174">
+  <CoE>
+    <InitCmd>
+      <Transition>PS</Transition>
+      <Comment>Example only</Comment>
+      <Timeout>1000</Timeout>
+      <Ccs>1</Ccs>
+      <Index>#x8000</Index>
+      <SubIndex>19</SubIndex>
+      <Data>0500</Data>
+    </InitCmd>
+  </CoE>
+</Terminal>
+```
+
+- No `<CoE>`: the tool does not change the user startup commands.
+- `<CoE/>`: the tool removes all user startup commands of the terminal.
+- A list: the tool replaces the user startup list with it, in this order.
+- `Data` is a hex byte string in device byte order. `Ccs` is 1 or 2. TwinCAT makes the `Fixed`
+  commands from the ESI and PDO settings. They are not in the manifest.
+- The tool reads the list back and stops on a difference. These are project settings, not
+  online writes. Confirm the values on the real terminal.
+
+PDO configuration. An optional `<ProcessData>` under a box, in the native TwinCAT format, with
+the full list of `<RxPdo>` and `<TxPdo>`. Each `<Entry>` has `Index`, `SubIndex`, `BitLen`,
+`Name` and `DataType`. `export io` writes it. Start from an export and edit it.
+
+Links:
+
+- `PlcVar`: `<PLC> Instance^<Task> Inputs|Outputs^<GVL or PROGRAM>.<variable>`.
+- `IoChannel`: the I/O tree path without `TIID^`, for example `<Device>^<Coupler>^<Terminal>^Channel 1^Input`.
+- The code must use the `AT %I*`/`%Q*` variable. If not, it is not in the process image and the
+  link fails (`0x98510001`).
+
+PLC data types. Put already computed `<DataType>` XML for a terminal in
+`plc-data-types\<Product>.xml`. `sync io` adds it to the `.tsproj`.
+
+### `variants.xml`
+
+```xml
+<Variants DefineMode="Implicit">
+  <Variant Name="MachineA" />
+  <Variant Name="MachineB" />
+  <Group Name="PCV_MODBUS"><Member>MachineA</Member></Group>
+  <Group Name="PCV_ETHERCAT"><Member>MachineB</Member></Group>
+</Variants>
+```
+
+- The PLC gets the name of the active variant and the names of its groups as compiler defines.
+  In the code, test the group (the feature), not the machine name:
+  `{IF defined (PCV_MODBUS)} ... {END_IF}`.
+- Names must be valid PLC identifiers. `DefineMode` must be `Implicit`.
+- `sync variants` writes the variants and groups and switches on the defines. It removes a
+  variant that the file does not list.
+- See `ST\VariantSample` and `ST\VariantIoSample`.
+
+### `safety.xml`
+
+```xml
+<Safety Name="SHARK_Safety_prj" Folder="safety/SHARK_Safety_prj" />
+```
+
+- `Folder` holds the safety project exactly as the TwinCAT safety editor saved it:
+  `<Name>.splcproj` and `TargetSystemConfig.xml`. Optional `TargetSystemConfig="<file>"`
+  replaces `TargetSystemConfig.xml` in the copy (same logic, different terminals).
+- `sync safety` sets the object IDs of the EtherCAT boxes and modules to the IDs in the safety
+  files. It finds the boxes by name (for example `Term 34 (EL1918)`) and edits the `.tsproj`
+  with TwinCAT closed. Then it copies the folder next to the `.tsproj`, checks each file
+  byte by byte, and adds the safety project one time. It stops with `SAFETY FAILED` if the logic
+  terminal has no Standard In/Out channels, or if a copied file is not equal to the source.
+- If the IDs are not the same, TwinCAT adds the project with no error but with no Standard
+  In/Out channels.
+- **CAUTION: Do not edit the safety files. A changed file causes a CRC dialog box that the tool
+  cannot close.** The tool does not download the safety project to the terminal.
+
+### `tasks.xml`
+
+```xml
+<Tasks BaseTimeUs="1000">
+  <Task Name="PlcTask" CycleTimeUs="10000" Priority="20"><Call>MAIN</Call></Task>
+  <Task Name="SpectrometerTask" CycleTimeUs="1000" Priority="2"><Call>PRG_Spectrometer</Call></Task>
+</Tasks>
+```
+
+- Write all tasks, also `PlcTask`. Without the file, the project keeps the one template task
+  (`PlcTask`, 10 ms, priority 20, calls `MAIN`).
+- `CycleTimeUs` must be a multiple of the base time. `BaseTimeUs` is optional (default 1000).
+  The tool does not change the base time.
+- Each task has its own priority (1 is the highest). `<Call>` names a PROGRAM of the source.
+  A program can be in one task only. A task calls its programs in the given order.
+- The tool makes missing tasks and calls and corrects a wrong cycle time or priority. It shows
+  a `WARNING` for a task or call that the file does not list. It never deletes one.
+
+### `events.xml`
+
+```xml
+<EventClasses>
+  <EventClass Name="BeckhoffLibEvents" Guid="{00000000-0000-0000-0000-000000000000}">
+    <Event Name="Verbose" Id="1" Severity="Verbose" Message="{0} - {1}" />
+  </EventClass>
+</EventClasses>
+```
+
+- Each class needs a template `event-classes\<Name>.xml` with the `<DataType>` XML and its real
+  GUID (from a working project, or from `export events`).
+- The Automation Interface cannot make event classes. `sync events` adds the missing classes
+  directly to the `.tsproj`, with TwinCAT closed.
+
+### `links.xml`
+
 ```xml
 <VarLinks>
-  <OwnerA Name="TIPC^Shark^Shark Instance">
+  <OwnerA Name="TIPC^sample^sample Instance">
     <OwnerB Name="TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 2 (EL1008)">
       <Link VarA="PlcTask Inputs^GVL_Shark.bMotorRunSensor" VarB="Channel 1^Input" />
     </OwnerB>
   </OwnerA>
 </VarLinks>
 ```
-— one `OwnerA` per PLC instance (both directions together, no `Type`
-attribute), and the `PlcTask Inputs`/`PlcTask Outputs` group folded directly
-into `VarA` (no separate `GrpA`) — confirmed round-trip-verified end to end
-(linked, built cleanly, `BUILD PASSED`). A richer variant also exists in the
-wild (`OwnerA` with separate `Prefix`/`Type`, `Link` with a separate `GrpA`
-plus `TypeA`/`InOutA`/`GuidA` metadata — the real
-`Spectrometer Instance Mappings.xml`'s own shape, and Beckhoff's official
-`CodeGenerationDemo` sample's alternate shape) — `check links` parses
-both, but only the shape above was confirmed to actually apply via
-`ConsumeMappingInfo` in this environment; the richer one was tried first and
-silently applied nothing (no COM exception, but an `export links`
-round-trip came back empty). If in doubt, always prefer `export links`
-over hand-authoring this file.
 
-See [`links.xml.example`](links.xml.example) at the repo root for a fully
-annotated template. `check links`/`check parse` also cross-reference
-`links.xml` entries the same way they do `io-devices.xml`'s `<Links>` — a
-`links.xml` entry whose variable is nested through a `FUNCTION_BLOCK`
-instance (e.g. `MAIN.fbSpec.inLogicSig[1]`, real usage seen in that same
-reference project) can't be statically verified either way, so it's
-reported informationally as "unresolvable," never as unlinked or stale.
+- This is the native TwinCAT "Export Variable Mapping" format. `sync io` applies it first, in
+  one call. Then it applies the `<Links>` of `io-devices.xml`.
+- Use it to find a channel path: link the variable one time in XAE, run `export links`, then
+  copy the channel into a `<Link>` in `io-devices.xml`. `links.xml` is in `.gitignore`.
+- One `OwnerA` for each PLC instance. Put the task group into `VarA` (no `GrpA`). Other shapes
+  can be read by `check parse`, but TwinCAT did not apply them. If you are not sure, use
+  `export links`.
 
-### Style checking
+## 7. Runtime test files
 
-`check format` scans every non-ignored `.st` file under the source path and
-prints a dry-run report of hygiene issues — it never modifies any file, and
-needs no Visual Studio session at all (similar to `check parse`):
+### `expect.json` (for `verify`)
 
-```powershell
-.\beckhoffAutomationInterface.exe check format "C:\...\ST\Shark"
+```json
+{
+  "variants": {
+    "MachineA": [
+      { "symbol": "MAIN.sMachine",           "type": "STRING(16)", "equals": "MachineA" },
+      { "symbol": "MAIN.rMaxPressure",       "type": "REAL",  "equals": 3.0, "tolerance": 0.001 },
+      { "symbol": "PRG_PcvModbus.nCycles",   "type": "UDINT", "increases": true },
+      { "symbol": "PRG_PcvEtherCAT.nCycles", "type": "UDINT", "absentOrZero": true }
+    ]
+  }
+}
 ```
 
-It checks for: mixed line endings (both CRLF and bare LF in the same file),
-trailing whitespace, a missing trailing newline at end of file, and extra
-blank lines at end of file. This is deliberately minimal — it does **not**
-re-indent or otherwise rewrite code; a full auto-formatter remains a
-possible future addition (see `docs/ideas/st-plc-bidirectional-sync.md`).
+Each line has one check: `equals` (optional `tolerance`), `increases` (read two times, 0.5 s
+apart; the code runs) or `absentOrZero` (the code is not compiled in, or does not run). For a
+project with no variants, use `"default": [ ... ]`.
 
-### Typical workflow
+### Scenario files (for `test`)
 
-```powershell
-# 0. First time only: bootstrap the TwinCAT solution + one-time project setup
-.\beckhoffAutomationInterface.exe init "C:\...\ST\Shark" --into "C:\...\TwinCAT"
-.\beckhoffAutomationInterface.exe sync io "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-.\beckhoffAutomationInterface.exe sync events "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-
-# 1. Fast syntax check after editing .st files (no Visual Studio, ~instant)
-.\beckhoffAutomationInterface.exe check parse "C:\...\ST\Shark"
-
-# 2. Full sync + build (reopens and reconciles the existing project)
-.\beckhoffAutomationInterface.exe sync all "C:\...\ST\Shark" --project "C:\...\TwinCAT\Shark"
-
-# 3. Fix compile errors reported, then iterate quickly without re-syncing
-.\beckhoffAutomationInterface.exe build "C:\...\TwinCAT\Shark"
+```json
+{
+  "name": "Purge precursor",
+  "tags": ["sequence", "smoke"],
+  "requires": ["PCV_ETHERCAT"],
+  "timeoutS": 300,
+  "steps": [
+    { "do": "send", "command": 200, "parameters": { "mode": 1, "side": 1 }, "expect": "accepted" },
+    { "do": "waitUntil", "symbol": "PRG_Sequence.fbOrchestrator.eActiveSequence", "type": "INT", "equals": 7, "timeoutS": 5 },
+    { "do": "check", "symbol": "PRG_Sequence.fbOrchestrator.bError", "equals": false },
+    { "do": "write", "symbol": "GVL_Simulation.bSafetyOk", "value": false },
+    { "do": "wait", "seconds": 2 }
+  ],
+  "cleanup": [
+    { "do": "write", "symbol": "GVL_Simulation.bSafetyOk", "value": true }
+  ]
+}
 ```
 
-> **Safety note:** `--project` names exactly which `.sln`/`.tsproj` is
-> targeted, and `sync` only accepts a project that `init` created. Creating a NEW project always requires
-> `init` (not `sync`) — a missing solution under `sync` is a hard error, so
-> a mistyped path can never silently bootstrap (or bury a duplicate project
-> inside) the wrong location.
+| Field | Meaning |
+|---|---|
+| `name` | Required. The name in the results. |
+| `tags` | Optional. Names that select a set of scenarios. |
+| `requires` | Optional. Feature groups that the machine must have. Never a machine name. |
+| `timeoutS` | Optional. The time limit for the scenario. Default: 600 s. |
+| `steps` | Required. The steps, in order. |
+| `cleanup` | Optional. Steps that run after the scenario, also after a failure. Use them to undo manual commands: CancelProcess does not undo all of them. |
 
-## Machine variants
+| `do` | Fields | What it does |
+|---|---|---|
+| `send` | `command`, `parameters`, `expect` (`accepted` or `rejected`, default `accepted`), `timeoutS` (default 10) | Writes the command JSON into `PRG_Telemetry.fbCommandReceiver.AdsStream`. Waits until `nLastCommandIndex` (accepted) or `nLastRejectedCommandIndex` (rejected) shows its index. |
+| `waitUntil` | `symbol`, `type`, a condition, `timeoutS` | Reads the symbol until the condition is true. Without `timeoutS`, it waits until the scenario time ends. |
+| `check` | `symbol`, `type`, a condition | Reads the symbol one time. |
+| `write` | `symbol`, `type`, `value` | Writes the value. |
+| `wait` | `seconds` | Waits. |
 
-One PLC project can serve a family of machines with TwinCAT Variant Management
-(TwinCAT 3.1.4024+). Declare the variants in **`variants.xml`** next to the other
-manifests (example: [`ST/VariantSample`](ST/VariantSample)):
+A condition is `equals` or `notEquals` (optional `tolerance`), or `lessThan` and/or
+`greaterThan` (numbers only). `type` is `BOOL`, `BYTE`, `SINT`, `INT`, `UINT`, `DINT`, `UDINT`,
+`LINT`, `ULINT`, `REAL`, `LREAL` or `STRING(n)`. For an enum, use `INT`. You can omit `type` only
+for `true` or `false`. The tool reads the size of each symbol from the PLC. If `type` does not
+agree, the step fails and shows the PLC type.
 
-```xml
-<Variants DefineMode="Implicit">
-  <Variant Name="MachineA" />
-  <Variant Name="MachineB" />
-  <Group Name="PCV_MODBUS">   <Member>MachineA</Member> </Group>
-  <Group Name="PCV_ETHERCAT"> <Member>MachineB</Member> </Group>
-</Variants>
-```
+## 8. Limits
 
-- `sync variants` (also part of `sync all`, first stage) writes the variants and groups into
-  the project and switches on the PLC's variant defines. A second run reports "no change";
-  a variant removed from the file is removed from the project.
-- The PLC gets the **active variant's name and its group names** as compiler defines. Use a
-  group as a feature switch: `{IF defined (PCV_MODBUS)}`. Keep machine names in one
-  configuration GVL; test features everywhere else.
-- Variant and group names must be valid PLC identifiers (they become defines).
-- `build` builds **every** variant (clean each time), because the compiler does not check code in
-  a branch that is not selected. `--variant <name>` builds one. The run ends with a summary
-  and exits 1 if any variant fails.
-- Each build prints the PLC's message pragmas, e.g. `{warning 'VARIANT CHECK: MachineA'}`, as
-  `[PLC MESSAGE]` lines, so the log shows which branch was compiled.
+- `MDP5001_*` PLC data type names contain a hash of the terminal configuration. They can be
+  different on a machine with other terminal revisions. If an alias shows `Unknown type`, build
+  one time, read the names in the saved `.tsproj`, and update the alias and `plc-data-types`.
+- A link needs the I/O image of the PLC instance. The link check covers only `AT %I*`/`%Q*`
+  variables of GVLs and PROGRAMs, not of function block instances.
+- UmRT has no EtherCAT adapter. Real I/O needs the real machine.
+- The UmRT trial license is valid for 7 days. Only a person can renew it in XAE (it asks for a
+  security code). `doctor` shows the expiry date.
 
-### Different I/O per machine
+## 9. Problems and fixes
 
-When machines of one family have slightly different I/O trees, keep **one** `io-devices.xml`
-and mark the items that only some machines have (example: [`ST/VariantIoSample`](ST/VariantIoSample)):
+| Problem | Fix |
+|---|---|
+| `Class not registered` | The shell is not installed or not registered. Run `bai doctor`. Use `--shell xae` or `--shell vs2022`. |
+| `REGDB_E_CLASSNOTREG (0x80040154)` | The tool runs as x86. Build it unchanged (x64). |
+| `TwinCAT project template not found` | Install TwinCAT 3.1 XAE, or repair it (section 1). |
+| `project not found` | Check the `--project` path. Make the project with `init` first. |
+| `not a project created by this tool` on `sync` | `sync` works only on a project that `init` made. Use `build` or `export` for other projects. |
+| `PLC project name ... is not valid` | Rename the source folder, or give `--name` to `init`. |
+| `BUILD FAILED — variant defines are off` | Run `bai sync variants` first. |
+| `object(s) are defined in more than one .st file` | Delete or rename the old file. |
+| `[drift] ... no longer in .st source` | The `.st` file of an object is gone, but the object is still in the project. Delete it in TwinCAT. |
+| `io-devices.xml: TwinCAT placed '...' at '...'` | The nesting is wrong. Put E-bus terminals under their coupler. |
+| `io-devices.xml: TwinCAT cannot make box '...'` | Install the ESI file, or give `VendorId`/`ProductCode`/`RevisionNo`. |
+| `box '...': ... made a "...", but Product says "..."` | The three numbers make a different box. Compare them with the ESI file. |
+| `IO SYNC FAILED — ... item(s) have the wrong kind` | The device has the other network layout. Add `--confirm-delete-io`, or make a new project. |
+| `Device '...' Via=...` or `... Port=...` | `Via` must name an `<Adapter>`. `Port` must be from 1 to `Ports`. |
+| Linking fails with `0x98510001` | Use the `%I*`/`%Q*` variable in the code. |
+| `SAFETY FAILED — ... box(es) named ...` | Use the box names of the real project in `io-devices.xml`. |
+| `SAFETY FAILED — ... has not got its Standard In/Out channels` | The object IDs do not agree. Look at the `~ id` lines and at the box names. |
+| `SAFETY FAILED — ... not byte-equal to the source` | Get the safety folder again from git. Do not edit it. |
+| The PLC stays in Config after `activate` | Run `bai doctor` and look at the license expiry date. |
+| `verify` shows `FAIL` | Another variant runs, or the code does not do what `expect.json` says. Look at the actual values. |
+| `test`: `send` gives `no answer` | The command id is not known, or the command receiver does not run. |
+| `TIMEOUT — Build did not finish in 15 minute(s)` | The shell locked during the build. The tool closed it. Run again. |
+| A `TcXaeShell` or `devenv` process stays open | The tool closes its shell in about 10 s. After a killed run: `Get-Process TcXaeShell,devenv \| Stop-Process -Force`. Do not pipe the tool output into `Select-Object -First`: it stops the tool early. |
+| `RPC_E_SERVERCALL_RETRYLATER` | The tool tries again. If it continues, close old `devenv`/`TcXaeShell` processes. |
 
-```xml
-<Terminal Name="Term 3 (EL2008)" Product="EL2008" Variants="MachineA" />
-```
+The tool sets TwinCAT silent mode during a run, so TwinCAT answers its own questions with the
+default. It sets your setting back at the end.
 
-- `Adapter="02000000B101"` on a `<Device>` sets the master's network adapter (12 hex digits,
-  `Pnp/DeviceData`). Two enabled masters with the same (empty) adapter fail the system build
-  with no error text, so give each enabled master its own (a test address on a PC with no
-  EtherCAT card).
-- The other layout: one real-time Ethernet adapter with a CU2508 (8 ports) and the EtherCAT
-  devices on its ports. `<Adapter Name="Device 1 (RT-Ethernet Adapter)" Mac="000105992C32"
-  Ports="8" />` (before the devices) makes the adapter (DevType 109, ESL ports);
-  `<Device Name="BH1" Via="Device 1 (RT-Ethernet Adapter)" Port="1">` makes an EtherCAT device
-  of SubType 111 on port 1 (its address is the port's TcCom object id, read from the adapter).
-  `Via` and `Adapter` are exclusive; one device per port. The CU2508 box on the port is
-  `Product="CU2508-0000-0000"` ("CU2508 Ethernet Port"; `CU2508` alone makes the
-  "Configuration Port" slave). A device with the wrong kind (94 vs 111) is an error; with
-  `--confirm-delete-io` it is deleted and made again. `export io` writes `<Adapter>`/`Via`/`Port`
-  back. Details: [HOW-TO-USE.md](HOW-TO-USE.md), section 9.
-- A box that is not a Beckhoff box (a third-party EtherCAT slave, for example the MARPOSS
-  spectrometer) cannot be made from a `Product` text ("Invalid item sub type"). Give its ESI
-  identity: `VendorId="#x00000916" ProductCode="#x00004000" RevisionNo="#x00010002"` (all three
-  or none). `sync io` then calls `CreateChild(name, 9099, "", int[] { vendor, product, revision, 0 })`
-  and checks that the new box's type name is `Product`. The ESI file must be installed.
-  `export io` writes the three numbers for every box whose vendor id is not 2 (Beckhoff).
-- `Variants="A,B"` works on `<Device>`, `<Box>` and `<Terminal>`. No attribute = all variants.
-  A child cannot be in a variant where its parent is not. Names must be in `variants.xml`.
-- `sync io` enables the item in those variants and disables it in the others (TwinCAT variant
-  management: `PvDisable` + `Disabled` per variant). A second run reports "0 changed".
-- `export io` writes the attribute back; export → sync → export is byte-identical.
-- **Links are the same in every variant** — TwinCAT stores them once
-  ([spike](docs/ideas/variant-io-spike.md)). A link to an item that is disabled in a variant is
-  harmless, so declare `%I*`/`%Q*` variables for all machines and link them once. A `Variants`
-  attribute on `<Link>` is rejected.
-- A `%I*`/`%Q*` variable must be used by the code to get into the process image; an unused one
-  cannot be linked.
+## 10. Test the tool
 
-## Closed loop on a runtime
+Unit tests (no TwinCAT): `dotnet test beckhoffAutomationInterface.Tests`.
 
-Build, run and check a project without touching XAE by hand. Two targets only:
-`umrt` (the User Mode Runtime `UmRT_Default` on this PC) and `local` (this PC's own runtime).
+The scripts in `e2e\` run the real tool on real TwinCAT. They work on copies in a temporary
+folder and read the fixtures in `ST\` (`sample`, `VariantSample`, `VariantIoSample`). Each script
+ends with `E2E PASSED` (exit code 0) or `E2E FAILED` (exit code 1).
 
-```powershell
-.\beckhoffAutomationInterface.exe doctor                                             # state + license expiry
-.\beckhoffAutomationInterface.exe activate C:\p\VariantSample --target umrt --variant MachineA --yes
-.\beckhoffAutomationInterface.exe verify --target umrt --expect ST\VariantSample\expect.json --variant MachineA
-```
+| Script | What it tests | Needs |
+|---|---|---|
+| `e2e\all-commands.ps1` | Each command: wrong command lines, checks, init/sync/build/export, a compile error on the correct line, read-only runtime checks | XAE, UmRT (run `variant-sample.ps1` first) |
+| `e2e\variant-sample.ps1` | Activate and verify each variant on UmRT; the wrong variant fails | XAE, UmRT with license |
+| `e2e\variant-io-sample.ps1` | Per-variant I/O: init, sync, export, round trip, build of all variants | XAE |
+| `e2e\coe-startup.ps1` | CoE startup lists: import, export, clear, fresh rebuild | XAE |
+| `e2e\pdo-configuration.ps1` | PDO configuration and links: import, export, fresh rebuild | XAE |
+| `e2e\com-errors.ps1`, `e2e\dispose-timeout.ps1` | COM error reports and shell shutdown | XAE |
+| `e2e\release-artifacts.ps1` | Release commands on a kept package and project | a kept package |
+| `e2e\cleanup-workspace.ps1` | `scripts\Manage-BaiWorkspace.ps1` on test folders | nothing |
 
-- **`activate` replaces the target's boot project.** Without `--yes` it prints what is on the
-  target now and stops. With `--yes`: select the variant → set the target → boot project
-  autostart → clean + build → activate → restart → wait for the PLC to reach Run. A failed build
-  stops before activation, so the running program stays.
-- **The project's own files are never written.** `build <path>` and `activate` work on a
-  temporary **shadow copy** of the project folder (deleted afterwards), because TwinCAT saves the
-  project by itself during a variant build and during activation. Error locations are reported
-  in the original project.
-- **UmRT has no EtherCAT adapter.** With `--target umrt`, `activate` disables the I/O devices in
-  the shadow copy, so the PLC logic runs and can be verified. Real I/O needs the real machine.
-- **`expect.json`** lists, per variant, the live values that prove the right program runs
-  (example: [`ST/VariantSample/expect.json`](ST/VariantSample/expect.json)):
-  - `"equals"` — a value (strings, BOOL, numbers; `"tolerance"` for REAL/LREAL)
-  - `"increases"` — a counter that must move (read twice, 0.5 s apart)
-  - `"absentOrZero"` — code that must not run: not linked into the program, or 0
-- **If the PLC never reaches Run** and TwinCAT stays in Config mode, `verify`/`activate` check the
-  target's license: missing or expired → that is the cause; valid → a device the target cannot
-  start (or another configuration error). `doctor` shows the expiry date. A 7-day trial license
-  must be renewed in XAE by a person (it asks for a security code).
+`scripts\Manage-BaiWorkspace.ps1` lists old `C:\bai-*` work folders and moves or deletes them.
+Each action only shows a preview until you add `-Apply`. Use short work paths such as
+`C:\bai\work`: long paths can exceed the Windows path limit.
 
-**End-to-end check:** [`e2e/variant-sample.ps1`](e2e/variant-sample.ps1) runs the whole loop on
-`ST/VariantSample` — init, build all variants, then for each variant activate, verify it, and
-verify the other one (which must fail) — and compares every exit code with the expected one.
-[`e2e/variant-io-sample.ps1`](e2e/variant-io-sample.ps1) does the same for per-variant I/O.
-[`e2e/all-commands.ps1`](e2e/all-commands.ps1) runs **every** command on copies of the real
-fixtures (`ST/sample`, `ST/VariantSample`): command-line errors, every check (with generated
-failures), the init/sync/build/export life cycle including an export → sync round trip, a compile error
-mapped to its `.st` line, incremental sync, the git hook worker, and read-only runtime checks
-(it never activates). Run `variant-sample.ps1` first; each step's output is kept in
-`<work>\logs\`.
-
-## Manifests (config data, not `.st` source)
-
-Alongside the `.st` files, a project folder can contain:
-
-- **`libraries.xml`** — PLC library references (`<Library Name="Tc2_Standard" Version="*" Company="Beckhoff Automation GmbH" />`)
-- **`io-devices.xml`** — EtherCAT I/O hardware tree (`<Adapter>`/`<Device>`/`<Box>`/`<Terminal>`) plus optional `<Links>` mapping PLC variables to I/O channels
-- **`variants.xml`** — TwinCAT project variants and groups (see [Machine variants](#machine-variants))
-- **`events.xml`** — Event Classes for `Tc3_EventLogger`, created from matching
-  `event-classes/<Name>.xml` templates via a direct `.tsproj` edit (the
-  Automation Interface has no path for this — see `Sync/TsprojEventClassEditor.cs`)
-- **`safety.xml`** (optional) — the TwinSAFE project: `<Safety Name="SHARK_Safety_prj" Folder="safety/SHARK_Safety_prj" [TargetSystemConfig="<file>"] />`.
-  `Folder` holds the project exactly as the safety editor saved it; it is copied, never changed
-  (`Sync/SafetyManifest.cs`, `Sync/SafetyProjectSync.cs`). Other attributes are ignored.
-- **`tasks.xml`** (optional) — the PLC tasks: `<Tasks [BaseTimeUs="1000"]><Task Name="PlcTask" CycleTimeUs="10000" Priority="20"><Call>MAIN</Call></Task>…</Tasks>`.
-  The full list of tasks (write `PlcTask` too); unique names and priorities, cycle time a multiple of
-  the base time, each `<Call>` a PROGRAM of the source and in one task only
-  (`Sync/TaskManifest.cs`, `Sync/TaskSyncEngine.cs`).
-
-All three are synced idempotently: existing entries are left alone, missing
-ones are added, removed-from-manifest ones are cleaned up (library/IO only —
-and IO cleanup requires the explicit `--confirm-delete-io` flag, otherwise
-undeclared items are only warned about).
-
-## Known limitations
-
-- **Event Classes have no Automation Interface path** (`CreateChild`/
-  `ConsumeXml` can't express them), so the tool creates them by editing the
-  `.tsproj` directly while Visual Studio is closed
-  (`Sync/TsprojEventClassEditor.cs`), using the exact `<DataType>` XML from a
-  matching `event-classes/<Name>.xml` template with its REAL GUID. Verified
-  surviving VS reload + build on the live project (2026-07-14). The read-only
-  `check events` still exists as a fast preflight/pipeline gate.
-- **`MDP5001_*` PLC data type names are config-hash suffixes** TwinCAT
-  computes from a terminal's PDO/revision configuration — they are NOT
-  portable across machines whose ESI catalogs instantiate different terminal
-  revisions. If `.st` aliases report `Unknown type` for one, run `build`
-  once and read the actual generated `MDP5001_*` names out of the saved
-  `.tsproj`, then update the aliases and `plc-data-types/*.xml` template.
-- **IO variable linking** requires the PLC instance's I/O image to exist,
-  which normally only materializes after *Activate Configuration* against a
-  real or simulated target. If a declared link can't be resolved, the tool
-  falls back to disabling the affected EtherCAT master so the build still
-  passes unattended.
-- **A TwinSAFE project needs the box/module object ids it was made with.**
-  `TargetSystemConfig.xml` names the logic terminal's box id (`#x0302nnnn`),
-  each `<box> - <module>.sds` a module id (`#x0309nnnn`). With other ids
-  TwinCAT adds the project with no error and no Standard In/Out channels.
-  `ConsumeXml` cannot change an id, so `Sync/TsprojObjectIdEditor.cs` sets them
-  in the `.tsproj` (VS closed; boxes found by name; a box that holds the id
-  swaps with it; `Port?BoxInfo` references follow). The safety files are never
-  edited: a changed `TargetSystemConfig.xml` gives a modal CRC dialog that
-  `SuppressUI` does not stop.
-
-## Troubleshooting
-
-- **A `TcXaeShell.exe` / `devenv.exe` process is left running after a crash/interrupt:** the
-  tool always tries to close the shell in a `finally`/`Dispose`, but if
-  you kill the tool itself mid-run, close it manually: `Get-Process TcXaeShell,devenv | Stop-Process -Force`.
-  Note: piping the tool's output into PowerShell's `Select-Object -First N` kills the tool
-  early (and leaves the shell running) — capture the output first, then filter it.
-- **`Class not registered` when the DTE is created:** the requested shell's ProgID is
-  registered but its class or exe is not (seen with `VisualStudio.DTE.17.0` on XAE-only PCs).
-  Use the default (`--shell xae`); the tool prints which shell and exe it uses.
-- **No Yes/No dialogs:** every run turns on TwinCAT's silent mode
-  (`ITcAutomationSettings.SilentMode`), so TwinCAT answers its own questions with the default
-  (for example "Target System Process Image Update"). Your previous setting is restored on
-  exit, so your interactive XAE still asks. `DialogAutoDismisser` stays as a safety net for
-  Visual Studio message boxes such as "…`.tmc` not found".
-- **`RPC_E_SERVERCALL_RETRYLATER` / random COM failures:** these are
-  automatically retried internally; if you still see one bubble up, an
-  existing lingering `devenv.exe` from a previous run is the usual cause —
-  close it and retry.
-- See [beckhoffAutomationInterface/REQUIREMENTS.md](beckhoffAutomationInterface/REQUIREMENTS.md)
-  for COM-registration and environment verification commands if the tool
-  fails before ever reaching your `.st` sources.
+To install a GitHub Actions runner for PLC CI, see
+[docs/github-self-hosted-runner-install-steps.md](docs/github-self-hosted-runner-install-steps.md).

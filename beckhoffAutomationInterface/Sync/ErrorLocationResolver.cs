@@ -22,8 +22,8 @@ namespace BeckhoffAutomationInterface.Sync
     }
 
     /// <summary>
-    /// Maps TwinCAT build-error locations back to the original .st source
-    /// (tasks/todo.md Task 6), using the provenance StFileParser records on every
+    /// Maps TwinCAT build-error locations back to the original .st source,
+    /// using the provenance StFileParser records on every
     /// StPouSource (Task 5) and the error shapes confirmed empirically against a
     /// real TwinCAT 3.1.4026 build (Task 4, 2026-07-14):
     ///

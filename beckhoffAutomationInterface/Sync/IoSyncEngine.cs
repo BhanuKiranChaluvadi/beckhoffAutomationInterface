@@ -36,7 +36,7 @@ namespace BeckhoffAutomationInterface.Sync
     ///   sub type"); CreateChild(name, 9099, "", int[4] { vendor, product, revision, 0 }) works
     ///   when the ESI file is installed (M5.2 spike, 2026-10-18; see EtherCatIdentity).
     ///
-    /// IMPORTANT CAVEAT (see docs/ideas/st-source-twincat-sync.md): TwinCAT pops a
+    /// IMPORTANT CAVEAT: TwinCAT pops a
     /// BLOCKING native "needs sync master (at least one variable linked to a tasked
     /// variable)" dialog on Build whenever an EtherCAT master has no linked
     /// variables — confirmed true even with terminals attached, not just an empty

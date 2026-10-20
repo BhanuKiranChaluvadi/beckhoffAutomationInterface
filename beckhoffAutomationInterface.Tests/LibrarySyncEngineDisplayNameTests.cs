@@ -6,7 +6,7 @@ namespace BeckhoffAutomationInterface.Tests
     /// <summary>
     /// LibrarySyncEngine.TryParseDisplayName. The bare-name test cases are the REAL,
     /// empirically-observed ITcPlcLibRef.Name values from a live scratch TwinCAT project
-    /// (tasks/2026-07-15-reverse-export-scaffold/, live validation 2026-07-16) — the
+    /// (live validation 2026-07-16) — the
     /// originally-assumed combined "Name, Version (Company)" display format was never
     /// actually produced; disproving that assumption is exactly what reverse-export's
     /// round-trip testing was for.

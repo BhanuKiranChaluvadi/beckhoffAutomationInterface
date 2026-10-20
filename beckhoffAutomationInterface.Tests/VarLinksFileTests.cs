@@ -5,7 +5,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// VarLinksFile parsing (tasks/plan.md: "Native links.xml (TwinCAT VarLinks format)").
+    /// VarLinksFile parsing (native links.xml, TwinCAT VarLinks format).
     /// Fixture is trimmed from the real reference project's own exported file
     /// ("Spectrometer Instance Mappings.xml").
     /// </summary>

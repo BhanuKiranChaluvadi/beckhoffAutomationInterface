@@ -8,7 +8,7 @@
 
   Setting just the CreateDeviceDataType/DeviceDataTypePerChannel attributes via
   ConsumeXml does NOT make TwinCAT compute these (confirmed against a real
-  project, see tasks/todo.md Task 3). This file supplies the already-computed
+  project). This file supplies the already-computed
   state instead of asking TwinCAT to derive it.
 -->
 <PlcDataTypeTemplate>

@@ -11,7 +11,7 @@ namespace BeckhoffAutomationInterface
     /// happens constantly when driving a large batch of PLC-object creates/edits.
     /// Registering this filter on the (STA) calling thread makes those calls wait
     /// and retry transparently. Standard pattern from Beckhoff/Microsoft DTE
-    /// automation samples (example/.../ScriptingTestContainerBase/MessageFilter.cs).
+    /// automation samples.
     /// Requires the calling thread to be STA (see [STAThread] on Main).
     /// </summary>
     public class MessageFilter : IOleMessageFilter

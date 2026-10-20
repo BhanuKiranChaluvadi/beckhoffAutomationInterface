@@ -37,8 +37,6 @@ namespace BeckhoffAutomationInterface.Runtime
                     result._switches.Add(a);
                 else if (!a.StartsWith("--") && result.Positional == null)
                     result.Positional = a;
-                else if (a == "--plc-name")
-                    throw new ArgumentException("unrecognized argument: --plc-name. Removed - use --plc");
                 else
                     throw new ArgumentException("unrecognized argument: " + a);
             }
@@ -362,89 +360,10 @@ namespace BeckhoffAutomationInterface.Runtime
                     // A shadow copy: TwinCAT saves the project during build and activation by itself.
                     var opened = TwinCatProjectOpener.OpenExistingReadOnly(vs.Dte, tsprojPath);
                     shadow = opened.Shadow;
-                    Interop.TCatSysManager.ITcSysManager sys = opened.SysManager;
-                    var sys14 = (Interop.TCatSysManager.ITcSysManager14)sys;
-                    string plcItem = "TIPC^" + plcName;
-
-                    // Exactly one variant runs on a target.
-                    List<string> selected;
-                    try
-                    {
-                        selected = Sync.VariantBuildPlan.Select(Sync.VariantSyncEngine.ProjectVariants(sys), a.Get("--variant"), false);
-                        if (selected.Count > 1)
-                            throw new ArgumentException(string.Format("the project has variants ({0}); choose one with --variant.", string.Join(", ", selected)));
-                    }
-                    catch (ArgumentException ex)
-                    {
-                        Console.WriteLine("{0}: ACTIVATE FAILED — {1}", Now(), ex.Message);
+                    running = ActivateOpenProject(vs, opened.SysManager, plcName, a.Get("--variant"), a.GetAll("--define"),
+                        target, netId, timeoutS, shadow.ToOriginalPath);
+                    if (!running)
                         return 1;
-                    }
-                    if (selected.Count == 1)
-                    {
-                        if (!Sync.VariantSyncEngine.DefinesEnabled(sys, plcItem))
-                        {
-                            Console.WriteLine("{0}: ACTIVATE FAILED — variant defines are off for '{1}'. Run 'sync variants' first.", Now(), plcItem);
-                            return 1;
-                        }
-                        sys14.CurrentProjectVariant = selected[0];
-                        Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
-                    }
-                    if (a.GetAll("--define").Count > 0)
-                        Console.WriteLine("{0}: Compiler defines for this activation: {1}", Now(),
-                            Sync.CompilerDefines.Add(sys, string.Format("TIPC^{0}^{0} Project", plcName), a.GetAll("--define")));
-
-                    sys14.SetTargetNetId(netId);
-                    Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
-
-                    if (RuntimeTargets.IsUmRt(target))
-                    {
-                        // UmRT has no EtherCAT adapter: an enabled master keeps TwinCAT in Config.
-                        // Disable the I/O devices for this activation only — the project is attached
-                        // read-only and never saved, so the files on disk do not change.
-                        int disabled = DisableIoDevices(sys);
-                        if (disabled > 0)
-                            Console.WriteLine("{0}: UmRT has no EtherCAT adapter: {1} I/O device(s) disabled for this activation (project not saved).", Now(), disabled);
-                    }
-                    // The PLC must start by itself after the restart, or nothing can be verified.
-                    sys.LookupTreeItem(plcItem).ConsumeXml(
-                        "<TreeItem><PlcProjectDef><BootProjectAutostart>true</BootProjectAutostart></PlcProjectDef></TreeItem>");
-
-                    Sync.BuildReport build;
-                    try
-                    {
-                        // No Clean: the variant, define, device and boot-flag changes above start a
-                        // background PLC precompile, and a Clean sent while it runs can deadlock
-                        // the shell (seen 4 times on Google, 2026-10-15; Build alone passed). The
-                        // project was built before (init/sync), and the build applies the changed
-                        // defines (verify checks GVL_Simulation.bActive from --define SIMULATION).
-                        using (vs.Watchdog("Build", Sync.BuildRunner.HangLimit))
-                            build = Sync.BuildRunner.Build(vs.Dte, clean: false);
-                    }
-                    catch (Sync.BuildTimeoutException ex)
-                    {
-                        Console.WriteLine("{0}: ACTIVATE FAILED — build timed out: {1}", Now(), ex.Message);
-                        return 1;
-                    }
-                    foreach (string message in build.PragmaMessages)
-                        Console.WriteLine("    [PLC MESSAGE] {0}", message);
-                    if (!build.Success)
-                    {
-                        Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
-                        foreach (Sync.BuildError e in build.Errors)
-                            Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, shadow.ToOriginalPath(e.FileName), e.Line);
-                        foreach (string line in build.OutputTail)
-                            Console.WriteLine("      | {0}", line);
-                        return 1;
-                    }
-                    Console.WriteLine("{0}: Build passed.", Now());
-
-                    sys.ActivateConfiguration();
-                    Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
-                    sys.StartRestartTwinCAT();
-                    Console.WriteLine("{0}: TwinCAT restart requested.", Now());
-
-                    using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
-                        running = WaitForPlcRun(target, netId, plc, timeoutS);
                 }
             }
             catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException || ex is UnauthorizedAccessException)
@@ -461,6 +380,101 @@ namespace BeckhoffAutomationInterface.Runtime
                 return 1;
             Console.WriteLine("{0}: ACTIVATED — boot project now: {1}", Now(), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
             return 0;
+        }
+
+        /// <summary>
+        /// The activation steps on a project that is open in 'vs': select the one variant, add the
+        /// defines, set the target, disable the I/O devices on UmRT, set the boot autostart, build
+        /// (no Clean), activate, restart TwinCAT and wait for the PLC to run. Returns true when the
+        /// PLC runs. A build in the same session before this call makes this build incremental
+        /// (bai machine test); 'activate' calls it on a fresh shadow copy. mapPath maps an error
+        /// location back to the user's project. COM errors go to the caller.
+        /// </summary>
+        internal static bool ActivateOpenProject(VisualStudioSession vs, Interop.TCatSysManager.ITcSysManager sys, string plcName,
+            string variant, IReadOnlyList<string> defines, string target, string netId, int timeoutS, Func<string, string> mapPath)
+        {
+            var sys14 = (Interop.TCatSysManager.ITcSysManager14)sys;
+            string plcItem = "TIPC^" + plcName;
+
+            // Exactly one variant runs on a target.
+            List<string> selected;
+            try
+            {
+                selected = Sync.VariantBuildPlan.Select(Sync.VariantSyncEngine.ProjectVariants(sys), variant, false);
+                if (selected.Count > 1)
+                    throw new ArgumentException(string.Format("the project has variants ({0}); choose one with --variant.", string.Join(", ", selected)));
+            }
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine("{0}: ACTIVATE FAILED — {1}", Now(), ex.Message);
+                return false;
+            }
+            if (selected.Count == 1)
+            {
+                if (!Sync.VariantSyncEngine.DefinesEnabled(sys, plcItem))
+                {
+                    Console.WriteLine("{0}: ACTIVATE FAILED — variant defines are off for '{1}'. Run 'sync variants' first.", Now(), plcItem);
+                    return false;
+                }
+                sys14.CurrentProjectVariant = selected[0];
+                Console.WriteLine("{0}: Variant: {1}", Now(), sys14.CurrentProjectVariant);
+            }
+            if (defines.Count > 0)
+                Console.WriteLine("{0}: Compiler defines for this activation: {1}", Now(),
+                    Sync.CompilerDefines.Add(sys, string.Format("TIPC^{0}^{0} Project", plcName), defines));
+
+            sys14.SetTargetNetId(netId);
+            Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
+
+            if (RuntimeTargets.IsUmRt(target))
+            {
+                // UmRT has no EtherCAT adapter: an enabled master keeps TwinCAT in Config.
+                // Disable the I/O devices for this activation only: 'activate' works on a shadow
+                // copy, and 'machine' sets them again from io-devices.xml on its next sync.
+                int disabled = DisableIoDevices(sys);
+                if (disabled > 0)
+                    Console.WriteLine("{0}: UmRT has no EtherCAT adapter: {1} I/O device(s) disabled for this activation.", Now(), disabled);
+            }
+            // The PLC must start by itself after the restart, or nothing can be verified.
+            sys.LookupTreeItem(plcItem).ConsumeXml(
+                "<TreeItem><PlcProjectDef><BootProjectAutostart>true</BootProjectAutostart></PlcProjectDef></TreeItem>");
+
+            Sync.BuildReport build;
+            try
+            {
+                // No Clean: the variant, define, device and boot-flag changes above start a
+                // background PLC precompile, and a Clean sent while it runs can deadlock
+                // the shell (seen 4 times on Google, 2026-10-15; Build alone passed). The
+                // project was built before (init/sync), and the build applies the changed
+                // defines (verify checks GVL_Simulation.bActive from --define SIMULATION).
+                using (vs.Watchdog("Build", Sync.BuildRunner.HangLimit))
+                    build = Sync.BuildRunner.Build(vs.Dte, clean: false);
+            }
+            catch (Sync.BuildTimeoutException ex)
+            {
+                Console.WriteLine("{0}: ACTIVATE FAILED — build timed out: {1}", Now(), ex.Message);
+                return false;
+            }
+            foreach (string message in build.PragmaMessages)
+                Console.WriteLine("    [PLC MESSAGE] {0}", message);
+            if (!build.Success)
+            {
+                Console.WriteLine("{0}: ACTIVATE FAILED — build failed, nothing was activated ({1} error(s)):", Now(), build.Errors.Count);
+                foreach (Sync.BuildError e in build.Errors)
+                    Console.WriteLine("    [ERROR] {0} ({1}:{2})", e.Description, mapPath(e.FileName), e.Line);
+                foreach (string line in build.OutputTail)
+                    Console.WriteLine("      | {0}", line);
+                return false;
+            }
+            Console.WriteLine("{0}: Build passed.", Now());
+
+            sys.ActivateConfiguration();
+            Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
+            sys.StartRestartTwinCAT();
+            Console.WriteLine("{0}: TwinCAT restart requested.", Now());
+
+            using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
+                return WaitForPlcRun(target, netId, plc, timeoutS);
         }
 
         static int DisableIoDevices(Interop.TCatSysManager.ITcSysManager sys)

@@ -26,8 +26,8 @@ namespace BeckhoffAutomationInterface.Sync
         {
             // Some hand-authored/older samples fold the "PlcTask Inputs"/"PlcTask Outputs"
             // group directly into VarA (joined by '^') instead of a separate GrpA attribute
-            // -- confirmed in Beckhoff's own official CodeGenerationDemo sample
-            // (example/TC_AI_DOTNET_Samples/.../Templates/MachineTypeA/Links.xml), e.g.
+            // -- confirmed in Beckhoff's own official CodeGenerationDemo sample,
+            // e.g.
             // VarA="PlcTask Outputs^MAIN.bError" with no GrpA at all. Normalize both shapes
             // so SimpleKey works either way.
             if (group == null && varA != null)

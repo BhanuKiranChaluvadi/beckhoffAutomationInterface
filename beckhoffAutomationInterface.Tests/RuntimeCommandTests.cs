@@ -4,8 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>Runtime targets and verify's COM/ADS-free parts
-    /// (tasks/2026-10-14-variants-closed-loop, Tasks 13–14).</summary>
+    /// <summary>Runtime targets and verify's COM/ADS-free parts.</summary>
     public class RuntimeCommandTests
     {
         // Real UmRT_Default TcRegistry.xml shape (TwinCAT 3.1.4026).
@@ -129,14 +128,14 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void ActivateTakesPlc_TheOldPlcNameNamesIt()
+        public void ActivateTakesPlc_AnUnknownOptionIsRefused()
         {
             string[] options = { "--target", "--variant", "--plc", "--timeout" };
 
             Assert.Equal("P", CommandArgs.Parse(new[] { "activate", "x.tsproj", "--plc", "P" }, options, new[] { "--yes" }).Get("--plc"));
             var ex = Assert.Throws<System.ArgumentException>(() =>
                 CommandArgs.Parse(new[] { "activate", "x.tsproj", "--plc-name", "P" }, options, new[] { "--yes" }));
-            Assert.Contains("use --plc", ex.Message);
+            Assert.Contains("unrecognized argument: --plc-name", ex.Message);
         }
     }
 }

@@ -85,8 +85,8 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains("SomePreExistingType", dataTypeNames);
             Assert.Contains("BeckhoffLibEvents", dataTypeNames);
 
-            // Confirms it did NOT go under Project/System (the four previously-failed
-            // placements documented in docs/ideas/st-plc-bidirectional-sync.md).
+            // Confirms it did NOT go under Project/System (one of the previously-failed
+            // placements).
             XElement systemEl = doc.Root.Element("Project").Element("System");
             Assert.Empty(systemEl.Elements("DataType"));
         }

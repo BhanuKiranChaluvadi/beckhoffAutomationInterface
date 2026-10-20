@@ -14,20 +14,20 @@ namespace BeckhoffAutomationInterface.Cli
     }
 
     /// <summary>
-    /// Parses the subcommand syntax straight into RunOptions — no translation to the old flat flags
-    /// (docs/ideas/cli-subcommand-redesign.md, "Final CLI spec"). One name per concept:
+    /// Parses the subcommand syntax straight into RunOptions. One name per concept:
     /// &lt;source&gt; (positional .st folder), --project (TwinCAT project), --plc, --variant, --shell.
-    /// activate / verify / doctor have their own parsers in Runtime/.
+    /// activate / verify / test / runtime-state / doctor have their own parsers in Runtime/;
+    /// package / libraries / toolchain / esi in Release/.
     /// </summary>
     static class CommandLine
     {
         public const string BuildUsage =
             "build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants] [--platform <name>] [--define <NAME>]...";
         public const string CheckUsage =
-            "check parse|format|links <source> [--ignore <glob>]...\n  check events <source> --project <project>";
+            "check parse|format <source> [--ignore <glob>]...\n  check events <source> --project <project>";
         public const string SyncUsage =
-            "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--incremental] [--clean]\n" +
-            "       [--confirm-delete] [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]";
+            "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--clean]\n" +
+            "       [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]";
         public const string ExportUsage =
             "export code|libs|io|events|tasks|safety|variants|native|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
             "  export object <ObjectName> <source> --project <project> [--plc <name>]";
@@ -42,49 +42,8 @@ namespace BeckhoffAutomationInterface.Cli
         static readonly string[] ConfigOptions = { "--config" };
         static readonly string[] ConfigSwitches = { "--no-config" };
 
-        /// <summary>Supported .stconfig keys. Everything else is an error (old keys get a hint).</summary>
-        internal static readonly string[] ConfigKeys = { "source", "project", "shell", "clean", "incremental" };
-
-        static readonly Dictionary<string, string> RemovedConfigKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["dest"] = "use project=<path to the .sln, its folder or the .tsproj>",
-            ["name"] = "use project=<path to the .sln, its folder or the .tsproj>",
-            ["tsproj"] = "use project=",
-            ["plc-name"] = "pass --plc on the command line (a wrong PLC name must never come from a defaults file)",
-            ["export"] = "use the command: export object <Name> …",
-            ["export-links"] = "use the command: export links …",
-            ["parse-only"] = "use the command: check parse …",
-            ["format-check"] = "use the command: check format …",
-            ["check-links"] = "use the command: check links …",
-            ["check-events"] = "use the command: check events …",
-            ["sync-code"] = "the sync command chooses the stage: sync code …",
-            ["sync-libs"] = "the sync command chooses the stage: sync libs …",
-            ["sync-io"] = "the sync command chooses the stage: sync io …",
-            ["sync-events"] = "the sync command chooses the stage: sync events …",
-            ["sync-variants"] = "the sync command chooses the stage: sync variants …",
-            ["build"] = "use the command: build <project>",
-        };
-
-        /// <summary>Flags of the old flat CLI, rejected with the replacement (README "Other flags").</summary>
-        static readonly Dictionary<string, string> RemovedOptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["--dest"] = "sync: --project <the .sln, its folder or the .tsproj>; init: --into <folder>",
-            ["--source"] = "pass the source folder as the path after the command",
-            ["--tsproj"] = "use --project (export, check events) or the path after 'build'",
-            ["--plc-name"] = "use --plc",
-            ["--init"] = "use the command: init <source> --into <folder>",
-            ["--parse-only"] = "use the command: check parse <source>",
-            ["--format-check"] = "use the command: check format <source>",
-            ["--check-links"] = "use the command: check links <source>",
-            ["--check-events"] = "use the command: check events <source> --project <project>",
-            ["--export"] = "use the command: export object <Name> <source> --project <project>",
-            ["--export-links"] = "use the command: export links <source> --project <project>",
-            ["--sync-code"] = "use the command: sync code …",
-            ["--sync-libs"] = "use the command: sync libs …",
-            ["--sync-io"] = "use the command: sync io …",
-            ["--sync-events"] = "use the command: sync events …",
-            ["--build"] = "use the command: build <project>",
-        };
+        /// <summary>Supported .stconfig keys. Everything else is an error.</summary>
+        internal static readonly string[] ConfigKeys = { "source", "project", "shell", "clean" };
 
         static readonly Dictionary<string, SyncStages> SyncModes = new Dictionary<string, SyncStages>
         {
@@ -163,9 +122,9 @@ namespace BeckhoffAutomationInterface.Cli
         static RunOptions ParseCheck(string[] args, string shell, string cwd)
         {
             if (args.Length < 2)
-                throw new UsageException("'check' needs a mode: parse|format|links|events.", CheckUsage);
+                throw new UsageException("'check' needs a mode: parse|format|events.", CheckUsage);
             string mode = args[1];
-            if (!new[] { "parse", "format", "links", "events" }.Contains(mode))
+            if (!new[] { "parse", "format", "events" }.Contains(mode))
                 throw new UsageException("unknown 'check' mode '" + mode + "'.", CheckUsage);
 
             Args a = Args.Read(args, 2, CheckUsage, new[] { "--project", "--ignore" }, new string[0]);
@@ -180,7 +139,6 @@ namespace BeckhoffAutomationInterface.Cli
                 sourceFolder: source,
                 parseOnly: mode == "parse",
                 formatCheck: mode == "format",
-                checkLinks: mode == "links",
                 checkEvents: mode == "events",
                 existingTsprojPath: tsproj);
         }
@@ -227,7 +185,8 @@ namespace BeckhoffAutomationInterface.Cli
                 throw new UsageException("unknown 'sync' mode '" + mode + "'.", SyncUsage);
 
             Args a = Args.Read(args, 2, SyncUsage, new[] { "--project", "--plc", "--ignore", "--variant", "--platform" },
-                new[] { "--incremental", "--clean", "--confirm-delete", "--confirm-delete-io", "--all-variants" });
+                // --confirm-delete is accepted and has no effect: PLC repository scripts still pass it.
+                new[] { "--clean", "--confirm-delete", "--confirm-delete-io", "--all-variants" });
             string source = SingleSource(a, "sync " + mode, SyncUsage);
             Config config = Config.Load(a, source, cwd);
             string project = a.Get("--project") ?? config.Project
@@ -239,8 +198,6 @@ namespace BeckhoffAutomationInterface.Cli
                 destinationFolder: dest,
                 projectName: name,
                 plcProjectName: ProjectLocator.ResolvePlcName(ResolveTsproj(project, SyncUsage), a.Get("--plc")),
-                incremental: a.Has("--incremental") || config.Incremental,
-                confirmDelete: a.Has("--confirm-delete"),
                 confirmDeleteIo: a.Has("--confirm-delete-io"));
         }
 
@@ -263,8 +220,7 @@ namespace BeckhoffAutomationInterface.Cli
 
         static RunOptions Make(Config config, string shell, Args a, SyncStages stages, string sourceFolder,
             string destinationFolder = null, string projectName = null, bool init = false,
-            bool parseOnly = false, bool formatCheck = false, bool checkLinks = false, bool checkEvents = false,
-            bool incremental = false, bool confirmDelete = false, bool confirmDeleteIo = false,
+            bool parseOnly = false, bool formatCheck = false, bool checkEvents = false, bool confirmDeleteIo = false,
             ReverseExports reverseExports = ReverseExports.None, bool exportLinks = false, string exportObjectName = null,
             bool overwrite = false, string plcProjectName = null, string existingTsprojPath = null)
         {
@@ -279,13 +235,10 @@ namespace BeckhoffAutomationInterface.Cli
                 stages: stages,
                 init: init,
                 checkEvents: checkEvents,
-                checkLinks: checkLinks,
                 parseOnly: parseOnly,
                 ignorePatterns: a.GetAll("--ignore"),
-                incremental: incremental,
                 exportObjectName: exportObjectName,
                 exportLinks: exportLinks,
-                confirmDelete: confirmDelete,
                 formatCheck: formatCheck,
                 confirmDeleteIo: confirmDeleteIo,
                 reverseExports: reverseExports,
@@ -344,8 +297,7 @@ namespace BeckhoffAutomationInterface.Cli
                     else if (switchSet.Contains(arg))
                         a._switches.Add(arg);
                     else if (arg.StartsWith("--"))
-                        throw new UsageException("unknown option " + arg + "."
-                            + (RemovedOptions.TryGetValue(arg, out string hint) ? " Removed - " + hint : ""), usage);
+                        throw new UsageException("unknown option " + arg + ".", usage);
                     else
                         a.Positionals.Add(arg);
                 }
@@ -366,7 +318,7 @@ namespace BeckhoffAutomationInterface.Cli
         {
             public bool Loaded;
             public string Source, Project, Shell;
-            public bool Clean, Incremental;
+            public bool Clean;
 
             public static Config Load(Args a, string source, string cwd)
             {
@@ -382,9 +334,7 @@ namespace BeckhoffAutomationInterface.Cli
                 var problems = new List<string>();
                 foreach (string key in values.Keys)
                 {
-                    if (RemovedConfigKeys.TryGetValue(key, out string hint))
-                        problems.Add(string.Format("'{0}' is no longer supported — {1}", key, hint));
-                    else if (!ConfigKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+                    if (!ConfigKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
                         problems.Add(string.Format("unknown key '{0}'", key));
                 }
                 if (problems.Count > 0)
@@ -396,7 +346,6 @@ namespace BeckhoffAutomationInterface.Cli
                 c.Project = values.GetString("project");
                 c.Shell = values.GetString("shell");
                 c.Clean = values.GetBool("clean");
-                c.Incremental = values.GetBool("incremental");
                 if (c.Source != null)
                     c.Source = Path.GetFullPath(Path.Combine(dir, c.Source));
                 if (c.Project != null)

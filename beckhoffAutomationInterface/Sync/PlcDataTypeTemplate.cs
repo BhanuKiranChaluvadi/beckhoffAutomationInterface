@@ -10,7 +10,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// (e.g. a terminal product like "EL3174", or an Event Class like
     /// "BeckhoffLibEvents"), loaded from &lt;templatesFolder&gt;/&lt;name&gt;.xml. Two real
     /// project settings turned out not to be settable via ProduceXml/ConsumeXml at all
-    /// (confirmed against a real project — see tasks/todo.md Task 3): a terminal's
+    /// (confirmed against a real project): a terminal's
     /// "Create PLC Data Type" and an Event Class's existence. Both instead need the
     /// exact already-computed XML a working reference project produced, written
     /// directly into the .tsproj file (see TsprojPlcDataTypeEditor,

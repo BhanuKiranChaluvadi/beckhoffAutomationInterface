@@ -19,8 +19,8 @@ namespace BeckhoffAutomationInterface.Sync
     ///
     /// ITcPlcLibRef exposes a "Name" property assumed (originally, never empirically
     /// confirmed) to be a combined display string like "Tc2_Standard, * (Beckhoff
-    /// Automation GmbH)". LIVE VALIDATION (2026-07-16, reverse-export scratch project,
-    /// see tasks/2026-07-15-reverse-export-scaffold/) disproved this: the real value is
+    /// Automation GmbH)". LIVE VALIDATION (2026-07-16, reverse-export scratch project)
+    /// disproved this: the real value is
     /// just the BARE library name, optionally with a leading "#" (e.g. "Tc2_Standard",
     /// "#Tc2_System") — the combined format never actually occurs. TryParseDisplayName
     /// now recognizes both shapes: the (never-observed, kept for safety) combined format,

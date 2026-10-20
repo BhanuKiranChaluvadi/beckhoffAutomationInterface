@@ -38,6 +38,14 @@ namespace BeckhoffAutomationInterface
             _ignore = ignore;
         }
 
+        /// <summary>What this run found (drift, I/O warnings, links, build), as values.</summary>
+        public PipelineOutcome Outcome { get; } = new PipelineOutcome();
+
+        /// <summary>Optional: runs in the same open session right after a passed build stage,
+        /// before the safety files are checked again (bai machine: the activation, so the
+        /// project is not opened and compiled a second time).</summary>
+        public Action<TwinCatSession> AfterBuild { get; set; }
+
         /// <summary>
         /// Executes the selected stages (see SyncStages; all of them when no stage flag
         /// was given) in a fixed three-phase order regardless of flag order:
@@ -128,6 +136,8 @@ namespace BeckhoffAutomationInterface
             {
                 _session.EnsureOpen();
                 RunBuild();
+                if (AfterBuild != null && Outcome.BuildPassed)
+                    AfterBuild(_session);
             }
 
             if (safety != null)
@@ -314,62 +324,11 @@ namespace BeckhoffAutomationInterface
         }
 
         /// <summary>Code stage: .st files -> PLC POUs (create/update/delete), plus the
-        /// warn-only drift detection, the naming lint, and the sync/known-names
-        /// baselines. --incremental narrows the parse to files git says changed/were
-        /// deleted since the recorded baseline.</summary>
+        /// warn-only drift detection, the naming lint, and the known-names baseline.</summary>
         void SyncCode()
         {
-            List<StPouSource> desiredPous;
-            if (_options.Incremental)
-            {
-                string lastSha = SyncState.Read(_options.SyncStatePath);
-
-                Console.WriteLine("{0}: Computing .st changes since {1}...", Now(), lastSha);
-                GitDiffResult diff = GitDiffHelper.GetChangedStFiles(_options.SourceFolder, lastSha);
-
-                desiredPous = new List<StPouSource>();
-                foreach (string relativePath in diff.Changed)
-                {
-                    if (_ignore.IsIgnored(relativePath))
-                        continue;
-                    string fullPath = Path.Combine(_options.SourceFolder, relativePath.Replace('/', Path.DirectorySeparatorChar));
-                    string relativeFolder = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? "";
-                    foreach (StPouSource source in StFileParser.ParseFile(fullPath))
-                    {
-                        source.RelativeFolder = relativeFolder;
-                        desiredPous.Add(source);
-                    }
-                }
-
-                Console.WriteLine("{0}: {1} file(s) changed, {2} file(s) deleted since last sync.",
-                    Now(), diff.Changed.Count, diff.Deleted.Count);
-                if (diff.Deleted.Count > 0)
-                {
-                    if (_options.ConfirmDelete)
-                    {
-                        List<DeleteResult> deleteResults = IncrementalDeleter.Delete(_session.SysManager, _options.ProjectRootPath, diff.Deleted);
-                        Console.WriteLine("{0}: --confirm-delete: {1} of {2} deleted PLC object(s) removed.",
-                            Now(), deleteResults.Count(r => r.Deleted), deleteResults.Count);
-                        foreach (DeleteResult r in deleteResults)
-                        {
-                            if (r.Deleted)
-                                Console.WriteLine("    - deleted  {0}", r.ObjectName);
-                            else
-                                Console.WriteLine("    ! skipped  {0} ({1})", r.ObjectName, r.SkipReason);
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("{0}: NOTE: the following PLC object(s) still exist — remove manually, or re-run with --confirm-delete:", Now());
-                        PrintLines("! ", diff.Deleted);
-                    }
-                }
-            }
-            else
-            {
-                Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), _options.SourceFolder);
-                desiredPous = StFileParser.ParseFolder(_options.SourceFolder, _ignore);
-            }
+            Console.WriteLine("{0}: Parsing .st sources from '{1}'...", Now(), _options.SourceFolder);
+            List<StPouSource> desiredPous = StFileParser.ParseFolder(_options.SourceFolder, _ignore);
 
             // Two files for one object: refuse before anything is written (see DuplicateObjects).
             List<string> duplicates = DuplicateObjects.Find(desiredPous);
@@ -378,19 +337,15 @@ namespace BeckhoffAutomationInterface
                     "{0} object(s) are defined in more than one .st file; nothing was synced. Delete or rename the stale file:\n    {1}",
                     duplicates.Count, string.Join("\n    ", duplicates)));
 
-            // Warn-only drift detection (see tasks/archive/2026-07-14-post-review-hardening/,
-            // Tasks 7-8 decision: warn always, prune opt-in): a previously-synced name
-            // missing from the current parse means its .st source was renamed/deleted, but
-            // the PLC object still compiles silently. Report it — never delete (deletion
-            // stays behind --incremental --confirm-delete for whole top-level objects only).
+            // Warn-only drift detection: a previously-synced name missing from the current
+            // parse means its .st source was renamed/deleted, but the PLC object still
+            // compiles. Report it, never delete it.
             List<string> currentNames = KnownNamesTracker.CollectNames(desiredPous);
             List<string> previousNames = KnownNamesTracker.Read(_options.KnownNamesPath);
-            var staleNames = new List<string>();
             if (previousNames != null)
             {
-                staleNames = _options.Incremental
-                    ? KnownNamesTracker.DiffWithinOwners(previousNames, currentNames)
-                    : KnownNamesTracker.DiffFull(previousNames, currentNames);
+                List<string> staleNames = KnownNamesTracker.DiffFull(previousNames, currentNames);
+                Outcome.StaleNames = staleNames.Count;
                 if (staleNames.Count > 0)
                 {
                     Console.WriteLine("{0}: [drift] {1} previously-synced name(s) no longer in .st source (renamed or deleted?) — still compiling in the PLC project:", Now(), staleNames.Count);
@@ -417,21 +372,8 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted, {4} unchanged).",
                 Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count, syncReport.Unchanged.Count);
 
-            // Record the new sync baseline (best-effort; silently skipped if SourceFolder
-            // isn't inside a git repo, since --incremental is opt-in and needs one anyway).
-            string headSha = GitDiffHelper.TryGetHeadSha(_options.SourceFolder);
-            if (headSha != null)
-            {
-                SyncState.Write(_options.SyncStatePath, headSha);
-                Console.WriteLine("{0}: Recorded sync baseline {1} in '{2}'.", Now(), headSha, _options.SyncStatePath);
-            }
-
             // Record the known-names drift baseline (see the [drift] warning block above).
-            // Full sync: the parse covered everything, so record it verbatim. Incremental:
-            // fold the partial parse into the previous record, dropping proven-stale names.
-            KnownNamesTracker.Write(_options.KnownNamesPath, _options.Incremental
-                ? KnownNamesTracker.Merge(previousNames ?? new List<string>(), currentNames, staleNames)
-                : currentNames);
+            KnownNamesTracker.Write(_options.KnownNamesPath, currentNames);
         }
 
         /// <summary>Libraries stage: libraries.xml -> PLC library references (config
@@ -562,6 +504,8 @@ namespace BeckhoffAutomationInterface
             PrintLines("~ state    ", ioReport.StateChanged);
             PrintLines("!! WARNING ", ioReport.Warnings);
             PrintLines("!! ERROR   ", ioReport.Errors);
+            Outcome.IoWarnings = ioReport.Warnings.Count;
+            Outcome.IoErrors = ioReport.Errors.Count;
             if (ioReport.Errors.Count > 0)
             {
                 Console.WriteLine("{0}: IO SYNC FAILED — {1} item(s) have the wrong kind (see above).", Now(), ioReport.Errors.Count);
@@ -786,7 +730,7 @@ namespace BeckhoffAutomationInterface
 
             // links.xml (native <VarLinks>, see Sync/VarLinksFile.cs) applies FIRST, in one
             // bulk COM call — then io-devices.xml's own <Links> apply on top, unchanged.
-            // Both coexist rather than one replacing the other (see tasks/plan.md).
+            // Both coexist rather than one replacing the other.
             bool varLinksApplied = false;
             RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.PlcProjectName, _options.VarLinksManifestPath), "applying links.xml");
             if (varLinksApplied)
@@ -809,8 +753,12 @@ namespace BeckhoffAutomationInterface
                 List<string> disabled = IoSyncEngine.DisableAllMasters(_session.SysManager);
                 foreach (string name in disabled)
                     Console.WriteLine("        ~ disabled master '{0}' to keep the build green.", name);
+                Outcome.DisabledMasters.AddRange(disabled);
             }
             _session.Project.Save();
+            Outcome.LinkSyncRan = true;
+            Outcome.LinksLinked = linkReport.Linked.Count;
+            Outcome.LinksUnresolved = linkReport.Failed.Count;
             Console.WriteLine("{0}: Variable link sync complete ({1} linked, {2} unresolved).",
                 Now(), linkReport.Linked.Count, linkReport.Failed.Count);
         }
@@ -876,6 +824,17 @@ namespace BeckhoffAutomationInterface
         /// <summary>One clean/build of the current variant (or of a project without variants),
         /// with errors, warnings and the PLC's message pragmas printed.</summary>
         VariantBuildResult BuildOnce(bool clean, string variant = null)
+        {
+            VariantBuildResult result = BuildOnceCore(clean, variant);
+            Outcome.Builds++;
+            if (!result.Passed)
+                Outcome.BuildFailures++;
+            if (result.TimedOut)
+                Outcome.BuildTimedOut = true;
+            return result;
+        }
+
+        VariantBuildResult BuildOnceCore(bool clean, string variant)
         {
             var result = new VariantBuildResult { Variant = variant };
             if (_options.Defines.Count > 0)

@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>variants.xml (tasks/2026-10-14-variants-closed-loop, Task 5).</summary>
+    /// <summary>variants.xml.</summary>
     public class VariantManifestTests
     {
         const string Valid =

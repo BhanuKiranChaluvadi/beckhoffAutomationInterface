@@ -15,14 +15,14 @@ namespace BeckhoffAutomationInterface.Sync
     /// created as children of their owning FUNCTION_BLOCK / INTERFACE.
     ///
     /// Folders are created via CreateChild(name, TREEITEMTYPE_PLCFOLDER=601, "",
-    /// null) (pattern from example/.../GeneratePlcProject.cs). Objects are created
+    /// null). Objects are created
     /// with CreateChild(name, TREEITEMTYPE_*, "", vInfo) and their text injected
     /// via ITcPlcDeclaration/ITcPlcImplementation.
     ///
     /// Orphan deletion is intentionally NOT performed at the mirrored-folder level:
     /// it would risk deleting the standard template's default POUs/DUTs/GVLs/MAIN
-    /// items. Only METHODs are pruned (per owner). Deleted .st files are therefore
-    /// left in the project until manually removed.
+    /// items. Nothing is deleted: objects and METHODs of deleted .st source stay in the
+    /// project until manually removed (SyncPipeline warns about them, see KnownNamesTracker).
     /// </summary>
     class PouSyncEngine
     {

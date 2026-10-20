@@ -5,8 +5,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// The subcommand parser (docs/ideas/cli-subcommand-redesign.md, "Final CLI spec";
-    /// tasks/2026-10-14-variants-closed-loop, Phase 5). Filesystem fixtures only — no TwinCAT.
+    /// The subcommand parser. Filesystem fixtures only — no TwinCAT.
     /// </summary>
     public class CommandLineTests : System.IDisposable
     {
@@ -110,7 +109,6 @@ namespace BeckhoffAutomationInterface.Tests
         [Theory]
         [InlineData("parse")]
         [InlineData("format")]
-        [InlineData("links")]
         public void Check_SourceModes(string mode)
         {
             RunOptions o = Parse("check", mode, _source, "--ignore", "Old*.st", "--ignore", "Tmp*.st");
@@ -118,7 +116,6 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(_source, o.SourceFolder);
             Assert.Equal(mode == "parse", o.ParseOnly);
             Assert.Equal(mode == "format", o.FormatCheck);
-            Assert.Equal(mode == "links", o.CheckLinks);
             Assert.Equal(new[] { "Old*.st", "Tmp*.st" }, o.IgnorePatterns);
         }
 
@@ -195,10 +192,10 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void Sync_Options()
         {
-            RunOptions o = Parse("sync", "all", _source, "--project", _ownedSln, "--incremental", "--confirm-delete",
+            RunOptions o = Parse("sync", "all", _source, "--project", _ownedSln, "--confirm-delete",
                 "--confirm-delete-io", "--clean", "--ignore", "Old*.st", "--variant", "SAS");
 
-            Assert.True(o.Incremental && o.ConfirmDelete && o.ConfirmDeleteIo && o.Clean);
+            Assert.True(o.ConfirmDeleteIo && o.Clean);   // --confirm-delete: accepted, no effect
             Assert.Equal(new[] { "Old*.st" }, o.IgnorePatterns);
             Assert.Equal("SAS", o.Variant);
         }
@@ -214,23 +211,22 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void OldFlags_NameTheirReplacement()
+        public void RemovedFlagsAndModes_AreUnknown()
         {
-            Rejected("Removed - sync: --project", () => Parse("sync", "all", _source, "--dest", _dir));
-            Rejected("Removed - use --plc", () => Parse("build", _tsproj, "--plc-name", "X"));
-            Rejected("Removed - use the command: check parse", () => Parse("check", "format", _source, "--parse-only"));
-            Rejected("unknown option --colour.", () => Parse("build", _tsproj, "--colour"));   // no hint for a never-known flag
+            Rejected("unknown option --incremental.", () => Parse("sync", "all", _source, "--project", _ownedSln, "--incremental"));
+            Rejected("unknown option --parse-only.", () => Parse("check", "format", _source, "--parse-only"));
+            Rejected("unknown 'check' mode 'links'", () => Parse("check", "links", _source));
+            Rejected("unknown option --colour.", () => Parse("build", _tsproj, "--colour"));
         }
 
         [Fact]
-        public void Sync_ProjectAndIncrementalFromStConfig()
+        public void Sync_ProjectFromStConfig()
         {
-            File.WriteAllText(Path.Combine(_source, ".stconfig"), "project=" + _ownedSln + "\nincremental=true\n");
+            File.WriteAllText(Path.Combine(_source, ".stconfig"), "project=" + _ownedSln + "\n");
 
             RunOptions o = Parse("sync", "all", _source);
 
             Assert.Equal(_ownedSln, o.SolutionFilePath);
-            Assert.True(o.Incremental);
         }
 
         [Fact]
@@ -276,16 +272,15 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void StConfig_RemovedKeys_FailWithTheReplacement()
+        public void StConfig_RemovedKeys_AreUnknown()
         {
-            File.WriteAllText(Path.Combine(_source, ".stconfig"), "dest=C:\\X\nname=Shark\nsync-code=true\nplc-name=P\n");
+            File.WriteAllText(Path.Combine(_source, ".stconfig"), "dest=C:\\X\nincremental=true\nplc-name=P\n");
 
             var ex = Assert.Throws<UsageException>(() => Parse("check", "parse", _source));
 
-            Assert.Contains("'dest' is no longer supported", ex.Message);
-            Assert.Contains("use project=", ex.Message);
-            Assert.Contains("'sync-code' is no longer supported", ex.Message);
-            Assert.Contains("'plc-name' is no longer supported", ex.Message);
+            Assert.Contains("unknown key 'dest'", ex.Message);
+            Assert.Contains("unknown key 'incremental'", ex.Message);
+            Assert.Contains("unknown key 'plc-name'", ex.Message);
         }
 
         [Fact]

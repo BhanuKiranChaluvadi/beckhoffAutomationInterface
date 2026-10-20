@@ -51,7 +51,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// Directly edits the .tsproj project file on disk to turn on "Create PLC Data
     /// Type" for specific EtherCAT terminals.
     ///
-    /// Confirmed (tasks/todo.md Task 3) that ITcSmTreeItem.ProduceXml/ConsumeXml use a
+    /// Confirmed that ITcSmTreeItem.ProduceXml/ConsumeXml use a
     /// completely different XML schema (a flat "TreeItem" summary — ItemName/PathName/
     /// DeviceDef/master-level EtherCAT settings, no Box, no CreateDeviceDataType/
     /// PlcDataTypes at all, even recursively) than the actual project FILE format

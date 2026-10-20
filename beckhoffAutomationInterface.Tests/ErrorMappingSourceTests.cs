@@ -4,7 +4,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>`build &lt;path&gt;` must not map PLC errors to .st files of the caller's
-    /// current directory (tasks/2026-10-14-variants-closed-loop, Task 4b).</summary>
+    /// current directory.</summary>
     public class ErrorMappingSourceTests : System.IDisposable
     {
         readonly string _dir;

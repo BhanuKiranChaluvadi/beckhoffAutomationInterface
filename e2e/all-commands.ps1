@@ -6,13 +6,12 @@
 
 .DESCRIPTION
     Groups:
-      A  command line: usage, --help, removed flags, wrong paths, .stconfig rules (no TwinCAT)
+      A  command line: usage, --help, unknown flags, wrong paths, .stconfig rules (no TwinCAT)
       B  read-only checks on ST/sample, plus generated failures: an unlinked %I variable and
          one object defined in two files (no TwinCAT)
       C  ST/sample life cycle: init, every sync mode (second run = no change), check events,
          build --clean, every export mode, overwrite guard, export -> sync round trip
-      D  the same project: compile error mapped to the .st file and line, then fixed again;
-         incremental sync after a git commit; the post-commit worker script
+      D  the same project: compile error mapped to the .st file and line, then fixed again
       E  runtime, read-only only: activate preview on both targets, verify on both targets
 
     Needs TwinCAT XAE. Group E needs UmRT_Default running the VariantSample project (run
@@ -52,7 +51,7 @@ function Step([string] $group, [string] $label, [int] $expectedExit, [string[]] 
     $missing = @($must | Where-Object { $m = $_; -not ($out | Where-Object { $_.Contains($m) }) })
     $present = @($mustNot | Where-Object { $m = $_; $out | Where-Object { $_.Contains($m) } })
     $ok = ($code -eq $expectedExit) -and $missing.Count -eq 0 -and $present.Count -eq 0
-    $out | Where-Object { $_ -match 'PASSED|FAILED|ERROR|Sync complete|complete \(|Exported|parsed OK|issue\(s\)|check-links\]|Per-variant|changed|NOT ACTIVATED|OK  |FAIL |refus|Removed -|Usage:' } |
+    $out | Where-Object { $_ -match 'PASSED|FAILED|ERROR|Sync complete|complete \(|Exported|parsed OK|issue\(s\)|check-links\]|Per-variant|changed|NOT ACTIVATED|OK  |FAIL |refus|unknown|Usage:' } |
         Select-Object -First 8 | ForEach-Object { "  $_" }
     $why = @()
     if ($code -ne $expectedExit) { $why += "exit $code, expected $expectedExit" }
@@ -78,21 +77,10 @@ function Snapshot([string] $dir) {   # hash of every project file TwinCAT must n
     Get-ChildItem $dir -Recurse -File | Where-Object { $_.FullName -notmatch '\\(_Boot|_CompileInfo|\.vs)\\' } |
         ForEach-Object { '{0} {1}' -f $_.FullName.Substring($dir.Length), (Get-FileHash $_.FullName).Hash } | Sort-Object
 }
-# Not named 'Git': PowerShell resolves functions before applications, case-insensitively.
-function InRepo([string] $dir) {
-    # PowerShell 5.1 turns any stderr line of a native exe into an error; judge git by its exit code.
-    $ErrorActionPreference = 'Continue'
-    & git.exe -C $dir -c user.name=e2e -c user.email=e2e@example.invalid -c core.hooksPath=NUL -c core.autocrlf=false @args 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "e2e fixture: git $($args -join ' ') failed in $dir" }
-}
-function NewGitCopy([string] $from, [string] $to) {
-    Copy-Item $from $to -Recurse
-    # Left by earlier runs on ST/ itself (git-ignored there); a copy must start without a baseline.
-    Remove-Item (Join-Path $to '.st-sync-state'), (Join-Path $to '.st-known-names') -ErrorAction SilentlyContinue
-    InRepo $to init -q; InRepo $to add -A; InRepo $to commit -q -m 'fixture'
-}
 
-$sample    = "$Work\src\sample"; NewGitCopy "$st\sample" $sample
+$sample    = "$Work\src\sample"; Copy-Item "$st\sample" $sample -Recurse
+# Left by earlier runs on ST/ itself (git-ignored there); a copy must start without one.
+Remove-Item (Join-Path $sample '.st-known-names') -ErrorAction SilentlyContinue
 $sampleSln = "$Work\tc\sample"
 $expect  = "$st\VariantSample\expect.json"
 
@@ -105,10 +93,10 @@ try {
     Step A 'activate --help'                          0 @('activate <path', '--plc <name>') @('activate', '--help')
     Step A 'verify --help'                            0 @('verify --target') @('verify', '--help')
     Step A 'unknown command'                          1 @('unknown command') @('deploy', $sample)
-    Step A 'old --dest names --project'               1 @('Removed - sync: --project') @('sync', 'all', $sample, '--dest', $Work)
-    Step A 'old --plc-name on build names --plc'      1 @('Removed - use --plc') @('build', $sample, '--plc-name', 'X')
-    Step A 'old --plc-name on activate names --plc'   1 @('use --plc') @('activate', $sample, '--target', 'umrt', '--plc-name', 'X')
-    Step A 'old --parse-only names check parse'       1 @('check parse') @('check', 'format', $sample, '--parse-only')
+    Step A 'unknown option on sync'                   1 @('unknown option --dest') @('sync', 'all', $sample, '--dest', $Work)
+    Step A 'unknown option on build'                  1 @('unknown option --plc-name') @('build', $sample, '--plc-name', 'X')
+    Step A 'unknown option on activate'               1 @('unrecognized argument: --plc-name') @('activate', $sample, '--target', 'umrt', '--plc-name', 'X')
+    Step A 'unknown check mode'                       1 @("unknown 'check' mode 'links'") @('check', 'links', $sample)
     Step A 'unknown --shell'                          1 @("unknown --shell 'eclipse'") @('--shell', 'eclipse', 'build', $sample)
     Step A 'sync without --project'                   1 @('needs --project') @('sync', 'code', $sample, '--no-config')
     Step A 'sync with a missing project'              1 @('project not found') @('sync', 'code', $sample, '--project', "$Work\Nope")
@@ -123,7 +111,7 @@ try {
     Step A 'verify: missing expect file'              1 @('ERROR') @('verify', '--target', 'umrt', '--expect', "$Work\none.json", '--variant', 'MachineA')
     Step A 'activate: unknown target'                 1 @('ERROR') @('activate', "$st\VariantSample", '--target', 'plc9')
     Set-Content "$Work\cfg\.stconfig" "dest=C:\X`nsync-code=true" -Encoding ascii
-    Step A '.stconfig: removed keys name their fix'   1 @("'dest' is no longer supported", "'sync-code' is no longer supported") @('check', 'parse', $sample, '--config', "$Work\cfg")
+    Step A '.stconfig: unknown keys are refused'      1 @("unknown key 'dest'", "unknown key 'sync-code'") @('check', 'parse', $sample, '--config', "$Work\cfg")
     Set-Content "$Work\cfg\.stconfig" 'confirm-delete=true' -Encoding ascii
     Step A '.stconfig: safety flag is refused'        1 @("unknown key 'confirm-delete'") @('check', 'parse', $sample, '--config', "$Work\cfg")
     Step A '--no-config skips a bad .stconfig'        0 @('parsed OK') @('check', 'parse', $sample, '--config', "$Work\cfg", '--no-config')
@@ -132,10 +120,10 @@ try {
     Step B 'doctor'                                   0 @('UmRT_Default', 'License:') @('doctor')
     Step B 'check parse sample'                       0 @('9 file(s) parsed OK', ', 0 failed') @('check', 'parse', $sample) @('DUPLICATE')
     Step B 'check format sample (clean)'              0 @('0 issue(s) found') @('check', 'format', $sample)
-    Step B 'check links sample'                       0 @('2 declared, 2 linked, 0 unlinked') @('check', 'links', $sample)
+    Step B 'check parse reports the links'            0 @('2 declared, 2 linked, 0 unlinked') @('check', 'parse', $sample)
     Step B 'check --ignore drops files'               0 @('7 file(s) parsed OK') @('check', 'parse', $sample, '--ignore', 'FB_Motor*.st')
     Copy-Item $sample "$Work\src\nolinks" -Recurse; Remove-Item "$Work\src\nolinks\io-devices.xml"
-    Step B 'check links: unlinked %I/%Q -> exit 1'     1 @('2 declared, 0 linked, 2 unlinked', 'UNLINKED') @('check', 'links', "$Work\src\nolinks")
+    Step B 'check parse: unlinked %I/%Q is reported'  0 @('2 declared, 0 linked, 2 unlinked', 'UNLINKED') @('check', 'parse', "$Work\src\nolinks")
     Copy-Item $sample "$Work\src\dup" -Recurse; Copy-Item "$Work\src\dup\FB_Motor.st" "$Work\src\dup\FB_Motor_old.st"
     Step B 'check parse: one object in two files'     1 @('DUPLICATE FB_Motor: FB_Motor.st, FB_Motor_old.st') @('check', 'parse', "$Work\src\dup")
 
@@ -173,38 +161,13 @@ try {
     Step C 'round trip: sync the export back, no change' 0 @('Sync complete (0 created, 0 updated, 0 deleted, ') @('sync', 'code', "$Work\exp\all", '--project', $sampleSln)
     Step C 'round trip: build after it'               0 @('BUILD PASSED') @('build', $tsproj)
 
-    # ------------------------------------------------------------ D: errors, incremental, hook
+    # ------------------------------------------------------------ D: compile errors
     $motor = Join-Path $sample 'FB_Motor.st'
     $orig = [IO.File]::ReadAllBytes($motor)
     Edit $motor '// Main cyclic logic of the motor function block' "// Main cyclic logic of the motor function block`r`nnUndeclared := 1;"
     Step D 'compile error is mapped to FB_Motor.st'   1 @('BUILD FAILED', 'nUndeclared', 'FB_Motor.st') @('sync', 'all', $sample, '--project', $sampleSln)
     [IO.File]::WriteAllBytes($motor, $orig)
     Step D 'error fixed: build passes again'          0 @('BUILD PASSED') @('sync', 'all', $sample, '--project', $sampleSln)
-    InRepo $sample add -A; InRepo $sample commit -q -m 'baseline'
-    Step D 'baseline recorded (full sync)'            0 @('Recorded sync baseline') @('sync', 'code', $sample, '--project', $sampleSln)
-    Edit (Join-Path $sample 'F_ClampSpeed.st') '// Requested speed' '// Requested speed (e2e incremental)'
-    InRepo $sample add -A; InRepo $sample commit -q -m 'one file'
-    Step D 'incremental: only the changed file'       0 @('1 file(s) changed, 0 file(s) deleted') @('sync', 'all', $sample, '--project', $sampleSln, '--incremental')
-    Edit (Join-Path $sample 'F_ClampSpeed.st') '// Maximum allowed speed' '// Maximum allowed speed (e2e hook)'
-    InRepo $sample add -A; InRepo $sample commit -q -m 'hook'
-    $env:BECKHOFF_ST_SOURCE = $sample; $env:BECKHOFF_TWINCAT_DEST = "$Work\tc"
-    $hookStart = Get-Date
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'githooks\run-incremental-sync.ps1')
-    Remove-Item Env:BECKHOFF_ST_SOURCE, Env:BECKHOFF_TWINCAT_DEST
-    $hookLog = Get-ChildItem (Join-Path $repo 'githooks\logs') -Filter *.log | Where-Object { $_.LastWriteTime -ge $hookStart } |
-               Sort-Object LastWriteTime | Select-Object -Last 1
-    $hookText = if ($hookLog) { Get-Content $hookLog.FullName -Raw } else { '' }
-    Check D 'git hook worker: incremental sync + build' (($hookText -like '*RESULT: SUCCESS*') -and ($hookText -like '*1 file(s) changed*') -and ($hookText -like '*BUILD PASSED*')) "log: $($hookLog.FullName)"
-    if ($hookLog) { Copy-Item $hookLog.FullName "$Work\logs\hook.log"; Remove-Item $hookLog.FullName }
-    $env:BECKHOFF_ST_SOURCE = $sample; $env:BECKHOFF_TWINCAT_DEST = "$Work\Nope"
-    $hookStart = Get-Date
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'githooks\run-incremental-sync.ps1')
-    Remove-Item Env:BECKHOFF_ST_SOURCE, Env:BECKHOFF_TWINCAT_DEST
-    $hookLog = Get-ChildItem (Join-Path $repo 'githooks\logs') -Filter *.log | Where-Object { $_.LastWriteTime -ge $hookStart } |
-               Sort-Object LastWriteTime | Select-Object -Last 1
-    $hookText = if ($hookLog) { Get-Content $hookLog.FullName -Raw } else { '' }
-    Check D 'git hook worker: wrong dest fails loudly' (($hookText -like '*RESULT: FAILED*') -and ($hookText -like '*project not found*') -and -not (Test-Path "$Work\Nope")) "log: $($hookLog.FullName)"
-    if ($hookLog) { Copy-Item $hookLog.FullName "$Work\logs\hook-wrong-dest.log"; Remove-Item $hookLog.FullName }
 
     # ------------------------------------------------------------ E: runtime (read-only)
     $other = if ($Running -eq 'MachineA') { 'MachineB' } else { 'MachineA' }

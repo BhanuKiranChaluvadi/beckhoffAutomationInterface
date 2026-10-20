@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>Per-variant I/O sync, COM-free parts (tasks/2026-10-14-variants-closed-loop, Task 10).</summary>
+    /// <summary>Per-variant I/O sync, COM-free parts.</summary>
     public class IoVariantSyncTests
     {
         const string El2008 = "TIID^Device 1 (EtherCAT)^Term 1 (EK1100)^Term 3 (EL2008)";

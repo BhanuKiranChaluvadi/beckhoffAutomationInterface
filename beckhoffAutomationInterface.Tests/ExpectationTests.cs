@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>expect.json and the live-value checks (tasks/2026-10-14-variants-closed-loop, Task 12).</summary>
+    /// <summary>expect.json and the live-value checks.</summary>
     public class ExpectationTests
     {
         const string Json = @"{

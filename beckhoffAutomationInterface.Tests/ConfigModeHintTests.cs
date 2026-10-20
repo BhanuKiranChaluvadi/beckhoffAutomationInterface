@@ -4,7 +4,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>"TwinCAT stays in Config" hint (tasks/2026-10-14-variants-closed-loop, Task 15b).
+    /// <summary>"TwinCAT stays in Config" hint.
     /// The Task 8 spike showed the cause is not always the license.</summary>
     public class ConfigModeHintTests
     {

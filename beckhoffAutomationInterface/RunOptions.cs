@@ -7,11 +7,10 @@ using BeckhoffAutomationInterface.Sync;
 namespace BeckhoffAutomationInterface
 {
     /// <summary>
-    /// The composable pipeline stages a run can execute (see tasks/plan.md). Each
-    /// --sync-*/--build CLI flag ORs one stage in; giving NO stage flag selects All
-    /// (the original full sync+build behavior). Stages always execute in the fixed
+    /// The pipeline stages a run can execute. 'sync <mode>' selects one stage, 'sync all'
+    /// and 'init' select All, 'build' selects Build. Stages always execute in the fixed
     /// order Variants → Code → Libraries → Tasks → Io(tree) → tsproj edits (Io templates +
-    /// Events) → Safety → Io links → Build, regardless of flag order.
+    /// Events) → Safety → Io links → Build.
     /// </summary>
     [Flags]
     enum SyncStages
@@ -29,10 +28,9 @@ namespace BeckhoffAutomationInterface
     }
 
     /// <summary>
-    /// The reverse-export artifacts a run can generate FROM an existing PLC project
-    /// (see tasks/2026-07-15-reverse-export-scaffold/): the read-side mirror of
-    /// SyncStages. Each --export-* CLI flag ORs one in; --export-all selects all four
-    /// (and additionally turns on the existing ExportLinks -> links.xml). This is a
+    /// The reverse-export artifacts a run can generate FROM an existing PLC project:
+    /// the read-side mirror of SyncStages. 'export <mode>' selects one; 'export all'
+    /// selects all (and also turns on ExportLinks -> links.xml). This is a
     /// one-time bootstrap/adoption direction, NOT the ongoing flow — .st stays the
     /// human-edited source of truth once the tree exists.
     /// </summary>
@@ -74,39 +72,30 @@ namespace BeckhoffAutomationInterface
         /// <summary>Explicit opt-in to CREATE the solution/TwinCAT/PLC project when the
         /// computed SolutionFilePath doesn't exist. Without it a missing solution is a
         /// hard error in every mode — guards against the silent-bootstrap trap where a
-        /// mistyped --dest/--name quietly builds a brand-new empty project (real
-        /// near-miss 2026-07-14, see tasks/archive/2026-07-14-post-review-hardening/).</summary>
+        /// mistyped path quietly builds a brand-new empty project.</summary>
         public bool Init { get; }
 
         /// <summary>Read-only declared-vs-present Event Class check (no Visual Studio):
-        /// prints the report and exits — code 1 if any declared class is missing, else 0.
-        /// (--events-only is the deprecated alias.)</summary>
+        /// prints the report and exits — code 1 if any declared class is missing, else 0.</summary>
         public bool CheckEvents { get; }
 
-        /// <summary>Read-only declared-vs-linked %I/%Q check (no Visual Studio, see
-        /// Sync.LinkChecker): prints the report and exits — code 1 if any declared GVL/
-        /// PROGRAM %I/%Q variable has no matching &lt;Link&gt; in io-devices.xml, or any .st
-        /// file failed to parse, else 0.</summary>
-        public bool CheckLinks { get; }
-
-        /// <summary>True when this run is ONLY the Build stage (--build with no other
-        /// stage flags, or the deprecated --build-only alias).</summary>
+        /// <summary>True when this run is ONLY the Build stage (the 'build' command).</summary>
         public bool BuildOnly => Stages == SyncStages.Build;
 
         public bool ParseOnly { get; }
 
         /// <summary>Which reverse-export artifacts this run generates from the existing
-        /// project (see ReverseExports). None when no --export-* flag was given — the
+        /// project (see ReverseExports). None when the command is not 'export' — the
         /// run then behaves as a normal forward sync/build.</summary>
         public ReverseExports ReverseExports { get; }
 
-        /// <summary>True when this run is a reverse export (any --export-* flag), so the
+        /// <summary>True when this run is a reverse export (the 'export' command), so the
         /// pipeline generates source artifacts instead of syncing them into the project.</summary>
         public bool IsReverseExport => ReverseExports != ReverseExports.None;
 
         /// <summary>Safety gate for reverse export: without it, refusing to overwrite an
         /// already-populated --source (existing .st files or manifests). CLI-only, never
-        /// read from .stconfig — same philosophy as --init/--confirm-delete*, so a
+        /// read from .stconfig — same philosophy as --confirm-delete-io, so a
         /// destructive regenerate can't happen by accident.</summary>
         public bool Overwrite { get; }
 
@@ -120,18 +109,6 @@ namespace BeckhoffAutomationInterface
         /// Sync.StFormatter). Deliberately dry-run-only for now; no --format (write) mode
         /// exists yet, since actually rewriting user source is a separate, riskier step.</summary>
         public bool FormatCheck { get; }
-
-        /// <summary>When set, sync only the .st files changed/deleted since the commit
-        /// recorded in SyncStatePath (via Sync.GitDiffHelper), instead of the whole source
-        /// folder. Requires SourceFolder to be inside a git repo with a prior recorded
-        /// baseline (see Sync.SyncState) — refuses to run without one rather than guessing.</summary>
-        public bool Incremental { get; }
-
-        /// <summary>Opt-in gate (user's explicit choice of the safer default): with
-        /// --incremental alone, deleted .st files are only warned about. Combined with
-        /// --confirm-delete, Sync.IncrementalDeleter actually removes the corresponding
-        /// PLC object(s), conservatively (exact unambiguous name match only).</summary>
-        public bool ConfirmDelete { get; }
 
         /// <summary>Opt-in gate for IO device orphan deletion (see Sync.IoSyncEngine):
         /// without this flag, IO tree items not declared in io-devices.xml are only
@@ -163,7 +140,7 @@ namespace BeckhoffAutomationInterface
         public string SolutionDirectory => Path.Combine(DestinationFolder, ProjectName);
         public string SolutionFilePath => Path.Combine(SolutionDirectory, ProjectName + ".sln");
 
-        /// <summary>When ExistingTsprojPath is given (see --tsproj), that path is used
+        /// <summary>When ExistingTsprojPath is given (--project of build/export), that path is used
         /// verbatim — the read-only "adopt an arbitrary existing project" path for
         /// reverse export (see TwinCatProjectOpener.OpenExistingReadOnly), which bypasses
         /// the dest/name/.sln convention entirely since a real pre-existing project's
@@ -209,10 +186,6 @@ namespace BeckhoffAutomationInterface
         /// event-classes/BeckhoffLibEvents.xml — see Sync/PlcDataTypeTemplate.cs.</summary>
         public string EventClassesFolder => Path.Combine(SourceFolder, "event-classes");
 
-        /// <summary>Records the last-synced commit SHA (see Sync.SyncState); consulted/updated
-        /// by --incremental and updated after every successful full sync too.</summary>
-        public string SyncStatePath => Path.Combine(SourceFolder, ".st-sync-state");
-
         /// <summary>Records every synced object/member's full name (see
         /// Sync.KnownNamesTracker) so renames/deletions in .st source are warned about
         /// on the next run instead of leaving stale PLC code compiling silently.</summary>
@@ -236,13 +209,13 @@ namespace BeckhoffAutomationInterface
 
         string TreePath(string leaf) => string.Format("TIPC^{0}^{0} Project^{1}", PlcProjectName, leaf);
 
-        /// <summary>When set (via --tsproj), opens THIS exact existing .tsproj file
+        /// <summary>When set (--project of build/export/check events), opens THIS exact existing .tsproj file
         /// directly — read-only, never saved — instead of resolving
         /// SolutionFilePath/TsprojFilePath from DestinationFolder/ProjectName. This is the
         /// "adopt an arbitrary pre-existing project" path: such a project may have no .sln
         /// at all (confirmed live against PLC_NFL_SHARK_V2), which the normal dte.Solution.
-        /// Open flow requires. CLI-only. Valid either with a --export-* flag (reverse
-        /// export) or with --build alone (e.g. CI compiling a project natively hosted on
+        /// Open flow requires. CLI-only. Valid with 'export' (reverse
+        /// export) or with 'build' (e.g. CI compiling a project natively hosted on
         /// GitHub, never bootstrapped by this tool) — see TwinCatSession.EnsureOpen.</summary>
         public string ExistingTsprojPath { get; }
 
@@ -270,7 +243,7 @@ namespace BeckhoffAutomationInterface
         public IReadOnlyList<string> Defines { get; }
 
         internal RunOptions(string sourceFolder, string destinationFolder, string projectName,
-            SyncStages stages, bool init, bool checkEvents, bool checkLinks, bool parseOnly, IReadOnlyList<string> ignorePatterns, bool incremental, string exportObjectName, bool exportLinks, bool confirmDelete, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null, string targetPlatform = null)
+            SyncStages stages, bool init, bool checkEvents, bool parseOnly, IReadOnlyList<string> ignorePatterns, string exportObjectName, bool exportLinks, bool formatCheck, bool confirmDeleteIo, ReverseExports reverseExports, bool overwrite, string plcProjectName, string existingTsprojPath, bool configFileLoaded, string shell, bool clean, bool sourceFolderExplicit, string variant, bool allVariants, IReadOnlyList<string> defines = null, string targetPlatform = null)
         {
             SourceFolder = sourceFolder;
             DestinationFolder = destinationFolder;
@@ -278,13 +251,10 @@ namespace BeckhoffAutomationInterface
             Stages = stages;
             Init = init;
             CheckEvents = checkEvents;
-            CheckLinks = checkLinks;
             ParseOnly = parseOnly;
             IgnorePatterns = ignorePatterns;
-            Incremental = incremental;
             ExportObjectName = exportObjectName;
             ExportLinks = exportLinks;
-            ConfirmDelete = confirmDelete;
             FormatCheck = formatCheck;
             ConfirmDeleteIo = confirmDeleteIo;
             ReverseExports = reverseExports;

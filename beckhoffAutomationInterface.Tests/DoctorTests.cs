@@ -6,7 +6,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>doctor's license and shell reporting (tasks/2026-10-14-variants-closed-loop, Task 15).</summary>
+    /// <summary>doctor's license and shell reporting.</summary>
     public class DoctorTests
     {
         // Shape of a real TwinCAT trial license file (TrialLicense.tclrs), shortened.

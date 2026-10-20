@@ -5,8 +5,8 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// LinkChecker.Check (tasks/plan.md: "--check-links — %I/%Q ↔ <Links> Cross-Reference
-    /// Checker"). Pure in-memory fixtures — no file I/O, no COM.
+    /// LinkChecker.Check (%I/%Q ↔ &lt;Links&gt; cross-reference, part of 'check parse').
+    /// Pure in-memory fixtures — no file I/O, no COM.
     /// </summary>
     public class LinkCheckerTests
     {

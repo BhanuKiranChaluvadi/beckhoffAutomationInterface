@@ -12,8 +12,8 @@ namespace BeckhoffAutomationInterface.Sync
     /// ITcPlcImplementation), classifying each file as a PROGRAM, FUNCTION_BLOCK,
     /// FUNCTION, INTERFACE, METHOD, or DUT (ENUM/STRUCT/ALIAS).
     ///
-    /// This is a naive, line-based parser, validated end-to-end in
-    /// docs/ideas/st-source-twincat-sync.md (2026-07-04). It is NOT a full IEC
+    /// This is a naive, line-based parser, validated end-to-end against
+    /// real TwinCAT projects (2026-07-04). It is NOT a full IEC
     /// 61131-3 parser. Conventions it relies on:
     ///   - A FUNCTION_BLOCK's or INTERFACE's METHODs live inline in the SAME
     ///     file as the FB/INTERFACE (e.g. FB_Motor.st contains
@@ -382,7 +382,7 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>Also returns implLineOffset: the 0-based line index WITHIN source where
         /// the (trimmed) implementation text begins, or -1 when there is none — provenance
-        /// for mapping build errors back to .st lines (tasks/todo.md Tasks 5-6). Callers
+        /// for mapping build errors back to .st lines. Callers
         /// working on a sub-segment add their segment's starting line to it.</summary>
         static (string declaration, string implementation, int implLineOffset) SplitAtLastEndVar(string source, string filePath, string sectionName)
         {

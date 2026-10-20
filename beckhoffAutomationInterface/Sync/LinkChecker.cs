@@ -58,7 +58,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// AT %I*/%Q* member, or a STRUCT/DUT member, resolves through wherever that FB/struct is
     /// actually instantiated (e.g. "PRG_MAIN.fbMotor.bEnable") — not derivable from static
     /// source alone, so those are deliberately NOT scanned here rather than silently
-    /// mismatched. See tasks/plan.md for why this is a separate, bigger piece of work.
+    /// mismatched.
     /// </summary>
     static class LinkChecker
     {

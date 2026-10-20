@@ -1,5 +1,5 @@
 ﻿<!--
-  Test fixture for TwinCAT Variant Management (tasks/2026-10-14-variants-closed-loop).
+  Test fixture for TwinCAT Variant Management.
   Two machines; each group name becomes a PLC compiler define, so it works as a
   feature switch: MAIN tests {IF defined (PCV_MODBUS)}, never a machine name.
   Port of BeckhoffLib/Experiments/VariantDemo (verified on UmRT 2026-10-14).

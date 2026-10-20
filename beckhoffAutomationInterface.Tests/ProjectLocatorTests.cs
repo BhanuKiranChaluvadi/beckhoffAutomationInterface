@@ -4,8 +4,7 @@ using Xunit;
 namespace BeckhoffAutomationInterface.Tests
 {
     /// <summary>
-    /// Path-to-.tsproj resolution for the new `build &lt;path&gt;` subcommand (see
-    /// docs/ideas/cli-subcommand-redesign.md) — the piece that replaces the legacy
+    /// Path-to-.tsproj resolution for the new `build &lt;path&gt;` subcommand — the piece that replaces the legacy
     /// --tsproj/--source/--dest/--name duality with one positional argument.
     /// ProjectLocator is COM-free, so this whole surface is unit-testable without VS/TwinCAT.
     /// </summary>

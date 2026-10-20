@@ -99,11 +99,11 @@ source=C:\path
         [InlineData("Yes")]
         public void GetBool_TruthyValues(string value)
         {
-            WriteConfig($"incremental={value}");
+            WriteConfig($"clean={value}");
 
             var config = StConfigFile.Load(_dir);
 
-            Assert.True(config.GetBool("incremental"));
+            Assert.True(config.GetBool("clean"));
         }
 
         [Theory]
@@ -114,11 +114,11 @@ source=C:\path
         [InlineData("nonsense")]
         public void GetBool_FalsyValues(string value)
         {
-            WriteConfig($"incremental={value}");
+            WriteConfig($"clean={value}");
 
             var config = StConfigFile.Load(_dir);
 
-            Assert.False(config.GetBool("incremental"));
+            Assert.False(config.GetBool("clean"));
         }
 
         [Fact]
@@ -126,7 +126,7 @@ source=C:\path
         {
             var config = StConfigFile.Load(_dir);
 
-            Assert.False(config.GetBool("incremental"));
+            Assert.False(config.GetBool("clean"));
         }
     }
 }

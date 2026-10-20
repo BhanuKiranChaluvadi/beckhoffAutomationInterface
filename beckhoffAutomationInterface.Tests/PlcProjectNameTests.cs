@@ -3,8 +3,7 @@ using Xunit;
 
 namespace BeckhoffAutomationInterface.Tests
 {
-    /// <summary>init/sync reject a PLC project name TwinCAT refuses, before the shell starts
-    /// (tasks/2026-10-14-variants-closed-loop, Task 7b).</summary>
+    /// <summary>init/sync reject a PLC project name TwinCAT refuses, before the shell starts.</summary>
     public class PlcProjectNameTests
     {
         [Theory]

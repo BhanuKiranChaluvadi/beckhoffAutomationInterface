@@ -32,37 +32,6 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void DiffWithinOwners_OnlyReportsMembersOfReparsedOwners()
-        {
-            var previous = new[] { "FB_A", "FB_A.Old", "FB_B", "FB_B.Keep", "GVL_X" };
-            // Incremental parse re-parsed only FB_A's file: FB_A.Old is provably gone,
-            // but FB_B.Keep and GVL_X just weren't re-parsed — no warning for those.
-            var current = new[] { "FB_A", "FB_A.New" };
-
-            Assert.Equal(new[] { "FB_A.Old" }, KnownNamesTracker.DiffWithinOwners(previous, current));
-        }
-
-        [Fact]
-        public void DiffWithinOwners_NeverReportsTopLevelNames()
-        {
-            var previous = new[] { "FB_Gone" };
-            var current = new[] { "FB_Other" };
-
-            Assert.Empty(KnownNamesTracker.DiffWithinOwners(previous, current));
-        }
-
-        [Fact]
-        public void Merge_DropsDisappearedKeepsUnparsedAddsNew()
-        {
-            var previous = new[] { "FB_A", "FB_A.Old", "FB_B" };
-            var current = new[] { "FB_A", "FB_A.New" };
-            var disappeared = new[] { "FB_A.Old" };
-
-            Assert.Equal(new[] { "FB_A", "FB_A.New", "FB_B" },
-                KnownNamesTracker.Merge(previous, current, disappeared));
-        }
-
-        [Fact]
         public void ReadWrite_RoundTripsAndReadReturnsNullWhenMissing()
         {
             string path = Path.Combine(Path.GetTempPath(), "KnownNamesTrackerTests_" + Guid.NewGuid() + ".txt");
