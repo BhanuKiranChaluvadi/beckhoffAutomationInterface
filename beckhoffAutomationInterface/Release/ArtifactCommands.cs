@@ -15,7 +15,8 @@ namespace BeckhoffAutomationInterface.Release
             "toolchain verify --archive <zip> --sha256 <retained-hash> --version <version> [--installed] [--json]\n" +
             "package verify --package <zip> [--sha256 <retained-hash>] [--json]\n" +
             "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json>\n" +
-            "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <retained-hash> [--json]";
+            "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <retained-hash> [--json]\n" +
+            ReleaseCommands.PackageUsage;
 
         internal static Dictionary<string, string> Options(string[] args, string[] required, string[] optional, string[] switches = null)
         {
@@ -42,6 +43,7 @@ namespace BeckhoffAutomationInterface.Release
         internal static int Run(string[] args)
         {
             if (args.Skip(1).Any(a => a == "--help" || a == "-h")) { Console.WriteLine(Usage); return 0; }
+            if (ReleaseCommands.Handles(args)) return ReleaseCommands.Run(args, null);
             try
             {
                 if (args.Length < 2) throw new ArgumentException("A subcommand is required.");

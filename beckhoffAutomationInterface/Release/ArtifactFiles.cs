@@ -73,6 +73,7 @@ namespace BeckhoffAutomationInterface.Release
             var a = Field(value, name);
             if (a is object[] items) return items;
             if (a is ArrayList list) return list.ToArray();
+            if (a is IEnumerable sequence && !(a is string) && !(a is IDictionary)) return sequence.Cast<object>().ToArray();
             throw new InvalidDataException("Expected array: " + name);
         }
         internal static JavaScriptSerializer Serializer() => new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024, RecursionLimit = 100 };
@@ -96,7 +97,9 @@ namespace BeckhoffAutomationInterface.Release
             using (var stream = File.OpenRead(path)) return new Dictionary<string, object> {
                 ["path"] = Relative(relative), ["bytes"] = stream.Length, ["sha256"] = Hash(stream) };
         }
-        internal static Dictionary<string, Dictionary<string, object>> Inventory(string root)
+        /// <summary>Every file below root (links are refused). A file with one of the excluded
+        /// names is not opened (for example a runtime journal that is locked).</summary>
+        internal static Dictionary<string, Dictionary<string, object>> Inventory(string root, ICollection<string> excludedNames = null)
         {
             root = Path.GetFullPath(root);
             string prefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -109,7 +112,7 @@ namespace BeckhoffAutomationInterface.Release
                 {
                     NoLinks(path);
                     if (Directory.Exists(path)) pending.Push(path);
-                    else
+                    else if (excludedNames == null || !excludedNames.Contains(Path.GetFileName(path)))
                     {
                         var name = Relative(path.Substring(prefix.Length).Replace('\\', '/'));
                         if (result.ContainsKey(name)) throw new InvalidDataException("Duplicate path: " + name);
@@ -127,6 +130,29 @@ namespace BeckhoffAutomationInterface.Release
                     throw new InvalidDataException("Missing file or size mismatch: " + pair.Key);
                 CheckHash(Text(value, "sha256"), Text(pair.Value, "sha256"));
             }
+        }
+        /// <summary>An inventory as evidence records (path order, upper-case SHA256 as in the
+        /// earlier PowerShell evidence), each path with an optional prefix.</summary>
+        internal static List<Dictionary<string, object>> Evidence(string root, string prefix = "", ICollection<string> excludedNames = null) =>
+            Inventory(root, excludedNames).OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new Dictionary<string, object>
+                { ["path"] = prefix + p.Key, ["bytes"] = p.Value["bytes"], ["sha256"] = ((string)p.Value["sha256"]).ToUpperInvariant() }).ToList();
+        /// <summary>Evidence records (from this run or read back from JSON) as an inventory.</summary>
+        internal static Dictionary<string, Dictionary<string, object>> Records(IEnumerable<object> records)
+        {
+            var result = new Dictionary<string, Dictionary<string, object>>(Names);
+            foreach (var item in records)
+            {
+                var record = Object(item); string name = Relative(Text(record, "path"));
+                if (result.ContainsKey(name)) throw new InvalidDataException("Duplicate path: " + name);
+                result.Add(name, record);
+            }
+            return result;
+        }
+        /// <summary>Throws "&lt;label&gt; changed" when the two file lists differ.</summary>
+        internal static void SameFiles(IEnumerable<object> expected, IEnumerable<object> actual, string label)
+        {
+            try { Same(Records(expected), Records(actual)); }
+            catch (InvalidDataException ex) { throw new InvalidDataException(label + " changed: " + ex.Message); }
         }
         internal static bool Inside(string child, string parent) => Path.GetFullPath(child).StartsWith(
             Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
