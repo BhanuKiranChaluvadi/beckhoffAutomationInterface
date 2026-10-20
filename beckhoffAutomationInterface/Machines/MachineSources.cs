@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace BeckhoffAutomationInterface.Machines
 {
@@ -17,6 +18,8 @@ namespace BeckhoffAutomationInterface.Machines
         public MachineFamily Family { get; }
         public string RepoRoot { get; }
         public string MachineFolder { get; }
+        /// <summary>A simulation build (SIMULATION define; for a native family also simulated NC axes).</summary>
+        public bool Simulation { get; }
         public string FamilyWork { get; }
         public string Dir { get; }
         public string Src => Path.Combine(Dir, "src");
@@ -28,6 +31,8 @@ namespace BeckhoffAutomationInterface.Machines
         public string StateFile => Path.Combine(Dir, "bai-machine.json");
         public string StartupExpect => Path.Combine(Dir, "startup.expect.json");
         public string DefaultJUnit => Path.Combine(Dir, "test-results.xml");
+        /// <summary>machine test: what passed, with the hashes of the scenarios, the TMC and bai (+ .sha256).</summary>
+        public string ValidationRecord => Path.Combine(Dir, "validation.json");
 
         public MachineLayout(MachineManifest manifest, string machine, bool simulation, string work = null)
         {
@@ -35,6 +40,7 @@ namespace BeckhoffAutomationInterface.Machines
             Machine = manifest.Spelling(machine);
             RepoRoot = manifest.Root;
             MachineFolder = Family.MachineFolder(RepoRoot, Machine);
+            Simulation = simulation;
             FamilyWork = Path.Combine(Path.GetFullPath(work ?? manifest.Work), Family.Name);
             Dir = Path.Combine(FamilyWork, Machine + (simulation ? "-sim" : ""));
         }
@@ -57,9 +63,15 @@ namespace BeckhoffAutomationInterface.Machines
         /// <summary>Runs an external command in a folder: exit code (-1 when it cannot start).</summary>
         internal delegate int CommandRunner(IReadOnlyList<string> command, string workingFolder);
 
+        /// <summary>Native family, normal build: the copied configuration, its links and the TwinSAFE folder in src.</summary>
+        public const string NativeConfigurationFile = "native-configuration.xml";
+        public const string NativeLinksFile = "links.xml";
+        public const string NativeSafetyFolder = "native-safety";
+
         public static void Assemble(MachineLayout l, CommandRunner run)
         {
-            if (!File.Exists(Path.Combine(l.MachineFolder, "variants.xml")))
+            bool native = l.Family.IsNative;
+            if (!native && !File.Exists(Path.Combine(l.MachineFolder, "variants.xml")))
                 throw new InvalidOperationException("No variants.xml in " + l.MachineFolder);
             string src = l.Src;
             Directory.CreateDirectory(src);
@@ -71,7 +83,10 @@ namespace BeckhoffAutomationInterface.Machines
                 Mirror(Path.Combine(shared, folder), Path.Combine(src, folder));
             foreach (string file in SharedFiles)
                 CopyOrDelete(Path.Combine(shared, file), Path.Combine(src, file));
-            CopyIfDifferent(Path.Combine(l.MachineFolder, "variants.xml"), Path.Combine(src, "variants.xml"));
+            if (native)
+                AssembleNative(l);
+            else
+                CopyIfDifferent(Path.Combine(l.MachineFolder, "variants.xml"), Path.Combine(src, "variants.xml"));
 
             string io = Path.Combine(l.MachineFolder, "io-devices.xml");
             if (File.Exists(io))
@@ -96,6 +111,32 @@ namespace BeckhoffAutomationInterface.Machines
             }
             else
                 DeleteFile(Path.Combine(src, "safety.xml"));
+        }
+
+        /// <summary>A native family: the configuration, its links.xml (PLC prefix of this family)
+        /// and the TwinSAFE folder (byte for byte). The simulation copy (-sim) of the configuration
+        /// has SimulationMode="1" on each NC axis (simulated drive and encoder); the retained file
+        /// and a normal build never have it.</summary>
+        static void AssembleNative(MachineLayout l)
+        {
+            NativeSettings n = l.Family.Native;
+            string src = l.Src;
+            string source = RepoPath(l.RepoRoot, n.Configuration);
+            XDocument retained = NativeConfiguration.Load(source);
+            if (NativeConfiguration.SimulatedAxes(retained) > 0)
+                throw new InvalidOperationException("The retained native configuration has SimulationMode on an NC axis: " + source);
+            if (l.Simulation)
+            {
+                NativeConfiguration.SimulateAxes(retained);
+                WriteIfDifferent(Path.Combine(src, NativeConfigurationFile), Encoding.UTF8.GetBytes(NativeConfiguration.Text(retained)));
+            }
+            else
+                CopyIfDifferent(source, Path.Combine(src, NativeConfigurationFile));
+            WriteIfDifferent(Path.Combine(src, NativeLinksFile), Encoding.UTF8.GetBytes(NativeConfiguration.LinksText(source, l.Family.Plc)));
+            string safetySource = RepoPath(l.RepoRoot, n.Safety);
+            if (!Directory.Exists(safetySource))
+                throw new InvalidOperationException("Native safety folder not found: " + safetySource);
+            Mirror(safetySource, Path.Combine(src, NativeSafetyFolder, Path.GetFileName(safetySource)));
         }
 
         /// <summary>.st files of the kept source folder that the repository no longer has
@@ -131,6 +172,11 @@ namespace BeckhoffAutomationInterface.Machines
                 parts.Add(name + "=" + Hash(Path.Combine(src, name)));
             foreach (string folder in SharedFolders)
                 parts.AddRange(HashFolder(src, Path.Combine(src, folder)));
+            // Native family only (absent elsewhere, so the stamp of other families does not change).
+            foreach (string name in new[] { NativeConfigurationFile, NativeLinksFile })
+                if (File.Exists(Path.Combine(src, name)))
+                    parts.Add(name + "=" + Hash(Path.Combine(src, name)));
+            parts.AddRange(HashFolder(src, Path.Combine(src, NativeSafetyFolder)));
             SafetySpec safety = SafetySpec.Read(src, requireSource: false);
             if (safety != null)
             {

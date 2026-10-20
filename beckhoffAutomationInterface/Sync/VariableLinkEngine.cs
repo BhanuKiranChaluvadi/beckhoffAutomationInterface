@@ -99,7 +99,7 @@ namespace BeckhoffAutomationInterface.Sync
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("PLC compilation failed before applying links.xml; mappings were not changed.", ex);
+                throw new InvalidOperationException("PLC compilation failed before applying links.xml; mappings were not changed (" + ex.Message + ").", ex);
             }
 
             ((ITcSysManager3)sysManager).ConsumeMappingInfo(xml);

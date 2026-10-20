@@ -135,6 +135,10 @@ namespace BeckhoffAutomationInterface.Sync
         public static string LoadRawXml(string path) =>
             File.Exists(path) ? File.ReadAllText(path) : null;
 
+        /// <summary>The number of &lt;Link&gt; elements of a links.xml (0 when the file does not exist).</summary>
+        public static int CountLinks(string path) =>
+            File.Exists(path) ? XDocument.Load(path).Descendants("Link").Count() : 0;
+
         /// <summary>Empty (never null) list if "links.xml" doesn't exist.</summary>
         public static List<VarLinkEntry> Parse(string path)
         {

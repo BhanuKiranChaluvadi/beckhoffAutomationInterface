@@ -173,6 +173,10 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("      Build (and test on UmRT in simulation) the machines of bai.machines.json in a PLC");
             Console.WriteLine("      repository: source assembly, build identity, one TwinCAT session per machine.");
             Console.WriteLine();
+            Console.WriteLine("  native capture|apply|links ...");
+            Console.WriteLine("      A retained native configuration (I/O, NC, safety references, mappings): import it");
+            Console.WriteLine("      from a reviewed project, apply it to a closed project, or write its links.xml.");
+            Console.WriteLine();
             Console.WriteLine("Global option (any command that opens TwinCAT):");
             Console.WriteLine("  --shell xae|vs2022   DTE shell to automate. Default: TwinCAT XAE shell if installed,");
             Console.WriteLine("                       else Visual Studio 2022. Also settable as 'shell=' in .stconfig.");
@@ -240,6 +244,7 @@ namespace BeckhoffAutomationInterface
                              : args[0] == "runtime-state" ? Runtime.RuntimeStateCommand.Usage
                              : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
                              : args[0] == "machine" ? "Usage: beckhoffAutomationInterface " + Machines.MachineCommands.Usage
+                             : args[0] == "native" ? "Usage: beckhoffAutomationInterface " + Machines.NativeCommands.Usage
                              : null;
                 if (usage != null)
                 {
@@ -276,6 +281,9 @@ namespace BeckhoffAutomationInterface
                 case "machine":
                     Environment.Exit(Machines.MachineCommands.Run(args, shell));
                     break;
+                case "native":
+                    Environment.Exit(Machines.NativeCommands.Run(args));
+                    break;
                 case "build":
                 case "check":
                 case "export":
@@ -285,7 +293,7 @@ namespace BeckhoffAutomationInterface
                     break;
                 default:
                     Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, package, libraries, toolchain, esi.");
+                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, native, package, libraries, toolchain, esi.");
                     Console.Error.WriteLine("Run with --help for usage.");
                     Environment.Exit(1);
                     break;

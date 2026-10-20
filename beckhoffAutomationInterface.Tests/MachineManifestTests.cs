@@ -48,13 +48,54 @@ namespace BeckhoffAutomationInterface.Tests
             MachineFamily f = m.FamilyOf("Google");
             Assert.Equal("NFLite", f.Plc);
             Assert.Equal(100000, f.SimulationGas.CycleTimeUs);
-            foreach (string machine in m.AllMachines)
-                Assert.True(File.Exists(Path.Combine(f.MachineFolder(m.Root, machine), "variants.xml")), machine);
+            foreach (string machine in m.AllMachines.Where(x => !m.FamilyOf(x).IsNative))
+                Assert.True(File.Exists(Path.Combine(m.FamilyOf(machine).MachineFolder(m.Root, machine), "variants.xml")), machine);
+            foreach (MachineFamily native in m.Families.Where(x => x.IsNative))
+            {
+                Assert.True(File.Exists(MachineSources.RepoPath(m.Root, native.Native.Configuration)), native.Name);
+                Assert.True(Directory.Exists(MachineSources.RepoPath(m.Root, native.Native.Safety)), native.Name);
+                Assert.True(File.Exists(Path.Combine(native.MachineFolder(m.Root, native.Machines[0]), "tasks.xml")), native.Name);
+            }
+        }
+
+        const string NativeFamily =
+            "{ \"kind\": \"native\", \"plc\": \"NFPro\", \"platform\": \"TwinCAT OS (x64)\", \"sources\": [\"Lib\", \"App/NFPro\"], " +
+            "\"shared\": \"Machines/NFPro\", \"buildInfo\": \"App/NFPro/Version/GVL_BuildInfo.st\", \"tests\": \"Tests/Integration/NFPro\", " +
+            "\"machines\": [\"NFPro\"], \"native\": { \"configuration\": \"Machines/NFPro/native/configuration.xml\", " +
+            "\"safety\": \"Safety/NFPro/S\", \"runtimeLicenses\": [\"TC3 NC PTP\", \"TC3 NC PTP Axis\"] } }";
+
+        [Fact]
+        public void NativeFamily_IsRead_AndItsMachineFolderIsTheFamilyFolder()
+        {
+            MachineFamily f = Assert.Single(MachineManifest.Parse(Json(NativeFamily), Path0).Families);
+            Assert.True(f.IsNative);
+            Assert.Equal("TwinCAT OS (x64)", f.Platform);
+            Assert.Equal("Machines/NFPro/native/configuration.xml", f.Native.Configuration);
+            Assert.Equal("Safety/NFPro/S", f.Native.Safety);
+            Assert.Equal(new[] { "TC3 NC PTP", "TC3 NC PTP Axis" }, f.Native.RuntimeLicenses);
+            Assert.Equal(@"C:\repo\Machines\NFPro", f.MachineFolder(@"C:\repo", "NFPro"));
+            Assert.Null(Assert.Single(MachineManifest.Parse(Json(), Path0).Families).Native);
+        }
+
+        [Theory]
+        [InlineData("NO_NATIVE", "", "kind 'native' needs \"native\"")]
+        [InlineData("[\"NFPro\"]", "[\"NFPro\", \"Other\"]", "exactly one machine")]
+        [InlineData("\"runtimeLicenses\"", "\"stubs\"", "unknown key 'stubs'")]
+        [InlineData("[\"TC3 NC PTP\", \"TC3 NC PTP Axis\"]", "\"TC3 NC PTP\"", "\"runtimeLicenses\" must be a list")]
+        [InlineData("\"safety\": \"Safety/NFPro/S\", ", "", "\"safety\" is required")]
+        [InlineData("\"Safety/NFPro/S\"", "\"../S\"", "relative path below the repository root")]
+        [InlineData("\"kind\": \"native\", ", "", "\"native\" is only for kind 'native'")]
+        public void BadNativeFamilies_AreRefused(string replace, string with, string message)
+        {
+            string family = replace == "NO_NATIVE"
+                ? NativeFamily.Substring(0, NativeFamily.IndexOf(", \"native\"", StringComparison.Ordinal)) + " }"
+                : NativeFamily.Replace(replace, with);
+            var ex = Assert.Throws<FormatException>(() => MachineManifest.Parse(Json(family), Path0));
+            Assert.Contains(message, ex.Message);
         }
 
         [Theory]
         [InlineData(null, ", \"extra\": 1", "unknown key 'extra'")]
-        [InlineData("{ \"kind\": \"native\", \"plc\": \"X\" }", null, "'native' is not supported yet")]
         [InlineData("{ \"kind\": \"other\", \"plc\": \"X\" }", null, "unknown kind")]
         [InlineData("{ \"plc\": \"my-plc\", \"sources\": [\"Lib\"], \"shared\": \"M\", \"buildInfo\": \"Lib/B.st\", \"machines\": [\"A\"] }", null, "not a valid PLC project name")]
         [InlineData("{ \"plc\": \"P\", \"sources\": [\"Lib\"], \"shared\": \"M\", \"buildInfo\": \"App/B.st\", \"machines\": [\"A\"] }", null, "inside one of the \"sources\"")]

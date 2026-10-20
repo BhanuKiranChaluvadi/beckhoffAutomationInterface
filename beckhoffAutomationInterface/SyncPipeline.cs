@@ -90,6 +90,21 @@ namespace BeckhoffAutomationInterface
                 _session.EnsureOpen();
                 SyncVariants();
             }
+            // A project without variants gets the build's compiler defines (--define) BEFORE the
+            // code import: a define added just before a compile is not seen yet by a GVL's
+            // {IF defined (...)} declaration (TwinCAT precompiles in the background), and the
+            // compile fails on its missing members (NFPro, SIMULATION, 2026-10-20). A project with
+            // variants gets them per variant in the build stage, as before.
+            if (stages.HasFlag(SyncStages.Code) && stages.HasFlag(SyncStages.Build) && _options.Defines.Count > 0)
+            {
+                _session.EnsureOpen();
+                if (VariantSyncEngine.ProjectVariants(_session.SysManager).Count == 0)
+                {
+                    string defines = null;
+                    RetryOnBusy(() => defines = CompilerDefines.Add(_session.SysManager, _options.ProjectRootPath, _options.Defines), "adding compiler defines");
+                    Console.WriteLine("{0}: Compiler defines (set before the code import): {1}", Now(), defines);
+                }
+            }
             if (stages.HasFlag(SyncStages.Code))
             {
                 _session.EnsureOpen();
@@ -734,7 +749,10 @@ namespace BeckhoffAutomationInterface
             bool varLinksApplied = false;
             RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.PlcProjectName, _options.VarLinksManifestPath), "applying links.xml");
             if (varLinksApplied)
-                Console.WriteLine("{0}: Applied links.xml.", Now());
+            {
+                Outcome.FileLinks = VarLinksFile.CountLinks(_options.VarLinksManifestPath);
+                Console.WriteLine("{0}: Applied links.xml ({1} link(s), all read back).", Now(), Outcome.FileLinks);
+            }
 
             VariableLinkReport linkReport = new VariableLinkReport();
             if (desiredLinks.Count > 0)

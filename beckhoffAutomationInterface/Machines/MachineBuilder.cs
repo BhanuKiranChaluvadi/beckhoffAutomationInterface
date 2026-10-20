@@ -100,7 +100,13 @@ namespace BeckhoffAutomationInterface.Machines
             var row = new MachineRow(l.Machine);
             BuildLocation.Assert(l.RepoRoot, l.Dir);
             Console.WriteLine();
-            Console.WriteLine("#################### {0}{1}", l.Machine, r.Simulation ? " (simulation)" : "");
+            // A native family: every build is the full native project (I/O, NC axes, safety). The
+            // simulation copy (-sim) has simulated NC axes and SIMULATION.
+            bool native = l.Family.IsNative;
+            bool nativeConfig = native;
+            Console.WriteLine("#################### {0}{1}", l.Machine,
+                r.Simulation ? (native ? " (native, simulation: SIMULATION and simulated NC axes)" : " (simulation)") : native ? " (native)" : "");
+            List<NativeProject.FileEntry> safetyBefore = nativeConfig ? NativeProject.Inventory(NativeProject.SafetySource(l)) : null;
 
             // 1. Kept or fresh. All checks before TwinCAT starts.
             MachineState state = MachineState.Read(l.StateFile);
@@ -161,13 +167,23 @@ namespace BeckhoffAutomationInterface.Machines
 
             // 3. One TwinCAT session: init or sync, build, (activate).
             new MachineState { Stamp = MachineSources.Stamp(l.Src), Simulation = r.Simulation, Result = "running" }.Write(l.StateFile);
-            var options = Options(r, init: !keep);
-            int declaredLinks = MachineChecks.DeclaredLinks(options.IoManifestPath);
+            // A fresh native build bootstraps the project and applies the native configuration
+            // first: the main session then syncs into that project (not 'init').
+            var options = Options(r, init: !keep && !nativeConfig);
+            int declaredLinks = MachineChecks.DeclaredLinks(options.IoManifestPath) + MachineChecks.DeclaredFileLinks(options.VarLinksManifestPath);
             string phase = "build";
             PipelineOutcome outcome = null;
             Environment.ExitCode = 0;
             try
             {
+                if (nativeConfig && !keep)
+                {
+                    phase = "bootstrap";
+                    NativeProject.Bootstrap(l, r.Shell, r.Platform ?? l.Family.Platform);
+                    phase = "build";
+                }
+                else if (nativeConfig)
+                    NativeProject.CopySafety(l); // kept: only files whose bytes differ (XAE is closed)
                 using (var session = new TwinCatSession(options))
                 {
                     var pipeline = new SyncPipeline(session, options, IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns));
@@ -175,7 +191,7 @@ namespace BeckhoffAutomationInterface.Machines
                     pipeline.AfterBuild = s =>
                     {
                         // A kept project with I/O items the manifest no longer has: build fresh, activate that one.
-                        if (IsDrift(keep, outcome))
+                        if (IsDrift(keep, outcome, ioFromManifest: !native))
                             return;
                         if (!r.Simulation && !CheckNoSimulationDefine(s, options))
                         {
@@ -192,7 +208,7 @@ namespace BeckhoffAutomationInterface.Machines
                         }
                         phase = "activate";
                         Console.WriteLine("{0}: Activate on UmRT_Default (SIMULATION, I/O disabled), same session.", Now());
-                        row.Activate = Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, options.PlcProjectName, l.Machine,
+                        row.Activate = Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, options.PlcProjectName, options.Variant,
                             new[] { SimulationDefine }, Runtime.RuntimeTargets.UmRt, r.ActivateNetId, r.TimeoutS, p => p) ? "PASS" : "FAIL";
                     };
                     pipeline.Run();
@@ -216,10 +232,23 @@ namespace BeckhoffAutomationInterface.Machines
                 row.Crashed = true;
             bool failed = Environment.ExitCode != 0 || outcome == null || !outcome.BuildPassed;
             Environment.ExitCode = 0;
+            string safetyProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.SafetyProblem(l, safetyBefore) : null;
+            if (safetyProblem != null)
+            {
+                Console.WriteLine("{0}: SAFETY FAILED — {1}", Now(), safetyProblem);
+                failed = true;
+            }
+            // Simulated NC axes only in the -sim project, never in a normal (release) project.
+            string axesProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.AxesProblem(l.Tsproj, r.Simulation) : null;
+            if (axesProblem != null)
+            {
+                Console.WriteLine("{0}: NC AXES FAILED — {1}", Now(), axesProblem);
+                failed = true;
+            }
 
             new MachineState { Stamp = MachineSources.Stamp(l.Src), Simulation = r.Simulation, Result = row.Crashed ? "crashed" : failed ? "failed" : "passed" }.Write(l.StateFile);
 
-            if (!row.Crashed && IsDrift(keep, outcome))
+            if (!row.Crashed && IsDrift(keep, outcome, ioFromManifest: !native))
             {
                 Console.WriteLine("{0}: The kept project has objects the source no longer has: building it fresh.", Now());
                 return Build(r, retried, forceFresh: true, freshReason: "fresh (drift)");
@@ -239,7 +268,7 @@ namespace BeckhoffAutomationInterface.Machines
                 return row;
             }
 
-            row.Build = failed ? "FAIL" : "PASS";
+            row.Build = safetyProblem != null ? "FAIL (safety changed)" : axesProblem != null ? "FAIL (NC axes)" : failed ? "FAIL" : "PASS";
             row.Links = outcome == null ? "-" : MachineChecks.LinkResult(declaredLinks, outcome);
             if (r.Release && row.BuildPassed && !BuildInfo.ShowsCleanTag(File.ReadAllText(buildInfo), ReleaseTag ?? ""))
             {
@@ -263,7 +292,7 @@ namespace BeckhoffAutomationInterface.Machines
                 init: init, checkEvents: false, parseOnly: false, ignorePatterns: new string[0], exportObjectName: null,
                 exportLinks: false, formatCheck: false, confirmDeleteIo: false, reverseExports: ReverseExports.None,
                 overwrite: false, plcProjectName: l.Family.Plc, existingTsprojPath: null, configFileLoaded: false,
-                shell: r.Shell, clean: false, sourceFolderExplicit: true, variant: l.Machine, allVariants: false,
+                shell: r.Shell, clean: false, sourceFolderExplicit: true, variant: l.Family.IsNative ? null : l.Machine, allVariants: false,
                 defines: r.Simulation ? new[] { SimulationDefine } : new string[0], targetPlatform: r.Platform ?? l.Family.Platform);
         }
 
@@ -279,9 +308,10 @@ namespace BeckhoffAutomationInterface.Machines
         }
 
         /// <summary>A kept project that the sync found different from the source: objects whose
-        /// source is gone ([drift]) or I/O items no longer in io-devices.xml (I/O warnings).</summary>
-        internal static bool IsDrift(bool kept, PipelineOutcome o) =>
-            kept && o != null && (o.StaleNames > 0 || o.IoWarnings > 0);
+        /// source is gone ([drift]) or I/O items no longer in io-devices.xml (I/O warnings). The
+        /// I/O of a native family is not in io-devices.xml: its I/O warnings are no drift.</summary>
+        internal static bool IsDrift(bool kept, PipelineOutcome o, bool ioFromManifest = true) =>
+            kept && o != null && (o.StaleNames > 0 || (ioFromManifest && o.IoWarnings > 0));
 
         internal static bool HasDefine(string defines, string name) =>
             (defines ?? "").Split(',').Select(d => d.Trim()).Contains(name, StringComparer.OrdinalIgnoreCase);

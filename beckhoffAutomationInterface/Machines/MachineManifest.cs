@@ -25,8 +25,10 @@ namespace BeckhoffAutomationInterface.Machines
     ///                          "generator": ["python", "Tools/generate_app_gas_model.py", "{model}", "App/NFLite",
     ///                                        "{src}/App/NFLite/Simulation/GVL_SimulationGasModel.st"] } } } }
     /// </code>
-    /// A family has "kind": "st" (the default: .st source + manifests). "native" (a project
-    /// kept as a native TwinCAT configuration) is reserved and refused for now.
+    /// A family has "kind": "st" (the default: .st source + manifests per machine) or "native":
+    /// one machine whose I/O, NC/motion, data types and mappings are a retained native TwinCAT
+    /// configuration, with its TwinSAFE folder copied byte for byte (see NativeSettings). Its one
+    /// build is the full native project; machine test activates the -sim copy with simulated axes.
     /// </summary>
     sealed class MachineManifest
     {
@@ -168,6 +170,9 @@ namespace BeckhoffAutomationInterface.Machines
         public string Tests { get; private set; }
         public IReadOnlyList<string> Machines { get; private set; }
         public SimulationGasSettings SimulationGas { get; private set; }
+        /// <summary>Only for "kind": "native".</summary>
+        public NativeSettings Native { get; private set; }
+        public bool IsNative => Kind == "native";
 
         public static readonly string[] Platforms = { "TwinCAT RT (x86)", "TwinCAT RT (x64)", "TwinCAT OS (x64)" };
 
@@ -178,17 +183,15 @@ namespace BeckhoffAutomationInterface.Machines
                 throw new FormatException(where + ": the name must be letters, digits and '_'.");
             if (!(value is Dictionary<string, object> f))
                 throw new FormatException(where + " must be an object.");
-            MachineManifest.Known(f, where, "kind", "plc", "platform", "sources", "shared", "buildInfo", "tests", "machines", "simulationGas");
+            MachineManifest.Known(f, where, "kind", "plc", "platform", "sources", "shared", "buildInfo", "tests", "machines", "simulationGas", "native");
 
             var family = new MachineFamily
             {
                 Name = name,
                 Kind = MachineManifest.Text(f, "kind", where, required: false) ?? "st",
             };
-            if (family.Kind == "native")
-                throw new FormatException(where + ": kind 'native' is not supported yet (use the family's own build script).");
-            if (family.Kind != "st")
-                throw new FormatException(where + ": unknown kind '" + family.Kind + "' (use 'st').");
+            if (family.Kind != "st" && family.Kind != "native")
+                throw new FormatException(where + ": unknown kind '" + family.Kind + "' (use 'st' or 'native').");
 
             family.Plc = MachineManifest.Text(f, "plc", where, required: true);
             if (RunOptions.PlcProjectNameProblem(family.Plc) != null)
@@ -209,6 +212,15 @@ namespace BeckhoffAutomationInterface.Machines
                 throw new FormatException(where + ": machine name '" + bad + "' must be letters, digits and '_', starting with a letter.");
             if (f.TryGetValue("simulationGas", out object gas))
                 family.SimulationGas = SimulationGasSettings.Parse(gas, where);
+            bool hasNative = f.TryGetValue("native", out object native);
+            if (family.IsNative != hasNative)
+                throw new FormatException(where + (family.IsNative ? ": kind 'native' needs \"native\"." : ": \"native\" is only for kind 'native'."));
+            if (family.IsNative)
+            {
+                family.Native = NativeSettings.Parse(native, where);
+                if (family.Machines.Count != 1)
+                    throw new FormatException(where + ": a 'native' family has exactly one machine (one native configuration).");
+            }
             return family;
         }
 
@@ -221,8 +233,43 @@ namespace BeckhoffAutomationInterface.Machines
             return p;
         }
 
-        /// <summary>The folder of one machine (absolute).</summary>
-        public string MachineFolder(string repoRoot, string machine) => Path.Combine(repoRoot, Shared.Replace('/', '\\'), machine);
+        /// <summary>The folder of one machine (absolute). A native family has one machine: the family folder.</summary>
+        public string MachineFolder(string repoRoot, string machine) =>
+            IsNative ? Path.Combine(repoRoot, Shared.Replace('/', '\\')) : Path.Combine(repoRoot, Shared.Replace('/', '\\'), machine);
+    }
+
+    /// <summary>
+    /// "native": the parts of a native family (paths relative to the repository root).
+    ///   configuration   - the retained configuration.xml (bai native capture). Every build applies
+    ///                     it to a bootstrapped project and writes its mappings as links.xml. The
+    ///                     simulation copy (-sim, machine test) also gets SimulationMode="1" on each
+    ///                     NC axis; a normal build must not have it.
+    ///   safety          - the TwinSAFE folder, copied byte for byte next to the .tsproj (the
+    ///                     configuration refers to it) and checked again after XAE closes.
+    ///   runtimeLicenses - optional: the license names UmRT_Default needs before machine test
+    ///                     activates the project (for example "TC3 NC PTP", "TC3 NC PTP Axis").
+    /// </summary>
+    sealed class NativeSettings
+    {
+        public string Configuration { get; private set; }
+        public string Safety { get; private set; }
+        public IReadOnlyList<string> RuntimeLicenses { get; private set; } = new string[0];
+
+        internal static NativeSettings Parse(object value, string where)
+        {
+            where += " native";
+            if (!(value is Dictionary<string, object> n))
+                throw new FormatException(where + " must be an object.");
+            MachineManifest.Known(n, where, "configuration", "safety", "runtimeLicenses");
+            var s = new NativeSettings
+            {
+                Configuration = MachineFamily.Relative(MachineManifest.Text(n, "configuration", where, required: true), where),
+                Safety = MachineFamily.Relative(MachineManifest.Text(n, "safety", where, required: true), where),
+            };
+            if (n.ContainsKey("runtimeLicenses"))
+                s.RuntimeLicenses = MachineManifest.List(n, "runtimeLicenses", where);
+            return s;
+        }
     }
 
     /// <summary>The generated simulation gas model (optional per machine: Machines/&lt;family&gt;/&lt;M&gt;/simulation-gas.json).</summary>

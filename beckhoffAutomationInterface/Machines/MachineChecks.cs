@@ -17,10 +17,13 @@ namespace BeckhoffAutomationInterface.Machines
     {
         /// <summary>A release build: no SIMULATION variant or group, and every EtherCAT adapter
         /// address is a real MAC (not empty, not a test address 02:00:00:00:xx:xx, not all 0/F).</summary>
-        public static void AssertReleaseManifests(string machineFolder)
+        public static void AssertReleaseManifests(string machineFolder, bool native = false)
         {
+            string variantsFile = Path.Combine(machineFolder, "variants.xml");
+            if (native && !File.Exists(variantsFile))
+                return; // a native family: no variants, and its I/O is the reviewed native configuration
             var variants = new XmlDocument { XmlResolver = null };
-            variants.Load(Path.Combine(machineFolder, "variants.xml"));
+            variants.Load(variantsFile);
             foreach (XmlElement node in variants.SelectNodes("/Variants/Variant | /Variants/Group"))
                 if (string.Equals(node.GetAttribute("Name"), "SIMULATION", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("SIMULATION appears in the release variants manifest.");
@@ -47,6 +50,9 @@ namespace BeckhoffAutomationInterface.Machines
             return doc.SelectNodes("//Links/Link").Count;
         }
 
+        /// <summary>Links of a links.xml (a native family: its native mappings); 0 without the file.</summary>
+        public static int DeclaredFileLinks(string linksXml) => Sync.VarLinksFile.CountLinks(linksXml);
+
         /// <summary>"PASS (n/n)", "none", or "FAIL (...)": every declared link must resolve. When one
         /// does not, the link stage disables the EtherCAT masters to keep the build green - then the
         /// build did NOT run with the I/O on, which is a failure here.</summary>
@@ -58,9 +64,10 @@ namespace BeckhoffAutomationInterface.Machines
                 return "none";
             if (!o.LinkSyncRan)
                 return "FAIL (no link result)";
-            if (o.LinksLinked != declared || o.LinksUnresolved != 0)
-                return string.Format("FAIL ({0}/{1} linked, {2} unresolved)", o.LinksLinked, declared, o.LinksUnresolved);
-            return string.Format("PASS ({0}/{1})", o.LinksLinked, declared);
+            int linked = o.LinksLinked + o.FileLinks;
+            if (linked != declared || o.LinksUnresolved != 0)
+                return string.Format("FAIL ({0}/{1} linked, {2} unresolved)", linked, declared, o.LinksUnresolved);
+            return string.Format("PASS ({0}/{1})", linked, declared);
         }
 
         /// <summary>The expected GVL_BuildInfo values, read from the compiled TMC of the build
@@ -125,6 +132,39 @@ namespace BeckhoffAutomationInterface.Machines
             checks.AddRange(buildChecks);
             var document = new Dictionary<string, object> { ["variants"] = new Dictionary<string, object> { [machine] = checks } };
             return new JavaScriptSerializer().Serialize(document);
+        }
+
+        /// <summary>Only the compiled build identity, as an expect file for 'verify' with --variant
+        /// &lt;machine&gt; (a native family without expect.json).</summary>
+        public static string IdentityExpectations(string machine, List<Dictionary<string, object>> buildChecks) =>
+            new JavaScriptSerializer().Serialize(new Dictionary<string, object>
+                { ["variants"] = new Dictionary<string, object> { [machine] = buildChecks } });
+
+        /// <summary>The record of a passed 'machine test' (as validation.json of the PLC repository's
+        /// NFPro test script) and its SHA-256 file. Returns the record file.</summary>
+        public static string WriteValidationRecord(string file, MachineLayout l, string tags, int executed,
+            List<NativeProject.FileEntry> scenarios, List<Dictionary<string, object>> identity, string tmc, string bai)
+        {
+            int scenarioFiles = scenarios.Count(s => s.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+            var record = new Dictionary<string, object>
+            {
+                ["status"] = "Passed",
+                ["scope"] = l.Family.Name + " integration simulation",
+                ["machine"] = l.Machine,
+                ["executed"] = executed,
+                ["tags"] = tags,
+                ["physicalDeployment"] = false,
+                ["completeScenarioSuite"] = string.IsNullOrEmpty(tags) && executed == scenarioFiles,
+                ["project"] = l.Tsproj,
+                ["baiSha256"] = NativeConfiguration.Sha256(bai).ToUpperInvariant(),
+                ["compiledIdentity"] = identity,
+                ["compiledTmcSha256"] = NativeConfiguration.Sha256(tmc).ToUpperInvariant(),
+                ["scenarios"] = scenarios.Select(s => new Dictionary<string, object> { ["path"] = s.Path, ["bytes"] = s.Bytes, ["sha256"] = s.Sha256.ToUpperInvariant() }).ToList(),
+                ["completedUtc"] = DateTime.UtcNow.ToString("o"),
+            };
+            File.WriteAllText(file, new JavaScriptSerializer().Serialize(record), new UTF8Encoding(false));
+            File.WriteAllText(file + ".sha256", NativeConfiguration.Sha256(file).ToUpperInvariant() + Environment.NewLine, Encoding.ASCII);
+            return file;
         }
 
         /// <summary>The JUnit report of 'test': present, no failure or error, at least one scenario

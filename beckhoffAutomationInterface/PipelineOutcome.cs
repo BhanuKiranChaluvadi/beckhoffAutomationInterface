@@ -18,6 +18,8 @@ namespace BeckhoffAutomationInterface
         public bool LinkSyncRan { get; set; }
         public int LinksLinked { get; set; }
         public int LinksUnresolved { get; set; }
+        /// <summary>Links applied from links.xml (all read back after the apply).</summary>
+        public int FileLinks { get; set; }
         /// <summary>EtherCAT masters the link stage disabled because a link did not resolve.</summary>
         public List<string> DisabledMasters { get; } = new List<string>();
 

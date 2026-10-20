@@ -116,7 +116,7 @@ Type `bai --help` for the list of commands. Type `bai <command> --help` for the 
 |---|---|
 | 0 | The command is done and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, `TEST PASSED`, no problem found). |
 | 1 | A problem: compile error, failed check, failed scenario, missing project, wrong command line (most commands), or `activate`/`runtime-state --state` without `--yes`. |
-| 2 | Only `test`, `machine`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
+| 2 | Only `test`, `machine`, `native`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
 | 3 | Only `machine test`: another run holds the UmRT lock. Nothing was changed. |
 
 ### `init`: make a new project
@@ -388,9 +388,56 @@ then for each machine: `machine build --simulation`, activation on UmRT_Default 
 TwinCAT session (no second shell), `verify` with the machine's `expect.json` and the compiled
 build identity, and `test` with the scenarios of `tests` and the feature groups of the machine.
 The JUnit result is `<work>\<family>\<Machine>-sim\test-results.xml`. With `--junit <file>` and
-more than one machine, the tool adds the machine name to the file name.
+more than one machine, the tool adds the machine name to the file name. When all steps pass,
+the tool writes `validation.json` (and its `.sha256`) in the same folder: the scenarios with
+their hashes, the compiled identity, and the hashes of the TMC and of bai. If a scenario file
+changes during the run, the test fails.
 
 **CAUTION: `machine test` replaces the boot project of UmRT_Default.**
+
+#### A native family (`"kind": "native"`)
+
+A native family has one machine. Its I/O tree, NC axes, data types and mappings are not
+manifests. They are one native configuration from a reviewed project. Its machine folder is the
+`shared` folder (no `variants.xml`; `expect.json` is optional).
+
+```json
+"NFPro": { "kind": "native", "plc": "NFPro", "platform": "TwinCAT OS (x64)", "sources": ["Lib", "App/NFPro"],
+  "shared": "Machines/NFPro", "buildInfo": "App/NFPro/Version/GVL_BuildInfo.st", "tests": "Tests/Integration/NFPro",
+  "machines": ["NFPro"],
+  "native": { "configuration": "Machines/NFPro/native/configuration.xml", "safety": "Safety/NFPro/Nanofabricator_Safety",
+              "runtimeLicenses": ["TC3 NC PTP", "TC3 NC PTP Axis"] } }
+```
+
+There is one build: the full native project. A fresh build makes an empty project with one
+PLC, copies the `safety` folder byte for byte next to the `.tsproj`, and applies the
+configuration to the closed `.tsproj`. Then the normal session syncs the source and applies the
+mappings (`links.xml`) after the PLC compile. All links must read back. After XAE closes, the
+safety files must be byte-equal to the source.
+
+- `machine build NFPro`: the project for the machine (release platform). No NC axis may have
+  `SimulationMode`; the build fails if one has it.
+- `machine build NFPro --simulation` and `machine test NFPro`: the same project in the `-sim`
+  folder, with `SIMULATION` and `SimulationMode="1"` on each NC axis (simulated drive and
+  encoder). `machine test` activates it on UmRT_Default with the I/O disabled. **Never put the
+  `-sim` project on a machine.**
+- Before `machine test` builds, it checks that UmRT_Default has each license of
+  `runtimeLicenses` and that it has not expired. The folder is
+  `C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default\3.1\Target\License`. A 7-day trial
+  file only in the general TwinCAT license folder is not enough.
+- A kept project is used again only when the configuration, the safety files and the other
+  manifests did not change.
+
+`native` works on the configuration file without TwinCAT (same rules and same bytes as the
+Python tool `native_configuration.py` that it replaces):
+
+```
+bai native capture --project <reviewed tsproj> --output <new folder>     # configuration.xml + provenance.json
+bai native apply   --configuration <configuration.xml> --project <closed tsproj>
+bai native links   --configuration <configuration.xml> --plc <PLC name> --output <links.xml>
+```
+
+`apply` keeps the original as `<tsproj>.before-native`. It changes only the PLC instance prefix.
 
 The log of each machine is `<work>\<family>\<Machine>[-sim].log`. The log of the run before is
 `<Machine>[-sim].previous.log`.
