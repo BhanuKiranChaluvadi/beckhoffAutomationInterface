@@ -26,6 +26,15 @@ namespace BeckhoffAutomationInterface.Release
             if (!Regex.IsMatch(expected ?? "", "\\A[0-9a-fA-F]{64}\\z") || !Names.Equals(actual, expected))
                 throw new InvalidDataException("SHA256 differs from the selected baseline.");
         }
+        /// <summary>The TwinCAT major of a version or a build: "3.1.4026" and "3.1.4026.24" give "3.1.4026";
+        /// null when the text is not a version. A release depends on the major only; the exact build
+        /// stays in the evidence (project TcVersion).</summary>
+        internal static string TwinCatMajor(string version)
+        {
+            var match = Regex.Match(version ?? "", @"\A(\d+\.\d+\.\d+)(\.\d+)?\z");
+            return match.Success ? match.Groups[1].Value : null;
+        }
+        internal static bool SameTwinCatMajor(string a, string b) => TwinCatMajor(a) != null && TwinCatMajor(a) == TwinCatMajor(b);
         internal static string Relative(string name)
         {
             if (string.IsNullOrEmpty(name) || name.Contains('\\')) throw new InvalidDataException("Invalid relative path: " + name);

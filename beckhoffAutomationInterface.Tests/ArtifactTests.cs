@@ -162,7 +162,9 @@ namespace BeckhoffAutomationInterface.Tests
             var result = ArtifactArchives.CaptureToolchain(Path.Combine(root, "components"), Path.Combine(root, "shell"), "3.1.4026.24", archive);
             string hash = Text(result, "sha256");
             ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4026.24", true);
-            Assert.Throws<InvalidDataException>(() => ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4026.25", false));
+            ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4026", true);
+            ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4026.27", true); // only the major is compared
+            Assert.Throws<InvalidDataException>(() => ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4024.25", false));
             Assert.Throws<InvalidDataException>(() => ArtifactArchives.VerifyToolchain(archive, new string('0', 64), "3.1.4026.24", false));
             Write("components/compiler.dll", "modified");
             ArtifactArchives.VerifyToolchain(archive, hash, "3.1.4026.24", false);

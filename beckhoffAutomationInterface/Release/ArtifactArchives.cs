@@ -113,7 +113,7 @@ namespace BeckhoffAutomationInterface.Release
                     var entries = PackageVerifier.Entries(zip);
                     if (!entries.TryGetValue("toolchain.json", out var metadata)) throw new InvalidDataException("Missing toolchain.json.");
                     var record = PackageVerifier.ReadEntry(metadata);
-                    if (Number(record, "schemaVersion") != 1 || Text(record, "twinCatVersion") != version) throw new InvalidDataException("Toolchain version mismatch.");
+                    if (Number(record, "schemaVersion") != 1 || !SameTwinCatMajor(Text(record, "twinCatVersion"), version)) throw new InvalidDataException("Toolchain version mismatch.");
                     roots = Object(Field(record, "roots"));
                     if (roots.Count != 2 || !roots.ContainsKey("components") || !roots.ContainsKey("xaeShell")) throw new InvalidDataException("Incomplete toolchain roots.");
                     foreach (var pair in Object(Field(record, "files")))

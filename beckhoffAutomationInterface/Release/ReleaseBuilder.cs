@@ -45,7 +45,8 @@ namespace BeckhoffAutomationInterface.Release
         static readonly string[] Limitations =
         {
             "Resolved libraries must match the supplied lock; install those dependencies before building.",
-            "TwinCAT Components and XAE bytes are archived and checked; Windows/.NET, package installation, registration and licenses must be provisioned separately.",
+            "The TwinCAT major is checked, not the build; the build of each project is recorded. With --toolchain, the Components and XAE bytes are also archived and checked.",
+            "Windows/.NET, package installation, registration and licenses must be provisioned separately.",
             "Machine backup, rollback rehearsal, online identity and hardware acceptance remain required.",
         };
 
@@ -104,7 +105,8 @@ namespace BeckhoffAutomationInterface.Release
         {
             string machine = l.Machine, variant = Variant(l);
             string version = (string)Xml(l.Tsproj).Root.Attribute("TcVersion");
-            if (version != twinCatVersion) throw new InvalidDataException(machine + " TwinCAT version '" + version + "' does not match required '" + twinCatVersion + "'.");
+            if (!SameTwinCatMajor(version, twinCatVersion))
+                throw new InvalidDataException(machine + " TwinCAT version '" + version + "' does not match required major '" + (TwinCatMajor(twinCatVersion) ?? twinCatVersion) + "'.");
             string tmc = MachineChecks.CompiledTmc(l.Tsproj), plcProject = Path.ChangeExtension(tmc, ".plcproj");
             var modules = Xml(tmc).Descendants().Where(e => e.Name.LocalName == "Module" && e.Attribute("TargetPlatform") != null).ToList();
             if (modules.Count != 1 || (string)modules[0].Attribute("TargetPlatform") != platform || ((string)modules[0].Attribute("ProjectVariant") ?? "") != variant)
@@ -246,9 +248,14 @@ namespace BeckhoffAutomationInterface.Release
         internal static Dictionary<string, object> Build(ReleaseRequest q, ReleaseCompiler compile)
         {
             if (q.WorkingTree && q.Tag != null) throw new ArgumentException("Use --tag or --working-tree, not both: a tag names a commit; --working-tree also builds uncommitted files.");
-            foreach (var (name, value) in new[] { ("--bai-sha256", q.BaiSha256), ("--library-lock-sha256", q.LibraryLockSha256), ("--toolchain-sha256", q.ToolchainSha256) })
+            // The toolchain archive is optional: it holds the bytes of one exact TwinCAT build.
+            bool archived = q.Toolchain != null || q.ToolchainSha256 != null;
+            if (archived && (q.Toolchain == null || q.ToolchainSha256 == null)) throw new ArgumentException("Use --toolchain and --toolchain-sha256 together, or neither.");
+            var hashes = new List<(string, string)> { ("--bai-sha256", q.BaiSha256), ("--library-lock-sha256", q.LibraryLockSha256) };
+            if (archived) hashes.Add(("--toolchain-sha256", q.ToolchainSha256));
+            foreach (var (name, value) in hashes)
                 if (!Sha.IsMatch(value ?? "")) throw new ArgumentException(name + " must be a SHA256 (64 hex digits).");
-            if (!Regex.IsMatch(q.TwinCatVersion ?? "", @"\A\d+\.\d+\.\d+\.\d+\z")) throw new ArgumentException("--twincat-version must look like 3.1.4026.24.");
+            if (TwinCatMajor(q.TwinCatVersion) == null) throw new ArgumentException("--twincat-version must look like 3.1.4026 (a build such as 3.1.4026.24 also works; only the major is compared).");
             var manifest = MachineManifest.Load(MachineManifest.Find(q.Manifest, q.Cwd ?? Directory.GetCurrentDirectory()));
             string repo = manifest.Root;
             string[] areas = manifest.BuildInputs.ToArray();
@@ -277,9 +284,9 @@ namespace BeckhoffAutomationInterface.Release
             if (Directory.Exists(bundle) || File.Exists(bundle)) throw new IOException("Bundle already exists; use a new folder: " + bundle);
             foreach (string m in machines.Where(m => manifest.FamilyOf(m).Kind == "st"))
                 MachineChecks.AssertReleaseManifests(manifest.FamilyOf(m).MachineFolder(repo, m));
-            string toolchain = Path.GetFullPath(q.Toolchain);
+            string toolchain = archived ? Path.GetFullPath(q.Toolchain) : null;
             if (!Names.Equals(Hash(bai), q.BaiSha256)) throw new InvalidDataException("BAI executable does not match the approved SHA256.");
-            CheckToolchain(q, toolchain);
+            if (archived) CheckToolchain(q, toolchain);
             var toolBefore = Evidence(toolRoot);
             var esiRoots = new List<(string Key, string Path)> { ("system", q.EsiDirectory) };
             if (Directory.Exists(q.UserEsiDirectory)) esiRoots.Add(("user", q.UserEsiDirectory));
@@ -290,7 +297,7 @@ namespace BeckhoffAutomationInterface.Release
             foreach (string m in machines)
             {
                 var entries = Array(libraryLock, "machines").Select(Object).Where(e => (string)e["machine"] == m).ToList();
-                if (entries.Count != 1 || (string)entries[0]["twinCatVersion"] != q.TwinCatVersion || (string)entries[0]["targetPlatform"] != platform)
+                if (entries.Count != 1 || !SameTwinCatMajor((string)entries[0]["twinCatVersion"], q.TwinCatVersion) || (string)entries[0]["targetPlatform"] != platform)
                     throw new InvalidDataException("Library baseline does not cover the requested machine/toolchain/platform.");
             }
 
@@ -300,8 +307,8 @@ namespace BeckhoffAutomationInterface.Release
                 ["schemaVersion"] = 1, ["status"] = "Building", ["startedUtc"] = DateTime.UtcNow.ToString("o"),
                 ["sourceCommit"] = commit, ["sourceTag"] = version, ["sourceTagged"] = q.Tag != null,
                 ["sourceMode"] = q.WorkingTree ? "WorkingTree" : q.Tag != null ? "Tag" : "Head", ["sourceDirty"] = dirty,
-                ["baiSha256"] = q.BaiSha256.ToUpperInvariant(), ["expectedTwinCatVersion"] = q.TwinCatVersion,
-                ["toolchainArchiveSha256"] = q.ToolchainSha256.ToUpperInvariant(), ["expectedTargetPlatform"] = platform,
+                ["baiSha256"] = q.BaiSha256.ToUpperInvariant(), ["expectedTwinCatVersion"] = TwinCatMajor(q.TwinCatVersion),
+                ["toolchainArchiveSha256"] = q.ToolchainSha256?.ToUpperInvariant(), ["expectedTargetPlatform"] = platform,
                 ["libraryLockSha256"] = q.LibraryLockSha256.ToUpperInvariant(), ["baiFileVersion"] = FileVersionInfo.GetVersionInfo(bai).FileVersion,
                 ["machines"] = machines.ToArray(), ["deploymentApproved"] = false, ["limitations"] = Limitations,
             };
@@ -310,8 +317,11 @@ namespace BeckhoffAutomationInterface.Release
             Save();
             try
             {
-                File.Copy(toolchain, Path.Combine(bundle, "toolchain.zip"));
-                if (!Names.Equals(Hash(Path.Combine(bundle, "toolchain.zip")), q.ToolchainSha256)) throw new InvalidDataException("Copied toolchain archive hash mismatch.");
+                if (archived)
+                {
+                    File.Copy(toolchain, Path.Combine(bundle, "toolchain.zip"));
+                    if (!Names.Equals(Hash(Path.Combine(bundle, "toolchain.zip")), q.ToolchainSha256)) throw new InvalidDataException("Copied toolchain archive hash mismatch.");
+                }
                 File.Copy(q.LibraryLock, Path.Combine(bundle, "libraries.lock.json"));
                 LibraryBaseline.ReadLock(Path.Combine(bundle, "libraries.lock.json"), q.LibraryLockSha256);
                 string snapshot = Path.Combine(bundle, "source");
@@ -350,7 +360,7 @@ namespace BeckhoffAutomationInterface.Release
                 SameFiles(sourceBefore, SourceInventory(snapshot, areas), "Source snapshot");
                 SameFiles(toolBefore, Evidence(privateTool), "Private BAI files");
                 SameFiles(esiBefore, EsiInventory(), "Installed ESI inventory");
-                CheckToolchain(q, Path.Combine(bundle, "toolchain.zip"));
+                if (archived) CheckToolchain(q, Path.Combine(bundle, "toolchain.zip"));
                 var built = MachineManifest.Load(snapshotManifest);
                 var layouts = machines.Select(m => new MachineLayout(built, m, simulation: false, work: work)).ToList();
                 var projects = layouts.Select(l => ProjectEvidence(l, q.TwinCatVersion, platform)).ToList();

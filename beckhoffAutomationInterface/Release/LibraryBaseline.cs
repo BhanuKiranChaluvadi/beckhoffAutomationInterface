@@ -76,7 +76,7 @@ namespace BeckhoffAutomationInterface.Release
         internal static void Verify(Dictionary<string, object> baseline, Dictionary<string, object> actual)
         {
             var entries = Array(baseline, "machines").Select(Object).Where(m => Text(m, "machine") == Text(actual, "machine")).ToArray();
-            if (entries.Length != 1 || Text(entries[0], "twinCatVersion") != Text(actual, "twinCatVersion") || Text(entries[0], "targetPlatform") != Text(actual, "targetPlatform"))
+            if (entries.Length != 1 || !SameTwinCatMajor(Text(entries[0], "twinCatVersion"), Text(actual, "twinCatVersion")) || Text(entries[0], "targetPlatform") != Text(actual, "targetPlatform"))
                 throw new InvalidDataException("Baseline does not cover the selected machine, toolchain and platform.");
             Same(Files(Array(entries[0], "libraries")), Files(Array(actual, "libraries")));
         }

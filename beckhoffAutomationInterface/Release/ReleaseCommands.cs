@@ -15,9 +15,9 @@ namespace BeckhoffAutomationInterface.Release
     {
         internal const string Usage =
             "release build --machines <M[,M]> [--tag <tag> | --working-tree] [--bundle <new-folder>] --bai-sha256 <hash>\n" +
-            "              --twincat-version <version> --library-lock <json> --library-lock-sha256 <hash> --toolchain <zip> --toolchain-sha256 <hash>\n" +
+            "              --twincat-version <major, e.g. 3.1.4026> --library-lock <json> --library-lock-sha256 <hash> [--toolchain <zip> --toolchain-sha256 <hash>]\n" +
             "              [--platform <name>] [--manifest <bai.machines.json>] [--esi-directory <folder>] [--user-esi-directory <folder>]\n" +
-            "release lock --machines <M[,M]> --twincat-version <version> --output <new-json> [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
+            "release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
             PackageUsage;
         internal const string PackageUsage =
             "package preflight --current <zip> --current-sha256 <hash> --service-project <folder> --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
@@ -42,13 +42,13 @@ namespace BeckhoffAutomationInterface.Release
                 switch (command)
                 {
                     case "release build":
-                        o = Options(args, new[] { "--machines", "--bai-sha256", "--twincat-version", "--library-lock", "--library-lock-sha256", "--toolchain", "--toolchain-sha256" },
-                            new[] { "--tag", "--bundle", "--platform", "--manifest", "--esi-directory", "--user-esi-directory" }, new[] { "--working-tree" });
+                        o = Options(args, new[] { "--machines", "--bai-sha256", "--twincat-version", "--library-lock", "--library-lock-sha256" },
+                            new[] { "--toolchain", "--toolchain-sha256", "--tag", "--bundle", "--platform", "--manifest", "--esi-directory", "--user-esi-directory" }, new[] { "--working-tree" });
                         var q = new ReleaseRequest
                         {
                             Machines = { o["--machines"] }, Tag = Get(o, "--tag"), WorkingTree = Get(o, "--working-tree") != null, Bundle = Get(o, "--bundle"),
                             Bai = System.Reflection.Assembly.GetEntryAssembly().Location, BaiSha256 = o["--bai-sha256"], TwinCatVersion = o["--twincat-version"],
-                            LibraryLock = o["--library-lock"], LibraryLockSha256 = o["--library-lock-sha256"], Toolchain = o["--toolchain"], ToolchainSha256 = o["--toolchain-sha256"],
+                            LibraryLock = o["--library-lock"], LibraryLockSha256 = o["--library-lock-sha256"], Toolchain = Get(o, "--toolchain"), ToolchainSha256 = Get(o, "--toolchain-sha256"),
                             Platform = Get(o, "--platform"), Manifest = Get(o, "--manifest"), Shell = shell,
                         };
                         if (Get(o, "--esi-directory") != null) q.EsiDirectory = o["--esi-directory"];

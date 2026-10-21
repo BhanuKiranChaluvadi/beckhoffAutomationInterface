@@ -79,7 +79,7 @@ namespace BeckhoffAutomationInterface.Tests
                 BuildInfo.Write(gvl, BuildInfo.FromGit(l.RepoRoot, m, manifest.BuildInputs, BuildInfo.RunGit, DateTime.UtcNow));
                 string stamp = File.ReadAllText(gvl);
                 string project = Path.GetDirectoryName(l.Tsproj), plc = Path.Combine(project, "Fam");
-                Write(l.Tsproj, "<TcSmProject TcVersion='" + (fault == "version" ? "3.1.9999.0" : Version) + "'/>");
+                Write(l.Tsproj, "<TcSmProject TcVersion='" + (fault == "version" ? "3.1.9999.0" : fault == "other-build" ? "3.1.4026.27" : Version) + "'/>");
                 Write(Path.Combine(plc, "Fam.plcproj"), "<Project><PropertyGroup><CompilerDefines>" + (fault == "simulation" ? "SIMULATION" : "") + "</CompilerDefines></PropertyGroup></Project>");
                 Directory.CreateDirectory(Path.Combine(plc, "_Libraries", "Vendor", "Library", "1.2.3.4"));
                 if (fault != "libraries")
@@ -189,11 +189,35 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<InvalidDataException>(() => Release(q));
             q = Request("both", "v-test", workingTree: true);
             Assert.Throws<ArgumentException>(() => Release(q));
+            q = Request("half-toolchain"); q.Toolchain = null;
+            Assert.Contains("together", Assert.Throws<ArgumentException>(() => Release(q)).Message);
+            q = Request("bad-version"); q.TwinCatVersion = "4026";
+            Assert.Throws<ArgumentException>(() => Release(q));
             q = Request("test-adapter"); q.Machines = new List<string> { "M2" };
             Assert.Contains("test adapter", Assert.Throws<InvalidOperationException>(() => Release(q)).Message);
             repo.Write("Lib/untracked.st", "x");
             Assert.Contains("clean repository", Assert.Throws<InvalidOperationException>(() => Release(Request("dirty"))).Message);
-            foreach (string name in new[] { "bad-hash", "bad-lock", "both", "test-adapter", "dirty" }) Assert.False(Directory.Exists(Bundle(name)), name);
+            foreach (string name in new[] { "bad-hash", "bad-lock", "both", "half-toolchain", "bad-version", "test-adapter", "dirty" }) Assert.False(Directory.Exists(Bundle(name)), name);
+        }
+
+        [Fact]
+        public void OtherBuildOfTheSameMajorPassesAndIsRecorded()
+        {
+            var q = Request("other-build"); q.TwinCatVersion = "3.1.4026";
+            var record = Release(q, "other-build");  // lock and toolchain: 3.1.4026.24; project: 3.1.4026.27
+            Assert.Equal("BuildPassed", record["status"]);
+            Assert.Equal("3.1.4026", record["expectedTwinCatVersion"]);
+            Assert.Equal("3.1.4026.27", First(record["projects"])["twinCatVersion"]);
+        }
+
+        [Fact]
+        public void ReleaseWithoutToolchainArchive()
+        {
+            var q = Request("no-toolchain"); q.Toolchain = null; q.ToolchainSha256 = null;
+            var record = Release(q);
+            Assert.Equal("BuildPassed", record["status"]);
+            Assert.Null(record["toolchainArchiveSha256"]);
+            Assert.False(File.Exists(Path.Combine(Bundle("no-toolchain"), "toolchain.zip")));
         }
 
         [Theory]
