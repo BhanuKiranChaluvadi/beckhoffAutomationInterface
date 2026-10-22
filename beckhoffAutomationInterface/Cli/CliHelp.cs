@@ -63,9 +63,9 @@ namespace BeckhoffAutomationInterface.Cli
                 "bai runtime-state --target umrt --expect run",
                 notes: "Choose --expect to check a state or --state with --yes to change it. No XAE session is needed."),
             Entry("release", "Build release bundles or capture library baselines.", Release.ReleaseCommands.Usage,
-                @"bai release lock --machines MachineA --twincat-version 3.1.4026.24 --output libraries.lock.json",
+                @"bai release lock --machines MachineA --twincat-version 3.1.4026 --output libraries.lock.json",
                 "build|lock", shell: true,
-                notes: "Build requires retained hashes for the tool, library lock, and toolchain. It creates a bundle without activating a runtime."),
+                notes: "Build requires retained hashes for the tool and the library lock; a toolchain archive is optional. Only the TwinCAT major is compared; the build is recorded. It creates a bundle without activating a runtime."),
             Entry("package", "Create, verify, compare, or install compiled packages.", Release.ArtifactCommands.Usage,
                 @"bai package verify --package release.zip", "create|verify|preflight|install|drift",
                 notes: "Install requires --yes and retains rollback evidence. Without --yes, it makes no changes."),
@@ -122,11 +122,11 @@ namespace BeckhoffAutomationInterface.Cli
             ["--working-tree"] = "Build from the working tree instead of a release tag.",
             ["--bundle"] = "New release bundle folder.",
             ["--bai-sha256"] = "Retained SHA-256 hash of the bai executable (required).",
-            ["--twincat-version"] = "Required TwinCAT build version.",
+            ["--twincat-version"] = "Required TwinCAT major, for example 3.1.4026 (a build such as 3.1.4026.24 also works; only the major is compared).",
             ["--library-lock"] = "Approved library baseline JSON.",
             ["--library-lock-sha256"] = "Retained SHA-256 hash of the library baseline.",
-            ["--toolchain"] = "Retained TwinCAT toolchain ZIP.",
-            ["--toolchain-sha256"] = "Retained SHA-256 hash of the toolchain ZIP.",
+            ["--toolchain"] = "Optional retained TwinCAT toolchain ZIP of one exact build (with --toolchain-sha256).",
+            ["--toolchain-sha256"] = "Retained SHA-256 hash of the toolchain ZIP (with --toolchain).",
             ["--esi-directory"] = "System EtherCAT device catalog folder.",
             ["--user-esi-directory"] = "User EtherCAT device catalog folder.",
             ["--directory"] = "Folder containing the package payload.",
@@ -289,8 +289,8 @@ namespace BeckhoffAutomationInterface.Cli
                         : @" --configuration C:\bai\native\configuration.xml --plc App --output links.xml");
                 case "release":
                     return mode == "lock" ? command.Example
-                        : prefix + " --machines MachineA --tag v1.0.0 --bai-sha256 <hash> --twincat-version 3.1.4026.24"
-                            + " --library-lock libraries.lock.json --library-lock-sha256 <hash> --toolchain toolchain.zip --toolchain-sha256 <hash>";
+                        : prefix + " --machines MachineA --tag v1.0.0 --bai-sha256 <hash> --twincat-version 3.1.4026"
+                            + " --library-lock libraries.lock.json --library-lock-sha256 <hash>";
                 case "package":
                     switch (mode)
                     {
