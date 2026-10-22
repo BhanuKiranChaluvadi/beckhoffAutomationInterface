@@ -25,17 +25,15 @@ namespace BeckhoffAutomationInterface.Runtime
                 string a = args[i];
                 if (known.Contains(a))
                 {
-                    if (i + 1 >= args.Length)
+                    if (i + 1 >= args.Length || args[i + 1].StartsWith("--") || args[i + 1] == "-h" || string.IsNullOrWhiteSpace(args[i + 1]))
                         throw new ArgumentException(a + " needs a value.");
-                {
                     if (!result._options.TryGetValue(a, out List<string> values))
                         result._options[a] = values = new List<string>();
                     values.Add(args[++i]);
                 }
-                }
                 else if (switches.Contains(a))
                     result._switches.Add(a);
-                else if (!a.StartsWith("--") && result.Positional == null)
+                else if (!a.StartsWith("-") && result.Positional == null)
                     result.Positional = a;
                 else
                     throw new ArgumentException("unrecognized argument: " + a);
@@ -66,8 +64,7 @@ namespace BeckhoffAutomationInterface.Runtime
             }
             catch (ArgumentException ex)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine(VerifyUsage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
                 return 1;
             }
 
@@ -176,8 +173,7 @@ namespace BeckhoffAutomationInterface.Runtime
             catch (Exception ex) when (ex is ArgumentException || ex is Sync.VariantManifestException
                                        || ex is System.IO.IOException || ex is System.Xml.XmlException)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine(TestUsage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
                 return 2;
             }
 
@@ -307,7 +303,7 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ activate
 
         internal const string ActivateUsage =
-            "Usage: beckhoffAutomationInterface activate <path-to-.tsproj-or-folder> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
+            "Usage: beckhoffAutomationInterface activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
 
         /// <summary>
         /// Builds one variant and activates it on the target, then waits for the PLC to run.
@@ -336,8 +332,7 @@ namespace BeckhoffAutomationInterface.Runtime
             catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is FormatException
                                        || ex is System.IO.IOException)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine(ActivateUsage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
                 return 1;
             }
 

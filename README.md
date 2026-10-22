@@ -98,7 +98,26 @@ A second `sync` with no changes reports `0 created, 0 updated, 0 deleted`.
 
 ## 4. Command reference
 
-Type `bai --help` for the list of commands. Type `bai <command> --help` for the usage of one command.
+Type `bai --help` for commands grouped by workflow. Each command and subcommand has
+help with usage, option descriptions, examples, and exit codes:
+
+```powershell
+bai build --help
+bai package verify --help
+bai help machine test
+bai --version
+```
+
+Help works without opening TwinCAT or reading project files. `help` and `--help` are
+equivalent; `-h` is also accepted. The examples use the `bai` alias from the installation
+section; the executable remains `beckhoffAutomationInterface.exe`.
+
+Help wraps to the terminal width (80 columns when redirected). Text reports use plain
+headings and aligned fields without terminal escape codes. Paths and hashes are kept
+intact for copying. Artifact commands that support `--json` emit only JSON on standard
+output when that flag is supplied; use it for scripts. Native configuration commands
+continue to emit JSON. Command-line errors go to standard error with the relevant usage
+and a command-specific help hint.
 
 ### Global options
 
@@ -108,6 +127,7 @@ Type `bai --help` for the list of commands. Type `bai <command> --help` for the 
 | `--config <folder>` | `init`, `sync`, `build`, `check`, `export` | Read `.stconfig` from this folder. |
 | `--no-config` | `init`, `sync`, `build`, `check`, `export` | Do not read `.stconfig`. |
 | `--help`, `-h` | all | Show the usage. Exit code 0. |
+| `--version` | top level | Print the tool version and exit. |
 
 `bai` with no arguments shows the usage and gives exit code 1.
 

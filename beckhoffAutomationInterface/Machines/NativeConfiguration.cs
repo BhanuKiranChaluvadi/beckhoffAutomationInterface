@@ -461,8 +461,7 @@ namespace BeckhoffAutomationInterface.Machines
             }
             catch (ArgumentException ex)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine("Usage: beckhoffAutomationInterface " + Usage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
                 return 2;
             }
             try

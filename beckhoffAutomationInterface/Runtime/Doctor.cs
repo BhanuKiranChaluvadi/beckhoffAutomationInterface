@@ -18,7 +18,9 @@ namespace BeckhoffAutomationInterface.Runtime
     {
         public static int Run()
         {
-            Console.WriteLine("DTE shells (--shell):");
+            ConsoleReport.Heading("System diagnostics");
+            Console.WriteLine();
+            ConsoleReport.Heading("DTE shells (--shell)");
             foreach ((DteShell shell, string detail, bool usable) in DteShellResolver.Status(new WindowsComRegistry(), File.Exists))
                 Console.WriteLine("  {0} {1,-7} {2}: {3}", usable ? "OK  " : "--  ", shell.Name, shell.ProgId, detail);
 
@@ -29,7 +31,7 @@ namespace BeckhoffAutomationInterface.Runtime
             string twinCatData = Path.Combine(programData, "Beckhoff", "TwinCAT", "3.1");
 
             Console.WriteLine();
-            Console.WriteLine("Runtime 'local' (activate/verify --target local):");
+            ConsoleReport.Heading("Local runtime (--target local)");
             string localNetId = null;
             try { localNetId = AdsClient.LocalNetId(); }
             catch (Exception ex) { Console.WriteLine("  ADS router: {0}", ex.Message); }
@@ -46,7 +48,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     continue;
                 string name = Path.GetFileName(dir);
                 Console.WriteLine();
-                Console.WriteLine("User Mode Runtime '{0}'{1}:", name, name == "UmRT_Default" ? " (activate/verify --target umrt)" : "");
+                ConsoleReport.Heading("User Mode Runtime '" + name + "'" + (name == "UmRT_Default" ? " (--target umrt)" : ""));
                 string netId;
                 try { netId = RuntimeTargets.NetIdFromTcRegistry(File.ReadAllText(registry)); }
                 catch (FormatException ex) { Console.WriteLine("  {0}", ex.Message); continue; }

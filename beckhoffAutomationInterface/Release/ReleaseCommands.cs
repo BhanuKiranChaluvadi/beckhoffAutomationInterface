@@ -32,7 +32,8 @@ namespace BeckhoffAutomationInterface.Release
 
         internal static int Run(string[] args, string shell, IUpdateHost host = null)
         {
-            if (args.Skip(1).Any(a => a == "--help" || a == "-h")) { Console.WriteLine(Usage); return 0; }
+            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
+                return Cli.CliHelp.Write(Console.Out, Console.Error, Cli.CliHelp.HelpPath(args), Cli.ConsoleLayout.TerminalWidth);
             host = host ?? new ProcessHost();
             try
             {
@@ -63,7 +64,7 @@ namespace BeckhoffAutomationInterface.Release
                         string manifest = Manifest(o);
                         var result = ReleaseBuilder.Lock(manifest, Get(o, "--work") ?? MachineManifest.Load(manifest).Work, new[] { o["--machines"] },
                             o["--twincat-version"], Get(o, "--platform"), o["--output"]);
-                        Console.WriteLine("Candidate library baseline: {0}\nSHA256: {1}", result["file"], result["sha256"]);
+                        ConsoleReport.Result("release lock", result);
                         return 0;
                     case "package drift":
                         o = Options(args, new[] { "--baseline", "--sha256", "--project", "--report" }, new string[0]);
@@ -88,7 +89,7 @@ namespace BeckhoffAutomationInterface.Release
                         throw new ArgumentException("Unknown command: " + command + ".");
                 }
             }
-            catch (ArgumentException ex) { Console.Error.WriteLine("ERROR: " + ex.Message + "\nUsage:\n" + Usage); return 2; }
+            catch (ArgumentException ex) { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 2; }
             catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is System.Xml.XmlException
                                        || ex is InvalidOperationException || ex is FormatException)
             { Console.Error.WriteLine("FAIL: " + ex.Message); return 1; }

@@ -7,15 +7,29 @@ namespace BeckhoffAutomationInterface
     /// lint output) and SyncPipeline (every stage's Created/Updated/Deleted/Warnings lines).</summary>
     static class ConsoleReport
     {
-        /// <summary>Prints one indented line per item — collapses the repeated
-        /// `foreach (...) Console.WriteLine("    &lt;symbol&gt; {0}", item);` shape that used
-        /// to be duplicated at every report-printing call site. `prefix` carries its own
-        /// trailing alignment padding exactly as each call site wants it (e.g.
-        /// "+ created  "), so output stays identical to before this was extracted.</summary>
+        public static void Heading(string title) =>
+            new Cli.ConsoleLayout(Console.Out, Cli.ConsoleLayout.TerminalWidth).Heading(title);
+
+        public static void Fields(System.Collections.IDictionary values) =>
+            new Cli.ConsoleLayout(Console.Out, Cli.ConsoleLayout.TerminalWidth).Fields(values);
+
+        public static void Result(string command, System.Collections.IDictionary values)
+        {
+            Heading("PASS: " + command);
+            Fields(values);
+        }
+
+        /// <summary>Prints report items with continuation lines aligned beneath the text.
+        /// Prefixes retain their existing status markers for log consumers.</summary>
         public static void PrintLines(string prefix, IEnumerable<string> items)
         {
             foreach (string item in items)
-                Console.WriteLine("    {0}{1}", prefix, item);
+            {
+                string[] lines = (item ?? "").Replace("\r\n", "\n").Split('\n');
+                Console.WriteLine("    {0}{1}", prefix, lines[0]);
+                for (int i = 1; i < lines.Length; i++)
+                    Console.WriteLine(new string(' ', 4 + prefix.Length) + lines[i]);
+            }
         }
     }
 }

@@ -819,7 +819,8 @@ namespace BeckhoffAutomationInterface
             {
                 foreach (string variant in variants)
                 {
-                    Console.WriteLine("{0}: ===== Variant '{1}' =====", Now(), variant);
+                    Console.WriteLine();
+                    ConsoleReport.Heading("Variant: " + variant);
                     sys14.CurrentProjectVariant = variant;
                     // Always clean: the previous variant's output must not pass for this one.
                     results.Add(BuildOnce(clean: true, variant: variant));

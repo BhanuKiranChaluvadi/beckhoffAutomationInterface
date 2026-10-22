@@ -26,16 +26,16 @@ namespace BeckhoffAutomationInterface.Cli
         public const string CheckUsage =
             "check parse|format <source> [--ignore <glob>]...\n  check events <source> --project <project>";
         public const string SyncUsage =
-            "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--clean]\n" +
+            "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--plc <name>] [--clean]\n" +
             "       [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]";
         public const string ExportUsage =
             "export code|libs|io|events|tasks|safety|variants|native|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
-            "  export object <ObjectName> <source> --project <project> [--plc <name>]";
+            "  export object <ObjectName> <source> --project <project> [--plc <name>] [--overwrite]";
         public const string InitUsage =
             "init <source> --into <folder> [--name <name>] [--plc <name>] [--platform <name>] [--ignore <glob>]...";
         // Parsed in Runtime/RuntimeCommands.Test (runtime command style); the text is here with the others.
         public const string TestUsage =
-            "test --target umrt|local --scenarios <file-or-folder> [--variant <name>] [--variants <variants.xml> | --groups <G1,G2>]\n" +
+            "test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>] [--variants <variants.xml> | --groups <G1,G2>]\n" +
             "       [--tags <a,b>] [--junit <file>] [--timeout <s>]";
 
         // Every command: where .stconfig is read from, and whether at all.
@@ -146,7 +146,7 @@ namespace BeckhoffAutomationInterface.Cli
         static RunOptions ParseExport(string[] args, string shell, string cwd)
         {
             if (args.Length < 2)
-                throw new UsageException("'export' needs a mode: object|code|libs|io|events|links|all.", ExportUsage);
+                throw new UsageException("'export' needs a mode: object|" + string.Join("|", ExportModes.Keys) + ".", ExportUsage);
             string mode = args[1];
             string objectName = null;
             int first = 2;
@@ -288,7 +288,7 @@ namespace BeckhoffAutomationInterface.Cli
                     string arg = args[i];
                     if (optionSet.Contains(arg))
                     {
-                        if (i + 1 >= args.Length)
+                        if (i + 1 >= args.Length || args[i + 1].StartsWith("--") || args[i + 1] == "-h" || string.IsNullOrWhiteSpace(args[i + 1]))
                             throw new UsageException(arg + " needs a value.", usage);
                         if (!a._options.TryGetValue(arg, out List<string> values))
                             a._options[arg] = values = new List<string>();
@@ -296,7 +296,7 @@ namespace BeckhoffAutomationInterface.Cli
                     }
                     else if (switchSet.Contains(arg))
                         a._switches.Add(arg);
-                    else if (arg.StartsWith("--"))
+                    else if (arg.StartsWith("-"))
                         throw new UsageException("unknown option " + arg + ".", usage);
                     else
                         a.Positionals.Add(arg);

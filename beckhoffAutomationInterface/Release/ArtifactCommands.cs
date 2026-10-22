@@ -14,7 +14,7 @@ namespace BeckhoffAutomationInterface.Release
             "toolchain capture --components <folder> --xae-shell <folder> --version <version> --archive <new-zip> [--json]\n" +
             "toolchain verify --archive <zip> --sha256 <retained-hash> --version <version> [--installed] [--json]\n" +
             "package verify --package <zip> [--sha256 <retained-hash>] [--json]\n" +
-            "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json>\n" +
+            "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json> [--json]\n" +
             "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <retained-hash> [--json]\n" +
             ReleaseCommands.PackageUsage;
 
@@ -42,7 +42,8 @@ namespace BeckhoffAutomationInterface.Release
 
         internal static int Run(string[] args)
         {
-            if (args.Skip(1).Any(a => a == "--help" || a == "-h")) { Console.WriteLine(Usage); return 0; }
+            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
+                return Cli.CliHelp.Write(Console.Out, Console.Error, Cli.CliHelp.HelpPath(args), Cli.ConsoleLayout.TerminalWidth);
             if (ReleaseCommands.Handles(args)) return ReleaseCommands.Run(args, null);
             try
             {
@@ -99,10 +100,11 @@ namespace BeckhoffAutomationInterface.Release
                     }
                 }
                 else throw new ArgumentException("Unknown artifact command.");
-                Console.WriteLine(Get(options, "--json") != null ? Encode(result) : "PASS: " + args[0] + " " + args[1] + ". " + Encode(result));
+                if (Get(options, "--json") != null) Console.WriteLine(Encode(result));
+                else ConsoleReport.Result(args[0] + " " + args[1], result);
                 return 0;
             }
-            catch (ArgumentException ex) { Console.Error.WriteLine("ERROR: " + ex.Message + "\n" + Usage); return 2; }
+            catch (ArgumentException ex) { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 2; }
             catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is System.Xml.XmlException || ex is InvalidOperationException)
             { Console.Error.WriteLine("FAIL: " + ex.Message); return 1; }
         }

@@ -104,8 +104,8 @@ namespace BeckhoffAutomationInterface.Machines
             // simulation copy (-sim) has simulated NC axes and SIMULATION.
             bool native = l.Family.IsNative;
             bool nativeConfig = native;
-            Console.WriteLine("#################### {0}{1}", l.Machine,
-                r.Simulation ? (native ? " (native, simulation: SIMULATION and simulated NC axes)" : " (simulation)") : native ? " (native)" : "");
+            ConsoleReport.Heading(l.Machine +
+                (r.Simulation ? (native ? " (native, simulation: SIMULATION and simulated NC axes)" : " (simulation)") : native ? " (native)" : ""));
             List<NativeProject.FileEntry> safetyBefore = nativeConfig ? NativeProject.Inventory(NativeProject.SafetySource(l)) : null;
 
             // 1. Kept or fresh. All checks before TwinCAT starts.

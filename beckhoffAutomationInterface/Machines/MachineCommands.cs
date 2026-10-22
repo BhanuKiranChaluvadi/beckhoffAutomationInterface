@@ -60,7 +60,7 @@ namespace BeckhoffAutomationInterface.Machines
                 string a = args[i];
                 if (Options.Contains(a))
                 {
-                    if (i + 1 >= args.Length)
+                    if (i + 1 >= args.Length || args[i + 1].StartsWith("--") || args[i + 1] == "-h" || string.IsNullOrWhiteSpace(args[i + 1]))
                         throw new ArgumentException(a + " needs a value.");
                     string v = args[++i];
                     switch (a)
@@ -122,8 +122,7 @@ namespace BeckhoffAutomationInterface.Machines
             catch (Exception ex) when (ex is ArgumentException || ex is FormatException || ex is IOException
                                        || ex is InvalidOperationException || ex is UnauthorizedAccessException)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                Console.Error.WriteLine("Usage: beckhoffAutomationInterface " + Usage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
                 return Exit.Usage;
             }
             Console.WriteLine("{0}: Machines: {1} (manifest {2})", Now(), string.Join(", ", layouts.Select(l => l.Machine)), manifest.File);
@@ -317,7 +316,7 @@ namespace BeckhoffAutomationInterface.Machines
                 }
                 if (manifest.PreCheck.Count > 0)
                 {
-                    Console.WriteLine("#################### source check");
+                    ConsoleReport.Heading("Source check");
                     if (MachineBuilder.RunCommand(manifest.PreCheck, manifest.Root) != 0)
                     {
                         Console.WriteLine("Source check FAILED; no build or runtime activation performed.");
@@ -357,7 +356,7 @@ namespace BeckhoffAutomationInterface.Machines
                     if (row.Activate == "PASS")
                     {
                         Console.WriteLine();
-                        Console.WriteLine("#################### {0} - verify and test scenarios", l.Machine);
+                        ConsoleReport.Heading(l.Machine + " - verification and test scenarios");
                         string tmc = MachineChecks.CompiledTmc(l.Tsproj);
                         List<Dictionary<string, object>> identity = MachineChecks.CompiledBuildExpectations(File.ReadAllText(tmc), l.Machine);
                         // A native family may have no expect.json: then only the compiled build identity is checked.
@@ -439,7 +438,7 @@ namespace BeckhoffAutomationInterface.Machines
         static Exit Summary(List<MachineRow> rows, bool test)
         {
             Console.WriteLine();
-            Console.WriteLine("#################### SUMMARY");
+            ConsoleReport.Heading("Machine summary");
             Console.WriteLine(Table(rows, test));
             Exit exit = ExitCode(rows, test);
             if (exit == Exit.Passed)

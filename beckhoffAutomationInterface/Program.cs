@@ -120,80 +120,16 @@ namespace BeckhoffAutomationInterface
             return found;
         }
 
-        /// <summary>Prints the top-level usage. '<command> --help' prints that command's own
-        /// usage line.</summary>
-        static void PrintTopLevelUsage()
-        {
-            Console.WriteLine("Usage: beckhoffAutomationInterface <command> [args]");
-            Console.WriteLine();
-            Console.WriteLine("Commands:");
-            Console.WriteLine("  package create|verify / libraries lock|verify / toolchain capture|verify");
-            Console.WriteLine("      Offline release artifacts; no XAE or runtime access. Use '<command> --help'.");
-            Console.WriteLine("  esi install|verify   Prepare or verify an EtherCAT catalog; existing files are never replaced.");
-            Console.WriteLine("  release build|lock   Build a machine release bundle with evidence and packages (no activation).");
-            Console.WriteLine("  package preflight|install|drift");
-            Console.WriteLine("      Check and install a compiled package on a machine or UmRT, with rollback. Use '<command> --help'.");
-            Console.WriteLine("  build  <path> [--plc X] [--clean] [--variant V | --all-variants]");
-            Console.WriteLine("      Compile an existing PLC project and report pass/fail.");
-            Console.WriteLine("      <path> may be a .tsproj file, or a folder containing exactly one.");
-            Console.WriteLine();
-            Console.WriteLine("  check  parse|format <source-path>");
-            Console.WriteLine("  check  events <source-path> --project <path>");
-            Console.WriteLine("      Read-only preflight checks against .st source (and, for 'events', the project).");
-            Console.WriteLine();
-            Console.WriteLine("  sync   code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--clean] [...]");
-            Console.WriteLine("      Push .st source (and manifests) forward into the TwinCAT project.");
-            Console.WriteLine();
-            Console.WriteLine("  export code|libs|io|events|tasks|safety|variants|native|links|all <source-path> --project <path> [--plc X] [--overwrite]");
-            Console.WriteLine("  export object <ObjectName> <source-path> --project <path> [--plc X]");
-            Console.WriteLine("      Regenerate .st source (or manifests) FROM an existing project (reverse export);");
-            Console.WriteLine("      'object' writes just the one named live PLC object back to .st.");
-            Console.WriteLine();
-            Console.WriteLine("  activate <path> --target umrt|local [--variant V] [--plc X] [--yes]");
-            Console.WriteLine("      Build one variant and activate it on UmRT_Default or the local runtime, then wait for");
-            Console.WriteLine("      the PLC to run. Without --yes: only shows what is on the target now (changes nothing).");
-            Console.WriteLine();
-            Console.WriteLine("  verify --target umrt|local --expect <expect.json> [--variant V] [--timeout S]");
-            Console.WriteLine("      Read live PLC values over ADS and compare them with expect.json (exit 0 = all as expected).");
-            Console.WriteLine();
-            Console.WriteLine("  test   --target umrt|local --scenarios <file-or-folder> [--variant V] [--variants <variants.xml> | --groups G1,G2]");
-            Console.WriteLine("         [--tags a,b] [--junit <file>] [--timeout S]");
-            Console.WriteLine("      Run scenario files (send commands, wait for and check PLC values) over ADS. Exit 0 = all");
-            Console.WriteLine("      passed, 1 = a scenario failed, 2 = wrong command line or invalid scenario file.");
-            Console.WriteLine();
-            Console.WriteLine("  runtime-state --target umrt|local|<AMS-Net-ID> [--expect config|run] [--state config|run --yes]");
-            Console.WriteLine("      Read the runtime state (Config/Run) over ADS; with --state and --yes, switch it. No XAE.");
-            Console.WriteLine();
-            Console.WriteLine("  doctor");
-            Console.WriteLine("      Read-only report: DTE shells, TwinCAT version, local runtime and UmRT state,");
-            Console.WriteLine("      boot projects and license expiry.");
-            Console.WriteLine();
-            Console.WriteLine("  init   <source> --into <folder> [--name X]");
-            Console.WriteLine("      Bootstrap a brand-new TwinCAT solution/PLC project.");
-            Console.WriteLine();
-            Console.WriteLine("  machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel]");
-            Console.WriteLine("  machine test  [<Machine>...] [--fresh] [--tags a,b] [--junit <file>]");
-            Console.WriteLine("      Build (and test on UmRT in simulation) the machines of bai.machines.json in a PLC");
-            Console.WriteLine("      repository: source assembly, build identity, one TwinCAT session per machine.");
-            Console.WriteLine();
-            Console.WriteLine("  native capture|apply|links ...");
-            Console.WriteLine("      A retained native configuration (I/O, NC, safety references, mappings): import it");
-            Console.WriteLine("      from a reviewed project, apply it to a closed project, or write its links.xml.");
-            Console.WriteLine();
-            Console.WriteLine("Global option (any command that opens TwinCAT):");
-            Console.WriteLine("  --shell xae|vs2022   DTE shell to automate. Default: TwinCAT XAE shell if installed,");
-            Console.WriteLine("                       else Visual Studio 2022. Also settable as 'shell=' in .stconfig.");
-            Console.WriteLine();
-            Console.WriteLine("Run '<command> --help' for that command's usage; README.md has the full reference.");
-        }
-
         /// <summary>Removes "flag value" from args and returns the value (null when absent).
         /// For options every subcommand accepts.</summary>
         internal static string TakeGlobalOption(ref string[] args, string flag)
         {
             int i = Array.IndexOf(args, flag);
-            if (i < 0 || i + 1 >= args.Length)
-                return null;
+            if (i < 0) return null;
+            if (i + 1 >= args.Length || args[i + 1].StartsWith("-", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(args[i + 1]))
+                throw new Cli.UsageException(flag + " needs a value.", null);
+            if (args.Skip(i + 1).Contains(flag))
+                throw new Cli.UsageException(flag + " may only be specified once.", null);
             string value = args[i + 1];
             args = args.Take(i).Concat(args.Skip(i + 2)).ToArray();
             return value;
@@ -203,20 +139,13 @@ namespace BeckhoffAutomationInterface
         /// usage and exits 1 on a command-line problem; prints usage and exits 0 on --help.</summary>
         static RunOptions ParseOrExit(string[] args, string shell)
         {
-            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
-            {
-                Console.WriteLine("Usage: beckhoffAutomationInterface " + Cli.CommandLine.UsageOf(args[0]));
-                Environment.Exit(0);
-            }
             try
             {
                 return Cli.CommandLine.Parse(args, shell);
             }
             catch (Cli.UsageException ex)
             {
-                Console.Error.WriteLine("ERROR: " + ex.Message);
-                if (ex.Usage != null)
-                    Console.Error.WriteLine("Usage: beckhoffAutomationInterface " + ex.Usage);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message, Cli.ConsoleLayout.TerminalWidth);
                 Environment.Exit(1);
                 return null; // unreachable
             }
@@ -225,35 +154,40 @@ namespace BeckhoffAutomationInterface
         [STAThread]
         static void Main(string[] args)
         {
-            if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
+            string shell;
+            try { shell = TakeGlobalOption(ref args, "--shell"); }
+            catch (Cli.UsageException ex)
             {
-                PrintTopLevelUsage();
-                Environment.Exit(args.Length == 0 ? 1 : 0);
+                Cli.CliHelp.WriteError(Console.Error, args, ex.Message);
+                Environment.Exit(1);
+                return;
             }
 
-            string shell = TakeGlobalOption(ref args, "--shell");
+            if (args.Length == 0)
+            {
+                Cli.CliHelp.Write(Console.Out, Console.Error, new string[0], Cli.ConsoleLayout.TerminalWidth);
+                Environment.Exit(1);
+                return;
+            }
+            if (args[0] == "help" || args.Contains("--help") || args.Contains("-h"))
+            {
+                string[] path = args[0] == "help"
+                    ? args.Skip(1).Where(a => a != "--help" && a != "-h").ToArray()
+                    : Cli.CliHelp.HelpPath(args);
+                Environment.Exit(Cli.CliHelp.Write(Console.Out, Console.Error, path, Cli.ConsoleLayout.TerminalWidth));
+                return;
+            }
+            if (args.Length == 1 && args[0] == "--version")
+            {
+                Console.WriteLine("bai " + Cli.CliHelp.Version);
+                return;
+            }
             if (shell != null && !DteShellResolver.IsKnownName(shell))
             {
-                Console.Error.WriteLine("ERROR: unknown --shell '{0}'. Use one of: {1}.", shell,
-                    string.Join(", ", DteShell.All.Select(s => s.Name)));
+                Cli.CliHelp.WriteError(Console.Error, args, "unknown --shell '" + shell + "'. Use one of: " +
+                    string.Join(", ", DteShell.All.Select(s => s.Name)) + ".");
                 Environment.Exit(1);
-            }
-
-            if (args.Skip(1).Any(a => a == "--help" || a == "-h"))
-            {
-                string usage = args[0] == "verify" ? Runtime.RuntimeCommands.VerifyUsage
-                             : args[0] == "activate" ? Runtime.RuntimeCommands.ActivateUsage
-                             : args[0] == "test" ? Runtime.RuntimeCommands.TestUsage
-                             : args[0] == "runtime-state" ? Runtime.RuntimeStateCommand.Usage
-                             : args[0] == "doctor" ? "Usage: beckhoffAutomationInterface doctor"
-                             : args[0] == "machine" ? "Usage: beckhoffAutomationInterface " + Machines.MachineCommands.Usage
-                             : args[0] == "native" ? "Usage: beckhoffAutomationInterface " + Machines.NativeCommands.Usage
-                             : null;
-                if (usage != null)
-                {
-                    Console.WriteLine(usage);
-                    Environment.Exit(0);
-                }
+                return;
             }
 
             RunOptions options = null;
@@ -279,6 +213,11 @@ namespace BeckhoffAutomationInterface
                     Environment.Exit(Runtime.RuntimeCommands.Test(args));
                     break;
                 case "doctor":
+                    if (args.Length != 1)
+                    {
+                        Cli.CliHelp.WriteError(Console.Error, args, "doctor does not accept arguments: " + string.Join(" ", args.Skip(1)));
+                        Environment.Exit(1);
+                    }
                     Environment.Exit(Runtime.Doctor.Run());
                     break;
                 case "runtime-state":
@@ -298,16 +237,19 @@ namespace BeckhoffAutomationInterface
                     options = ParseOrExit(args, shell);
                     break;
                 default:
-                    Console.Error.WriteLine("ERROR: unknown command '{0}'.", args[0]);
-                    Console.Error.WriteLine("Expected one of: build, check, sync, export, init, activate, verify, test, runtime-state, doctor, machine, native, release, package, libraries, toolchain, esi.");
-                    Console.Error.WriteLine("Run with --help for usage.");
+                    Cli.CliHelp.WriteError(Console.Error, args, "unknown command '" + args[0] + "'.");
                     Environment.Exit(1);
                     break;
             }
 
             if (options.ConfigFileLoaded)
                 Console.WriteLine("{0}: Loaded defaults from '.stconfig' (pass --no-config to ignore it).", Now());
-            Console.WriteLine("{0}: Source='{1}'  Dest='{2}'  Project='{3}'", Now(), options.SourceFolder, options.DestinationFolder, options.ProjectName);
+            ConsoleReport.Heading("bai " + args[0] + (args.Length > 1 && new[] { "check", "sync", "export" }.Contains(args[0]) ? " " + args[1] : ""));
+            var context = new Dictionary<string, object> { ["Source"] = options.SourceFolder };
+            if (options.ExistingTsprojPath != null) context["Project"] = options.ExistingTsprojPath;
+            else if (options.Init || args[0] == "sync") context["Project"] = options.SolutionFilePath;
+            ConsoleReport.Fields(context);
+            Console.WriteLine();
             IgnoreRules ignore = IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns);
 
             // Fast preflight: parse all .st files WITHOUT opening Visual Studio, so parser

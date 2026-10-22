@@ -88,10 +88,13 @@ Push-Location $Work
 try {
     # ------------------------------------------------------------ A: command line
     Step A 'no arguments prints usage, exit 1'        1 @('Usage:', 'Commands:') @()
-    Step A '--help, exit 0'                           0 @('Commands:', "'<command> --help'") @('--help')
-    Step A 'build --help'                             0 @('Usage: beckhoffAutomationInterface build') @('build', '--help')
-    Step A 'activate --help'                          0 @('activate <path', '--plc <name>') @('activate', '--help')
+    Step A '--help, exit 0'                           0 @('Commands:', "'bai <command> --help'") @('--help')
+    Step A 'build --help'                             0 @('bai build <project>', 'Options:', 'Examples:') @('build', '--help')
+    Step A 'activate --help'                          0 @('activate <project>', '--plc <name>') @('activate', '--help')
     Step A 'verify --help'                            0 @('verify --target') @('verify', '--help')
+    Step A 'nested help'                             0 @('bai package verify', '--json') @('help', 'package', 'verify')
+    Step A 'version'                                 0 @('bai ') @('--version')
+    Step A 'missing shell value'                     1 @('--shell needs a value') @('build', '--shell')
     Step A 'unknown command'                          1 @('unknown command') @('deploy', $sample)
     Step A 'unknown option on sync'                   1 @('unknown option --dest') @('sync', 'all', $sample, '--dest', $Work)
     Step A 'unknown option on build'                  1 @('unknown option --plc-name') @('build', $sample, '--plc-name', 'X')

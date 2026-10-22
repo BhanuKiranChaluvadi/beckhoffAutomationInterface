@@ -45,7 +45,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 }
             }
             catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is System.IO.IOException)
-            { Console.Error.WriteLine("ERROR: " + ex.Message); Console.Error.WriteLine(Usage); return 1; }
+            { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 1; }
         }
     }
 }
