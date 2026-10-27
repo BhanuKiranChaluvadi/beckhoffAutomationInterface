@@ -12,6 +12,14 @@ namespace BeckhoffAutomationInterface.Sync
         public bool AllLinked => Failed.Count == 0;
     }
 
+    /// <summary>The PLC compile before links.xml failed. ITcPlcProject.CompileProject reports
+    /// only a COM error (E_FAIL), not the compiler messages; SyncPipeline.SyncLinks then runs
+    /// the solution build, which reads them from the Error List.</summary>
+    class PlcCompileException : InvalidOperationException
+    {
+        public PlcCompileException(string message, Exception inner) : base(message, inner) { }
+    }
+
     /// <summary>
     /// Reconciles PLC-variable-to-IO-channel links declared in io-devices.xml against
     /// the project, using ITcSysManager.LinkVariables. Path format confirmed against
@@ -92,21 +100,31 @@ namespace BeckhoffAutomationInterface.Sync
             if (xml == null)
                 return false;
 
-            try
+            CompileBeforeLinks(() =>
             {
                 var plcProject = (ITcPlcProject)sysManager.LookupTreeItem("TIPC^" + plcName);
                 plcProject.CompileProject();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("PLC compilation failed before applying links.xml; mappings were not changed (" + ex.Message + ").", ex);
-            }
+            });
 
             ((ITcSysManager3)sysManager).ConsumeMappingInfo(xml);
             var missing = VarLinksFile.MissingMappings(xml, ((ITcSysManager3)sysManager).ProduceMappingInfo());
             if (missing.Count > 0)
                 throw new InvalidOperationException("links.xml read-back is incomplete: " + string.Join("; ", missing));
             return true;
+        }
+
+        /// <summary>Runs the compile before the links and turns any failure into a
+        /// PlcCompileException, so the caller can show the compiler errors (pure, unit-tested).</summary>
+        internal static void CompileBeforeLinks(Action compile)
+        {
+            try
+            {
+                compile();
+            }
+            catch (Exception ex)
+            {
+                throw new PlcCompileException("PLC compilation failed before applying links.xml; mappings were not changed (" + ex.Message + ").", ex);
+            }
         }
     }
 }

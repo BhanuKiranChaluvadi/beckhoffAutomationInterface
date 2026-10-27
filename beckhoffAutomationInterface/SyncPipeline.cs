@@ -747,7 +747,18 @@ namespace BeckhoffAutomationInterface
             // bulk COM call — then io-devices.xml's own <Links> apply on top, unchanged.
             // Both coexist rather than one replacing the other.
             bool varLinksApplied = false;
-            RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.PlcProjectName, _options.VarLinksManifestPath), "applying links.xml");
+            try
+            {
+                RetryOnBusy(() => varLinksApplied = VariableLinkEngine.ApplyFromFile(_session.SysManager, _options.PlcProjectName, _options.VarLinksManifestPath), "applying links.xml");
+            }
+            catch (PlcCompileException)
+            {
+                // CompileProject gives only E_FAIL. The solution build reads the Error List and
+                // prints each error with its .st file and line; then the stage fails as before.
+                Console.WriteLine("{0}: PLC compilation failed before links.xml; building the solution to show the compiler errors:", Now());
+                BuildOnce(clean: false);
+                throw;
+            }
             if (varLinksApplied)
             {
                 Outcome.FileLinks = VarLinksFile.CountLinks(_options.VarLinksManifestPath);
