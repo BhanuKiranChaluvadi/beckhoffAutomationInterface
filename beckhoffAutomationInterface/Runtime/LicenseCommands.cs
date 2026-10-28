@@ -41,7 +41,7 @@ namespace BeckhoffAutomationInterface.Runtime
     {
         internal const string Usage =
             "license check [--target local|umrt] [--package <zip> | --licenses <name[,name]>]\n" +
-            "license trial [--target local|umrt] --package <zip> | --licenses <name[,name]>   [--work <folder>] [--wait-minutes <minutes>]";
+            "license trial [--target local|umrt] [--package <zip> | --licenses <name[,name]>] [--work <folder>] [--wait-minutes <minutes>]";
 
         /// <summary>The TwinCAT 3 licenses bai can select: name -> license id. XAE selects a license by id.</summary>
         internal static readonly IReadOnlyDictionary<string, string> Known = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -105,6 +105,12 @@ namespace BeckhoffAutomationInterface.Runtime
             return names.Select(n => new KeyValuePair<string, string>(n, Known[n])).Concat(ids)
                 .GroupBy(p => p.Value).Select(g => g.First()).ToList();
         }
+
+        /// <summary>The licenses of the trial files (the files with an end date) of a target, expired or
+        /// not: what 'license trial' renews without --package or --licenses.</summary>
+        internal static List<KeyValuePair<string, string>> FromTrials(List<LicenseFile> files) =>
+            files.Where(f => f.Expires != null).SelectMany(f => f.Licenses).Where(l => l.Id.Length > 0).GroupBy(l => l.Id)
+                .Select(g => new KeyValuePair<string, string>(Known.FirstOrDefault(k => k.Value == g.Key).Key ?? g.First().Name ?? g.Key, g.Key)).ToList();
 
         /// <summary>The required licenses of a package that are missing or expired on the target (local or UmRT).</summary>
         internal static List<string> Missing(string target, string package) =>
@@ -191,6 +197,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 return Cli.CliHelp.Write(Console.Out, Console.Error, Cli.CliHelp.HelpPath(args), Cli.ConsoleLayout.TerminalWidth);
             Dictionary<string, string> o;
             string target;
+            IReadOnlyList<string> folders;
             List<KeyValuePair<string, string>> required;
             int waitMinutes = 15;
             try
@@ -203,8 +210,13 @@ namespace BeckhoffAutomationInterface.Runtime
                 string list = Release.ArtifactCommands.Get(o, "--licenses"), package = Release.ArtifactCommands.Get(o, "--package");
                 if (list != null && package != null) throw new ArgumentException("use --package or --licenses, not both.");
                 if (package != null && !File.Exists(package)) throw new ArgumentException("package not found: " + package);
+                folders = RuntimeTargets.LicenseFolders(target);
                 required = list != null ? Select(list) : package != null ? FromPackage(package) : null;
-                if (args[1] == "trial" && required == null) throw new ArgumentException("license trial needs --package or --licenses.");
+                if (args[1] == "trial" && required == null)
+                {
+                    required = FromTrials(Read(folders, new List<string>()));
+                    if (required.Count == 0) throw new ArgumentException("there is no trial license file on " + target + " to renew. Give --package or --licenses.");
+                }
                 if (args[1] == "check" && (o.ContainsKey("--work") || o.ContainsKey("--wait-minutes"))) throw new ArgumentException("--work and --wait-minutes are for license trial.");
                 if (o.ContainsKey("--wait-minutes") && (!int.TryParse(o["--wait-minutes"], out waitMinutes) || waitMinutes < 1)) throw new ArgumentException("--wait-minutes needs a number of minutes (1 or more).");
             }
@@ -212,7 +224,6 @@ namespace BeckhoffAutomationInterface.Runtime
             catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is System.Xml.XmlException)
             { Console.Error.WriteLine("FAIL: cannot read the package: " + ex.Message); return 1; }
 
-            var folders = RuntimeTargets.LicenseFolders(target);
             if (args[1] == "check")
                 return Report(target, folders, required) ? 0 : 1;
             try

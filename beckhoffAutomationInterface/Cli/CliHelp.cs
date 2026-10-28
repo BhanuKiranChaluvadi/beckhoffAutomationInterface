@@ -55,7 +55,7 @@ namespace BeckhoffAutomationInterface.Cli
                 notes: "Activation replaces the target boot project. It first prints the boot project that is on the target now."),
             Entry("license", "Check TwinCAT licenses or make a 7-day trial license.", Runtime.LicenseCommands.Usage,
                 @"bai license check --target local --licenses ""TC3 PLC,TC3 NC PTP""", "check|trial", shell: true,
-                notes: "Reads the license files on this PC (local runtime or UmRT). Trial opens XAE on a license-only project with the missing licenses; you click '7 Days Trial License...' and type the code. It never activates."),
+                notes: "Reads the license files on this PC (local runtime or UmRT). 'bai license trial --target umrt' renews every trial license of UmRT that ends in less than 2 days. Trial opens XAE on a license-only project with the missing licenses; you click '7 Days Trial License...' and type the code. It never activates."),
             Entry("verify", "Compare live PLC values with an expectation file.", Runtime.RuntimeCommands.VerifyUsage,
                 @"bai verify --target umrt --expect ST\sample\expect.json",
                 notes: "Reads values over ADS. Use --variant when the expectation file has no default entry."),
@@ -66,9 +66,9 @@ namespace BeckhoffAutomationInterface.Cli
                 "bai runtime-state --target umrt --check run",
                 notes: "--check reads the state and changes nothing; --set changes it. No XAE session is needed."),
             Entry("release", "Build release bundles or capture library baselines.", Release.ReleaseCommands.Usage,
-                @"bai release lock --machines MachineA --twincat-version 3.1.4026 --output libraries.lock.json",
+                @"bai release lock --machines MachineA --output libraries.lock.json",
                 "build|lock", shell: true,
-                notes: "Build requires retained hashes for the tool and the library lock; a toolchain archive is optional. Only the TwinCAT major is compared; the build is recorded. It creates a bundle without activating a runtime."),
+                notes: "bai.machines.json \"release\" gives the TwinCAT major and the approved bai SHA256; the library lock is <family folder>\\libraries.lock.json of the source. The options override them. A tag that is not HEAD is built from a clean checkout; your working tree is not touched. One bundle per family. A toolchain archive is optional. Only the TwinCAT major is compared; the build is recorded. It creates a bundle without activating a runtime."),
             Entry("package", "Create, verify, compare, or install compiled packages.", Release.ArtifactCommands.Usage,
                 @"bai package check --package NFPro.zip", "create|verify|check|install|rollback|drift",
                 notes: "check changes nothing. install checks first, then installs; it keeps the old image (Boot.before.<id>, and boot-before.zip in the record folder) and a copy of the package (Boot.installed), so the next install and a rollback need no other options. rollback undoes the last install."),
@@ -121,14 +121,14 @@ namespace BeckhoffAutomationInterface.Cli
             ["--wait-minutes"] = "Minutes to wait for the new license file (default 15).",
             ["--configuration"] = "Retained native configuration.xml file.",
             ["--output"] = "Destination path for the generated artifact.",
-            ["--machines"] = "Comma-separated machine names (required).",
+            ["--machines"] = "A family name (all its machines) or comma-separated machine names. Optional for a build: default all machines.",
             ["--machine"] = "Machine label recorded in the library baseline.",
-            ["--tag"] = "Git tag to build; alternative to --include-uncommitted.",
+            ["--tag"] = "Git tag to build (pushed). When it is not HEAD, bai builds it from a clean checkout. Default: HEAD.",
             ["--include-uncommitted"] = "Build the working tree with its uncommitted changes (a development package, not for a machine).",
-            ["--bai-sha256"] = "Retained SHA-256 hash of the bai executable (required).",
-            ["--twincat-version"] = "Required TwinCAT major, for example 3.1.4026 (a build such as 3.1.4026.24 also works; only the major is compared).",
-            ["--library-lock"] = "Approved library baseline JSON.",
-            ["--library-lock-sha256"] = "Retained SHA-256 hash of the library baseline.",
+            ["--bai-sha256"] = "Approved SHA-256 hash of the bai executable. Default: \"release\" \"bai\" of bai.machines.json.",
+            ["--twincat-version"] = "Required TwinCAT major, for example 3.1.4026 (only the major is compared). Default: \"release\" \"twincat\" of bai.machines.json.",
+            ["--library-lock"] = "Approved library baseline JSON. Default: <family folder>\\libraries.lock.json of the source.",
+            ["--library-lock-sha256"] = "Retained SHA-256 hash of --library-lock (needed with it).",
             ["--toolchain"] = "Optional retained TwinCAT toolchain ZIP of one exact build (with --toolchain-sha256).",
             ["--toolchain-sha256"] = "Retained SHA-256 hash of the toolchain ZIP (with --toolchain).",
             ["--system-esi"] = "System EtherCAT device catalog folder (ESI files).",
@@ -144,7 +144,7 @@ namespace BeckhoffAutomationInterface.Cli
             ["--rehearsal"] = "Run the package operation as an UmRT rehearsal.",
             ["--record"] = "Install: new folder for the install record (logs, install.json, boot-before.zip); default C:\\bai\\updates\\<machine>-<time>. Rollback: the record folder of the install to undo; default the last install.",
             ["--first-install"] = "Force a first install (no installed package). bai chooses it itself when it installed nothing on the target.",
-            ["--ssh"] = "SSH user@host for a remote TwinCAT/BSD installation.",
+            ["--ssh"] = "SSH user@host of the target: a Windows IPC (runs the command there from this PC, over OpenSSH) or a TwinCAT/BSD host.",
             ["--baseline"] = "Retained project ZIP used for drift comparison.",
             ["--components"] = "TwinCAT Components folder to archive.",
             ["--xae-shell"] = "TwinCAT XAE shell folder to archive.",
@@ -243,12 +243,12 @@ namespace BeckhoffAutomationInterface.Cli
             if (command.Config) { options.Add("--config <folder>"); options.Add("--no-config"); }
             options.Add("--help, -h");
             layout.Section("Options");
-            layout.Rows(options.Select(o => Pair(OptionLabel(command.Name, o), Description(command.Name, o))));
+            layout.Rows(options.Select(o => Pair(OptionLabel(command.Name, o), (o.StartsWith("--help") ? "" : Need(usage, o) + " ") + Description(command.Name, o))));
             layout.Section("Examples");
             // Keep examples scoped to the requested subcommand.
             layout.Text(Example(command, mode), 2, 6);
             layout.Section("Notes");
-            layout.Text("Angle brackets indicate values; square brackets indicate optional arguments. Repeatable options end in '...'. Quote paths containing spaces.");
+            layout.Text("Angle brackets indicate values. [ ] = optional; without brackets = required. a | b = one of them. Repeatable options end in '...'. Quote paths containing spaces.");
             if (command.Notes != null && !(command.Name == "package" && mode != null && mode != "install" && mode != "rollback"))
                 layout.Text(command.Notes);
             layout.Section("Exit codes");
@@ -264,6 +264,16 @@ namespace BeckhoffAutomationInterface.Cli
             string[] parts = usage.Split(' ');
             if (parts.Length > 1 && parts[1].Contains("|")) parts[1] = "<mode>";
             return string.Join(" ", parts);
+        }
+
+        /// <summary>"Required." when each usage line shown has the option outside [ ], "Required in some
+        /// forms (see Usage)." when only some lines do, else "Optional." (also for options not in the usage).</summary>
+        internal static string Need(IEnumerable<string> usage, string option)
+        {
+            string name = option.Split(' ')[0].TrimEnd(',');
+            var required = usage.Select(line => Regex.Matches(line, Regex.Escape(name) + @"(?![\w-])").Cast<Match>().Any(m =>
+                line.Substring(0, m.Index).Count(c => c == '[') == line.Substring(0, m.Index).Count(c => c == ']'))).ToList();
+            return required.Count > 0 && required.All(r => r) ? "Required." : required.Any(r => r) ? "Required in some forms (see Usage)." : "Optional.";
         }
 
         static string OptionLabel(string command, string option)
@@ -289,8 +299,7 @@ namespace BeckhoffAutomationInterface.Cli
                         : @" --configuration C:\bai\native\configuration.xml --plc App --output links.xml");
                 case "release":
                     return mode == "lock" ? command.Example
-                        : prefix + " --machines MachineA --tag v1.0.0 --bai-sha256 <hash> --twincat-version 3.1.4026"
-                            + " --library-lock libraries.lock.json --library-lock-sha256 <hash>";
+                        : prefix + " --tag v1.0.0 --machines FamilyA";
                 case "package":
                     switch (mode)
                     {
@@ -309,6 +318,7 @@ namespace BeckhoffAutomationInterface.Cli
                     return mode == "verify" ? command.Example
                         : prefix + @" --components C:\TwinCAT\Components --xae-shell C:\TwinCAT\TcXaeShell --twincat-version 3.1.4026.24 --output toolchain.zip";
                 case "esi": return prefix + @" --system-esi C:\TwinCAT\ESI --required-esi .\esi --user-esi C:\bai\esi";
+                case "license": return mode == "trial" ? prefix + " --target umrt" : prefix + " --target umrt --package NFPro.zip";
             }
             return command.Example;
         }
@@ -322,15 +332,18 @@ namespace BeckhoffAutomationInterface.Cli
                     : command == "test" ? "Wait for PLC Run, in seconds (default: 60). Scenario timeouts come from the scenario files."
                     : Descriptions[name];
             if (name == "--manifest" && (command == "machine" || command == "release")) return "bai.machines.json path; discovered from the current directory when omitted.";
+            if (command == "license" && name == "--target") return "Runtime on this PC: local or umrt (default local).";
+            if (command == "license" && name == "--work") return @"Folder for the license-only project (default C:\bai\work\license).";
                         return Descriptions.TryGetValue(name, out string description) ? description : "See the command reference in README.md.";
         }
 
-        static string ModeSummary(string command, string mode)
+        internal static string ModeSummary(string command, string mode)
         {
-            if (command == "sync" || command == "export" || command == "check")
-                return ModeDescriptions.TryGetValue(mode, out string summary) ? summary : mode;
             switch (command + " " + mode)
             {
+                case "check events": return "Check event classes";
+                case "license check": return "Show the license files of a runtime and when they expire; with --package or --licenses, check that each license is there and valid";
+                case "license trial": return "Make a 7-day trial license for each license that is missing or ends in less than 2 days (without --package or --licenses: the licenses of the trial files on the target). Opens XAE; you click '7 Days Trial License...' and type the code";
                 case "machine build": return "Assemble source and build selected machines";
                 case "machine test": return "Build, activate on UmRT, verify, and run scenarios";
                 case "native capture": return "Capture configuration from a reviewed project";
@@ -350,7 +363,9 @@ namespace BeckhoffAutomationInterface.Cli
                 case "toolchain verify": return "Verify archive hash, version, and optional installed files";
                 case "esi install": return "Install missing EtherCAT catalog files";
                 case "esi verify": return "Check required EtherCAT catalog files";
-                default: return mode;
+                default:
+                    bool shared = command == "sync" || command == "export" || command == "check";
+                    return shared && ModeDescriptions.TryGetValue(mode, out string summary) ? summary : mode;
             }
         }
 

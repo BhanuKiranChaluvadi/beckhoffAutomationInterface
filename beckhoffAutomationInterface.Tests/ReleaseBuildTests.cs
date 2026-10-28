@@ -264,6 +264,65 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void DefaultsComeFromTheManifestAndTheSource()
+        {
+            string bai = Path.Combine(Tool, "bai.exe"), json = File.ReadAllText(repo.ManifestFile);
+            File.WriteAllText(repo.ManifestFile, "{ \"release\": { \"twincat\": \"3.1.4026\", \"bai\": { \"version\": \"1.9.0\", \"sha256\": \"" + Hash(bai) + "\" } },"
+                + json.Substring(json.IndexOf('{') + 1));
+            File.Copy(LockFile, repo.Path_("Machines/Fam/libraries.lock.json"));
+            Git("add", ".");
+            Git("commit", "-qm", "release defaults");
+            Git("tag", "v-auto");
+            ReleaseRequest Minimal(string bundle) => new ReleaseRequest { Machines = { "M1" }, Tag = "v-auto", Bundle = Bundle(bundle), Bai = bai,
+                Manifest = repo.ManifestFile, EsiDirectory = Esi, UserEsiDirectory = UserEsi };
+            var record = ReleaseBuilder.BuildAll(Minimal("auto"), FakeCompile).Single();
+            Assert.Equal("BuildPassed", record["status"]);
+            Assert.Equal("3.1.4026", record["expectedTwinCatVersion"]);
+            Assert.Equal(Hash(bai).ToUpperInvariant(), record["baiSha256"]);
+            Assert.Equal(Hash(LockFile).ToUpperInvariant(), record["libraryLockSha256"]);
+
+            // Another bai than the approved one, and a lock from outside without its hash, stop before a bundle.
+            File.WriteAllText(bai, "another bai");
+            Assert.Contains("approved SHA256", Assert.Throws<InvalidDataException>(() => ReleaseBuilder.BuildAll(Minimal("other-bai"), FakeCompile)).Message);
+            var q = Minimal("lock-without-hash"); q.LibraryLock = LockFile;
+            Assert.Contains("--library-lock-sha256", Assert.Throws<ArgumentException>(() => ReleaseBuilder.BuildAll(q, FakeCompile)).Message);
+            Assert.False(Directory.Exists(Bundle("other-bai")));
+            Assert.False(Directory.Exists(Bundle("lock-without-hash")));
+        }
+
+        [Fact]
+        public void TagThatIsNotHeadIsBuiltFromACleanCheckout()
+        {
+            string tagged = ReleaseBuilder.Git(repo.Root, "rev-parse", "HEAD")[0];
+            repo.Write("App/Fam/after-tag.txt", "after the tag");
+            Git("add", ".");
+            Git("commit", "-qm", "after the tag");
+            repo.Write("Lib/uncommitted.st", "not committed");
+            Assert.Contains("not on the server", Assert.Throws<InvalidOperationException>(() => ReleaseBuilder.BuildAll(Request("unpushed"), FakeCompile)).Message);
+            string origin = Path.Combine(scratch, "origin.git");
+            ReleaseBuilder.GitText(scratch, "init", "-q", "--bare", origin);
+            Git("remote", "add", "origin", origin);
+            Git("push", "-q", "origin", "HEAD:refs/heads/main");
+
+            var record = ReleaseBuilder.BuildAll(Request("checkout"), FakeCompile).Single();
+            Assert.Equal("Tag", record["sourceMode"]);
+            Assert.Equal("v-test", record["sourceTag"]);
+            Assert.Equal(tagged, record["sourceCommit"]);
+            Assert.False(File.Exists(Path.Combine(Bundle("checkout"), @"source\App\Fam\after-tag.txt")));
+            Assert.True(File.Exists(repo.Path_("Lib/uncommitted.st")));   // the working tree is not touched
+            Assert.Empty(Directory.GetDirectories(Path.Combine(repo.Work, "checkout")));
+        }
+
+        [Fact]
+        public void FamilyNameSelectsItsMachines()
+        {
+            var manifest = repo.Load();
+            Assert.Equal(new[] { "M1", "M2" }, ReleaseBuilder.Machines(manifest, new[] { "fam" }));
+            Assert.Equal(new[] { "M1" }, ReleaseBuilder.Machines(manifest, new[] { "m1" }));
+            Assert.Contains("Fam (M1, M2)", Assert.Throws<ArgumentException>(() => ReleaseBuilder.Machines(manifest, new[] { "Other" })).Message);
+        }
+
+        [Fact]
         public void WorkingTreeGivesADevelopmentPackage()
         {
             repo.Write("Lib/Math/F_Add.st", "FUNCTION F_Add : INT\nVAR_INPUT\n    a : INT;\nEND_VAR\nF_Add := a + 1; // uncommitted\nEND_FUNCTION\n");

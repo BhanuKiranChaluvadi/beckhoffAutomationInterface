@@ -43,6 +43,8 @@ namespace BeckhoffAutomationInterface.Machines
         public IReadOnlyList<string> PreCheck { get; private set; } = new string[0];
         public IReadOnlyList<string> BuildInputs { get; private set; } = DefaultBuildInputs;
         public IReadOnlyList<MachineFamily> Families { get; private set; } = new MachineFamily[0];
+        /// <summary>"release": the defaults of 'release build|lock'. Null when the file has none.</summary>
+        public ReleaseSettings Release { get; private set; }
 
         /// <summary>The family of a machine (name compared without case); null when unknown.</summary>
         public MachineFamily FamilyOf(string machine) =>
@@ -85,7 +87,7 @@ namespace BeckhoffAutomationInterface.Machines
             catch (ArgumentException ex) { throw new FormatException(path + ": not valid JSON: " + ex.Message); }
             if (!(parsed is Dictionary<string, object> root))
                 throw new FormatException(path + ": the root must be an object.");
-            Known(root, path, "work", "lock", "preCheck", "buildInputs", "families");
+            Known(root, path, "work", "lock", "preCheck", "buildInputs", "families", "release");
 
             string folder = Path.GetDirectoryName(Path.GetFullPath(path));
             var m = new MachineManifest
@@ -99,6 +101,8 @@ namespace BeckhoffAutomationInterface.Machines
                 m.PreCheck = List(root, "preCheck", path);
             if (root.ContainsKey("buildInputs"))
                 m.BuildInputs = List(root, "buildInputs", path);
+            if (root.ContainsKey("release"))
+                m.Release = ReleaseSettings.Parse(root["release"], path);
 
             if (!(root.TryGetValue("families", out object fams) && fams is Dictionary<string, object> families) || families.Count == 0)
                 throw new FormatException(path + ": \"families\" must be an object with at least one family.");
@@ -152,6 +156,46 @@ namespace BeckhoffAutomationInterface.Machines
             relative == null ? null : Path.GetFullPath(Path.Combine(folder, relative));
 
         internal static bool IsIdentifier(string name) => name != null && Identifier.IsMatch(name);
+    }
+
+    /// <summary>
+    /// "release" in bai.machines.json: what 'release build' uses when its options do not give it.
+    /// The tag of a release then records the TwinCAT major and the approved bai that built it.
+    /// <code>
+    /// "release": { "twincat": "3.1.4026", "bai": { "version": "1.9.0", "sha256": "&lt;64 hex digits&gt;" } }
+    /// </code>
+    /// </summary>
+    sealed class ReleaseSettings
+    {
+        static readonly Regex Sha = new Regex(@"\A[0-9a-fA-F]{64}\z");
+        static readonly Regex Major = new Regex(@"\A\d+\.\d+\.\d+(\.\d+)?\z");
+
+        /// <summary>The TwinCAT major (3.1.4026).</summary>
+        public string TwinCat { get; private set; }
+        public string BaiVersion { get; private set; }
+        public string BaiSha256 { get; private set; }
+
+        internal static ReleaseSettings Parse(object value, string path)
+        {
+            string where = path + ": \"release\"";
+            if (!(value is Dictionary<string, object> r))
+                throw new FormatException(where + " must be an object.");
+            MachineManifest.Known(r, where, "twincat", "bai");
+            var settings = new ReleaseSettings { TwinCat = MachineManifest.Text(r, "twincat", where, required: false) };
+            if (settings.TwinCat != null && !Major.IsMatch(settings.TwinCat))
+                throw new FormatException(where + ": \"twincat\" must look like 3.1.4026.");
+            if (r.TryGetValue("bai", out object b))
+            {
+                if (!(b is Dictionary<string, object> bai))
+                    throw new FormatException(where + ": \"bai\" must be an object.");
+                MachineManifest.Known(bai, where + ".bai", "version", "sha256");
+                settings.BaiVersion = MachineManifest.Text(bai, "version", where + ".bai", required: true);
+                settings.BaiSha256 = MachineManifest.Text(bai, "sha256", where + ".bai", required: true);
+                if (!Sha.IsMatch(settings.BaiSha256))
+                    throw new FormatException(where + ".bai: \"sha256\" must be a SHA256 (64 hex digits).");
+            }
+            return settings;
+        }
     }
 
     sealed class MachineFamily

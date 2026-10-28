@@ -110,6 +110,29 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains(message, ex.Message);
         }
 
+        const string Sha = "a84bf257d9c84531e7268f1f0d882aade4d3098bba940d581844b14fa636d919";
+
+        [Fact]
+        public void ReleaseSettings_AreRead_AndOptional()
+        {
+            var r = MachineManifest.Parse(Json(top: ", \"release\": { \"twincat\": \"3.1.4026\", \"bai\": { \"version\": \"1.9.0\", \"sha256\": \"" + Sha + "\" } }"), Path0).Release;
+            Assert.Equal("3.1.4026", r.TwinCat);
+            Assert.Equal("1.9.0", r.BaiVersion);
+            Assert.Equal(Sha, r.BaiSha256);
+            Assert.Null(MachineManifest.Parse(Json(), Path0).Release);
+            Assert.Null(MachineManifest.Parse(Json(top: ", \"release\": { \"twincat\": \"3.1.4026\" }"), Path0).Release.BaiSha256);
+        }
+
+        [Theory]
+        [InlineData(", \"release\": { \"twincat\": \"4026\" }", "\"twincat\" must look like 3.1.4026")]
+        [InlineData(", \"release\": { \"bai\": { \"version\": \"1.9.0\", \"sha256\": \"abc\" } }", "64 hex digits")]
+        [InlineData(", \"release\": { \"bai\": { \"sha256\": \"" + Sha + "\" } }", "\"version\" is required")]
+        [InlineData(", \"release\": { \"tag\": \"v1\" }", "unknown key 'tag'")]
+        public void BadReleaseSettings_AreRefused(string top, string message)
+        {
+            Assert.Contains(message, Assert.Throws<FormatException>(() => MachineManifest.Parse(Json(top: top), Path0)).Message);
+        }
+
         [Fact]
         public void MissingWork_IsRefused()
         {

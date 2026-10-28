@@ -30,9 +30,9 @@ namespace BeckhoffAutomationInterface.Release
     /// <summary>
     /// 'release build': a machine release in a new, isolated bundle folder, with build evidence.
     /// Source: --tag (the tag must name HEAD), HEAD (version = git describe; HEAD must be pushed),
-    /// or --working-tree (HEAD plus uncommitted and untracked files of the build inputs: a
+    /// or --include-uncommitted (HEAD plus uncommitted and untracked files of the build inputs: a
     /// DevelopmentValidation package for a UmRT rehearsal, never for a machine). Without
-    /// --working-tree the repository must be clean. Never activates a runtime. The bundle has
+    /// --include-uncommitted the repository must be clean. Never activates a runtime. The bundle has
     /// source.zip, a detached checkout, a private BAI copy, the generated projects and logs, the
     /// installed ESI files, release.json and verified packages (compiled boot files and a
     /// separate service solution archive). Resolved libraries must match the hashed lock, and
@@ -86,13 +86,25 @@ namespace BeckhoffAutomationInterface.Release
             return platforms[0];
         }
 
-        static List<string> Machines(MachineManifest manifest, IEnumerable<string> requested)
+        /// <summary>The machines of "M1,M2" or a family name (all its machines).</summary>
+        internal static List<string> Machines(MachineManifest manifest, IEnumerable<string> requested)
         {
-            var machines = requested.SelectMany(m => m.Split(',')).Select(m => m.Trim()).Where(m => m.Length > 0).ToList();
+            var machines = requested.SelectMany(m => m.Split(',')).Select(m => m.Trim()).Where(m => m.Length > 0)
+                .SelectMany(m => manifest.Families.FirstOrDefault(f => string.Equals(f.Name, m, StringComparison.OrdinalIgnoreCase))?.Machines ?? (IEnumerable<string>)new[] { m }).ToList();
             if (machines.Count == 0 || machines.Distinct(StringComparer.OrdinalIgnoreCase).Count() != machines.Count) throw new ArgumentException("Select distinct machines.");
             foreach (string m in machines)
-                if (manifest.FamilyOf(m) == null) throw new ArgumentException("Unknown machine '" + m + "'. " + MachineManifest.FileName + " lists: " + string.Join(", ", manifest.AllMachines) + ".");
+                if (manifest.FamilyOf(m) == null)
+                    throw new ArgumentException("Unknown machine or family '" + m + "'. " + MachineManifest.FileName + " lists: "
+                        + string.Join("; ", manifest.Families.Select(f => f.Name + " (" + string.Join(", ", f.Machines) + ")")) + ".");
             return machines.Select(manifest.Spelling).ToList();
+        }
+
+        /// <summary>The bundle name of the machines: the family name when they are all its machines.</summary>
+        static string Label(MachineManifest manifest, List<string> machines)
+        {
+            var family = manifest.FamilyOf(machines[0]);
+            return family.Machines.Count > 1 && machines.Count == family.Machines.Count && machines.All(m => manifest.FamilyOf(m) == family)
+                ? family.Name : string.Join("+", machines);
         }
 
         /// <summary>A family kept as a native project has one application and no TwinCAT variant.</summary>
@@ -247,7 +259,7 @@ namespace BeckhoffAutomationInterface.Release
         /// before the bundle exists) or a failure (release.json then has status Failed and the reason).</summary>
         internal static Dictionary<string, object> Build(ReleaseRequest q, ReleaseCompiler compile)
         {
-            if (q.WorkingTree && q.Tag != null) throw new ArgumentException("Use --tag or --working-tree, not both: a tag names a commit; --working-tree also builds uncommitted files.");
+            if (q.WorkingTree && q.Tag != null) throw new ArgumentException("Use --tag or --include-uncommitted, not both: a tag names a commit; --include-uncommitted also builds uncommitted files.");
             // The toolchain archive is optional: it holds the bytes of one exact TwinCAT build.
             bool archived = q.Toolchain != null || q.ToolchainSha256 != null;
             if (archived && (q.Toolchain == null || q.ToolchainSha256 == null)) throw new ArgumentException("Use --toolchain and --toolchain-sha256 together, or neither.");
@@ -270,15 +282,15 @@ namespace BeckhoffAutomationInterface.Release
             var inputChanges = changes.Where(c => { string p = c.Substring(3).Trim('"'); return areas.Any(a => p.StartsWith(a + "/", StringComparison.OrdinalIgnoreCase)); }).ToList();
             if (!q.WorkingTree)
             {
-                if (changes.Count > 0) throw new InvalidOperationException("Release requires a clean repository, including tests, documentation and untracked files. Commit them, or use --working-tree for a development package.");
+                if (changes.Count > 0) throw new InvalidOperationException("Release requires a clean repository, including tests, documentation and untracked files. Commit them, or use --include-uncommitted for a development package.");
                 if (q.Tag == null && Git(repo, "branch", "-r", "--contains", commit).Count == 0)
-                    throw new InvalidOperationException("HEAD is not on the server. Push it first (git push), so that others can rebuild this package; or use --tag, or --working-tree for a development package.");
+                    throw new InvalidOperationException("HEAD is not on the server. Push it first (git push), so that others can rebuild this package; or use --tag, or --include-uncommitted for a development package.");
             }
             bool dirty = q.WorkingTree && inputChanges.Count > 0;
             var machines = Machines(manifest, q.Machines);
             string platform = PlatformOf(manifest, machines, q.Platform);
             string bundle = Path.GetFullPath(q.Bundle ?? Path.Combine(manifest.Work, "release",
-                string.Format("{0}-{1}{2}-{3:yyyyMMdd-HHmmss}", string.Join("+", machines), version, dirty ? "-dirty" : "", DateTime.Now)));
+                string.Format("{0}-{1}{2}-{3:yyyyMMdd-HHmmss}", Label(manifest, machines), version, dirty ? "-dirty" : "", DateTime.Now)));
             string bai = Path.GetFullPath(q.Bai), toolRoot = Path.GetDirectoryName(bai);
             foreach (string source in new[] { repo, toolRoot, q.EsiDirectory, q.UserEsiDirectory }) BuildLocation.Assert(source, bundle);
             if (Directory.Exists(bundle) || File.Exists(bundle)) throw new IOException("Bundle already exists; use a new folder: " + bundle);
@@ -383,6 +395,89 @@ namespace BeckhoffAutomationInterface.Release
                 Save();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// 'release build': fills in what the options do not give, then builds one bundle for each
+        /// family. From bai.machines.json "release": the TwinCAT major and the approved bai hash.
+        /// The library lock is &lt;family folder&gt;\libraries.lock.json of the source: git keeps it,
+        /// so its hash is taken from the file. No machines: all machines. A --tag that is not HEAD,
+        /// or a repository with changes, is built from a clean checkout of the tag (removed at the
+        /// end); the tag must be on the server. The working tree is never touched.
+        /// </summary>
+        internal static List<Dictionary<string, object>> BuildAll(ReleaseRequest q, ReleaseCompiler compile)
+        {
+            if (q.LibraryLock != null && q.LibraryLockSha256 == null)
+                throw new ArgumentException("--library-lock needs --library-lock-sha256: a lock from outside the source has no git history. Without --library-lock, bai takes the lock of the source.");
+            string cwd = q.Cwd ?? Directory.GetCurrentDirectory();
+            var manifest = MachineManifest.Load(MachineManifest.Find(q.Manifest, cwd));
+            string checkout = null;
+            try
+            {
+                if (q.Tag != null && !q.WorkingTree && NeedsCheckout(manifest.Root, q.Tag))
+                {
+                    string top = Git(manifest.Root, "rev-parse", "--show-toplevel")[0].Replace('/', '\\');
+                    string relative = manifest.File.Substring(Path.GetFullPath(top).TrimEnd('\\').Length + 1);
+                    checkout = CheckOut(top, q.Tag, Path.Combine(manifest.Work, "checkout"));
+                    manifest = MachineManifest.Load(Path.Combine(checkout, relative));
+                    q.Cwd = Path.GetDirectoryName(manifest.File);
+                    q.Manifest = manifest.File;
+                }
+                string from = Path.GetFileName(manifest.File) + " \"release\"";
+                q.TwinCatVersion = q.TwinCatVersion ?? manifest.Release?.TwinCat
+                    ?? throw new ArgumentException("Give --twincat-version, or set \"twincat\" in " + from + ".");
+                if (q.BaiSha256 == null)
+                {
+                    q.BaiSha256 = manifest.Release?.BaiSha256 ?? throw new ArgumentException("Give --bai-sha256, or set \"bai\" in " + from + ".");
+                    if (!Names.Equals(Hash(q.Bai), q.BaiSha256))
+                        throw new InvalidDataException("This bai does not match the approved SHA256 of " + from + ": bai " + manifest.Release.BaiVersion + ", "
+                            + q.BaiSha256 + ". Use that bai, or approve this one in a reviewed commit.");
+                }
+                var machines = Machines(manifest, q.Machines.Count > 0 ? q.Machines : manifest.AllMachines);
+                var families = machines.GroupBy(m => manifest.FamilyOf(m)).ToList();
+                if (families.Count > 1 && q.Bundle != null) throw new ArgumentException("--output takes one family; these machines are of " + families.Count + " families.");
+                var records = new List<Dictionary<string, object>>();
+                foreach (var family in families)
+                {
+                    string familyLock = q.LibraryLock ?? MachineSources.RepoPath(manifest.Root, family.Key.Shared + "/libraries.lock.json");
+                    if (!File.Exists(familyLock)) throw new FileNotFoundException("No library lock: " + familyLock + ". Make one with 'bai release lock', or give --library-lock.");
+                    var one = new ReleaseRequest
+                    {
+                        Machines = family.ToList(), Tag = q.Tag, WorkingTree = q.WorkingTree, Bundle = q.Bundle, Bai = q.Bai, BaiSha256 = q.BaiSha256, TwinCatVersion = q.TwinCatVersion,
+                        LibraryLock = familyLock, LibraryLockSha256 = q.LibraryLockSha256 ?? Hash(familyLock), Toolchain = q.Toolchain, ToolchainSha256 = q.ToolchainSha256,
+                        Platform = q.Platform, Manifest = q.Manifest, Cwd = q.Cwd, Shell = q.Shell, EsiDirectory = q.EsiDirectory, UserEsiDirectory = q.UserEsiDirectory,
+                    };
+                    Console.WriteLine("{0}: release build {1}: {2}", Now(), family.Key.Name, string.Join(", ", family));
+                    records.Add(Build(one, compile));
+                }
+                return records;
+            }
+            finally
+            {
+                if (checkout != null)
+                    try { BuildLocation.Delete(checkout); }
+                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { Console.WriteLine("WARNING: could not remove the checkout {0}: {1}", checkout, ex.Message); }
+            }
+        }
+
+        /// <summary>True when the tag is not HEAD or the repository has changes.</summary>
+        static bool NeedsCheckout(string root, string tag) =>
+            Git(root, "rev-parse", "--verify", "refs/tags/" + tag + "^{commit}")[0] != Git(root, "rev-parse", "--verify", "HEAD")[0]
+            || Git(root, "status", "--porcelain", "--untracked-files=all").Count > 0;
+
+        /// <summary>A clean checkout of the tag in a new folder below 'parent'. The tag must be on the
+        /// server, so that others can build the same release.</summary>
+        static string CheckOut(string repo, string tag, string parent)
+        {
+            string commit = Git(repo, "rev-parse", "--verify", "refs/tags/" + tag + "^{commit}")[0];
+            if (Git(repo, "branch", "-r", "--contains", commit).Count == 0)
+                throw new InvalidOperationException("The commit of tag " + tag + " is not on the server. Push it first (git push origin " + tag + ").");
+            string folder = Path.Combine(parent, Regex.Replace(tag, @"[^A-Za-z0-9._-]", "_") + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            Console.WriteLine("{0}: Clean checkout of {1} in {2}", Now(), tag, folder);
+            Directory.CreateDirectory(parent);
+            GitText(repo, "clone", "--no-local", "--no-checkout", "--quiet", "--", repo, folder);
+            GitText(folder, "checkout", "--quiet", "--detach", commit);
+            return folder;
         }
 
         /// <summary>HEAD plus the current source: every tracked and untracked (not ignored) file of the

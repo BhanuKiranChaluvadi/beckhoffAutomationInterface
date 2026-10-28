@@ -14,10 +14,10 @@ namespace BeckhoffAutomationInterface.Release
     internal static class ReleaseCommands
     {
         internal const string Usage =
-            "release build --machines <M[,M]> [--tag <tag> | --include-uncommitted] [--output <new-folder>] --bai-sha256 <hash>\n" +
-            "              --twincat-version <major, e.g. 3.1.4026> --library-lock <json> --library-lock-sha256 <hash> [--toolchain <zip> --toolchain-sha256 <hash>]\n" +
-            "              [--platform <name>] [--manifest <bai.machines.json>] [--system-esi <folder>] [--user-esi <folder>]\n" +
-            "release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
+            "release build [--tag <tag> | --include-uncommitted] [--machines <family|M[,M]>] [--output <new-folder>]\n" +
+            "              [--bai-sha256 <hash>] [--twincat-version <major>] [--library-lock <json> --library-lock-sha256 <hash>]\n" +
+            "              [--toolchain <zip> --toolchain-sha256 <hash>] [--platform <name>] [--manifest <bai.machines.json>] [--system-esi <folder>] [--user-esi <folder>]\n" +
+            "release lock --machines <family|M[,M]> --output <new-json> [--twincat-version <major>] [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
             PackageUsage;
         internal const string PackageUsage =
             "package check --package <zip> [--sha256 <hash>] [--installed <zip> [--installed-sha256 <hash>] [--saved-project <folder>] | --first-install]\n" +
@@ -26,7 +26,10 @@ namespace BeckhoffAutomationInterface.Release
             "                [--record <new-folder>] [--target local|umrt] [--rehearsal]\n" +
             "package install --package <zip> [--sha256 <hash>] --installed <zip> --installed-sha256 <hash> --saved-project <folder> --record <new-folder>\n" +
             "                --target <AMS-Net-ID> --ssh <user@host>\n" +
+            "package check --package <zip> [--sha256 <hash>] [--first-install] --ssh <user@host>\n" +
+            "package install --package <zip> [--sha256 <hash>] [--first-install] --ssh <user@host>\n" +
             "package rollback [--record <install-folder>] [--target local|umrt]\n" +
+            "package rollback --ssh <user@host>\n" +
             "package drift --baseline <project.zip> --sha256 <hash> --saved-project <folder> --output <new-json>";
 
         internal static bool Handles(string[] args) => args.Length >= 2 &&
@@ -57,27 +60,32 @@ namespace BeckhoffAutomationInterface.Release
                 switch (command)
                 {
                     case "release build":
-                        o = Options(args, new[] { "--machines", "--bai-sha256", "--twincat-version", "--library-lock", "--library-lock-sha256" },
-                            new[] { "--toolchain", "--toolchain-sha256", "--tag", "--output", "--platform", "--manifest", "--system-esi", "--user-esi" }, new[] { "--include-uncommitted" });
+                        o = Options(args, new string[0], new[] { "--machines", "--bai-sha256", "--twincat-version", "--library-lock", "--library-lock-sha256",
+                            "--toolchain", "--toolchain-sha256", "--tag", "--output", "--platform", "--manifest", "--system-esi", "--user-esi" }, new[] { "--include-uncommitted" });
                         var q = new ReleaseRequest
                         {
-                            Machines = { o["--machines"] }, Tag = Get(o, "--tag"), WorkingTree = Get(o, "--include-uncommitted") != null, Bundle = Get(o, "--output"),
-                            Bai = System.Reflection.Assembly.GetEntryAssembly().Location, BaiSha256 = o["--bai-sha256"], TwinCatVersion = o["--twincat-version"],
-                            LibraryLock = o["--library-lock"], LibraryLockSha256 = o["--library-lock-sha256"], Toolchain = Get(o, "--toolchain"), ToolchainSha256 = Get(o, "--toolchain-sha256"),
+                            Tag = Get(o, "--tag"), WorkingTree = Get(o, "--include-uncommitted") != null, Bundle = Get(o, "--output"),
+                            Bai = host.BaiPath, BaiSha256 = Get(o, "--bai-sha256"), TwinCatVersion = Get(o, "--twincat-version"),
+                            LibraryLock = Get(o, "--library-lock"), LibraryLockSha256 = Get(o, "--library-lock-sha256"), Toolchain = Get(o, "--toolchain"), ToolchainSha256 = Get(o, "--toolchain-sha256"),
                             Platform = Get(o, "--platform"), Manifest = Get(o, "--manifest"), Shell = shell,
                         };
+                        if (Get(o, "--machines") != null) q.Machines.Add(o["--machines"]);
                         if (Get(o, "--system-esi") != null) q.EsiDirectory = o["--system-esi"];
                         if (Get(o, "--user-esi") != null) q.UserEsiDirectory = o["--user-esi"];
-                        ReleaseBuilder.Build(q, ReleaseBuilder.Spawn(shell));
+                        var bundles = ReleaseBuilder.BuildAll(q, ReleaseBuilder.Spawn(shell));
+                        foreach (var bundle in bundles)
+                            Console.WriteLine("PASS: release {0}: {1}", bundle["sourceTag"], string.Join(", ", ((string[])bundle["machines"])));
                         return 0;
                     case "release compile": // internal: run by the private BAI copy of 'release build'
                         o = Options(args, new[] { "--manifest", "--work", "--platform", "--version", "--machines" }, new string[0], new[] { "--dirty" });
                         return ReleaseBuilder.Compile(o["--manifest"], o["--work"], o["--machines"].Split(','), o["--platform"], o["--version"], Get(o, "--dirty") != null, shell);
                     case "release lock":
-                        o = Options(args, new[] { "--machines", "--twincat-version", "--output" }, new[] { "--platform", "--work", "--manifest" });
+                        o = Options(args, new[] { "--machines", "--output" }, new[] { "--twincat-version", "--platform", "--work", "--manifest" });
                         string manifest = Manifest(o);
-                        var result = ReleaseBuilder.Lock(manifest, Get(o, "--work") ?? MachineManifest.Load(manifest).Work, new[] { o["--machines"] },
-                            o["--twincat-version"], Get(o, "--platform"), o["--output"]);
+                        var loaded = MachineManifest.Load(manifest);
+                        string twinCat = Get(o, "--twincat-version") ?? loaded.Release?.TwinCat
+                            ?? throw new ArgumentException("Give --twincat-version, or set \"twincat\" in " + MachineManifest.FileName + " \"release\".");
+                        var result = ReleaseBuilder.Lock(manifest, Get(o, "--work") ?? loaded.Work, new[] { o["--machines"] }, twinCat, Get(o, "--platform"), o["--output"]);
                         ConsoleReport.Result("release lock", result);
                         return 0;
                     case "package drift":

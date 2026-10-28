@@ -34,6 +34,30 @@ namespace BeckhoffAutomationInterface.Tests
             if (topic.Length > 0) Assert.Contains("bai " + topic, result.Output);
         }
 
+        [Fact]
+        public void EverySubcommandHasADescription()
+        {
+            foreach (var command in CliHelp.Commands)
+                foreach (string mode in command.Modes)
+                    Assert.True(CliHelp.ModeSummary(command.Name, mode) != mode, "No description for 'bai " + command.Name + " " + mode + "'.");
+        }
+
+        [Theory]
+        [InlineData("--package <zip>", "Required.")]
+        [InlineData("--sha256 <hash>", "Optional.")]
+        [InlineData("--licenses <name[,name]>", "Optional.")]
+        [InlineData("--ssh <user@host>", "Required in some forms (see Usage).")]
+        [InlineData("--json", "Optional.")]
+        public void OptionsShowWhetherTheyAreRequired(string option, string need)
+        {
+            string[] usage =
+            {
+                "package install --package <zip> [--sha256 <hash>] [--licenses <name[,name]>]",
+                "package install --package <zip> --ssh <user@host>",
+            };
+            Assert.Equal(need, CliHelp.Need(usage, option));
+        }
+
         [Theory]
         [InlineData("package verify", "package create", "--payload")]
         [InlineData("libraries verify", "toolchain capture", "--components")]

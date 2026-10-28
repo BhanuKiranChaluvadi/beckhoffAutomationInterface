@@ -87,10 +87,22 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void CommandLineRefusesRemoteTargetsAndTrialWithoutLicenses()
+        public void TrialWithoutLicensesRenewsTheLicensesOfAllTrialFiles()
+        {
+            var files = LicenseCommands.Parse("old.tclrs", Tclrs("2026-10-27T00:00:00", "TC3 NC PTP Axis", "TC3 PLC"))
+                .Concat(LicenseCommands.Parse("new.tclrs", Tclrs("2026-11-04T00:00:00", "TC3 PLC", "TC3 Modbus-RTU")))
+                .Concat(LicenseCommands.Parse("permanent.tclrs", Tclrs(null, "TC3 IO"))).ToList();
+            var renew = LicenseCommands.FromTrials(files);
+            Assert.Equal(new[] { "TC3 NC PTP Axis", "TC3 PLC", "TC3 Modbus-RTU" }, renew.Select(r => r.Key));
+            Assert.Equal(LicenseCommands.Known["TC3 PLC"], renew[1].Value);
+            Assert.Empty(LicenseCommands.FromTrials(files.Where(f => f.Expires == null).ToList()));
+        }
+
+        [Fact]
+        public void CommandLineRefusesRemoteTargetsAndWrongOptions()
         {
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--target", "1.2.3.4.1.1" }, null));
-            Assert.Equal(2, LicenseCommands.Run(new[] { "license", "trial", "--target", "umrt" }, null));
+            Assert.Equal(2, LicenseCommands.Run(new[] { "license", "trial", "--package", "a.zip", "--licenses", "TC3 PLC" }, null));
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--wait-minutes", "5" }, null));
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "renew" }, null));
         }
