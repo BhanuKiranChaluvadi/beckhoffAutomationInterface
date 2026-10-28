@@ -174,13 +174,15 @@ namespace BeckhoffAutomationInterface.Machines
         public string TwinCat { get; private set; }
         public string BaiVersion { get; private set; }
         public string BaiSha256 { get; private set; }
+        /// <summary>The TwinCAT packages a build PC needs (bai toolchain check|install); null when not given.</summary>
+        public IReadOnlyList<TwinCatPackage> Packages { get; private set; }
 
         internal static ReleaseSettings Parse(object value, string path)
         {
             string where = path + ": \"release\"";
             if (!(value is Dictionary<string, object> r))
                 throw new FormatException(where + " must be an object.");
-            MachineManifest.Known(r, where, "twincat", "bai");
+            MachineManifest.Known(r, where, "twincat", "bai", "packages");
             var settings = new ReleaseSettings { TwinCat = MachineManifest.Text(r, "twincat", where, required: false) };
             if (settings.TwinCat != null && !Major.IsMatch(settings.TwinCat))
                 throw new FormatException(where + ": \"twincat\" must look like 3.1.4026.");
@@ -194,8 +196,34 @@ namespace BeckhoffAutomationInterface.Machines
                 if (!Sha.IsMatch(settings.BaiSha256))
                     throw new FormatException(where + ".bai: \"sha256\" must be a SHA256 (64 hex digits).");
             }
+            if (r.TryGetValue("packages", out object list))
+            {
+                if (!(list is IEnumerable items) || list is string || list is Dictionary<string, object>)
+                    throw new FormatException(where + ": \"packages\" must be a list.");
+                var packages = new List<TwinCatPackage>();
+                foreach (object item in items)
+                {
+                    string at = where + ".packages[" + packages.Count + "]";
+                    if (!(item is Dictionary<string, object> p)) throw new FormatException(at + " must be an object.");
+                    MachineManifest.Known(p, at, "name", "version", "why", "alias", "lib");
+                    packages.Add(new TwinCatPackage
+                    {
+                        Name = MachineManifest.Text(p, "name", at, required: true), Version = MachineManifest.Text(p, "version", at, required: true),
+                        Why = MachineManifest.Text(p, "why", at, required: false) ?? "", Alias = MachineManifest.Text(p, "alias", at, required: false),
+                        Lib = MachineManifest.Text(p, "lib", at, required: false),
+                    });
+                }
+                settings.Packages = packages;
+            }
             return settings;
         }
+    }
+
+    /// <summary>One TwinCAT package (TcPkg) of "release" "packages": its exact version, why it is needed,
+    /// an older name of the same package (alias), and the library package that also counts (lib).</summary>
+    sealed class TwinCatPackage
+    {
+        public string Name, Version, Why, Alias, Lib;
     }
 
     sealed class MachineFamily

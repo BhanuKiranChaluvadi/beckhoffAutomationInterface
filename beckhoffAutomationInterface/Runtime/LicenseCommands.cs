@@ -260,6 +260,11 @@ namespace BeckhoffAutomationInterface.Runtime
                 return 0;
             }
             string netId = RuntimeTargets.NetId(target);
+            // XAE makes the trial for the runtime it reaches: a stopped UmRT gives no license file.
+            using (var ads = new AdsClient(netId, AdsClient.PortSystemService))
+                if (ads.TryReadState(out ushort _) is int error && error != 0)
+                    throw new InvalidOperationException("The runtime " + target + " (" + netId + ") does not answer over ADS (error " + error + "). Start it first"
+                        + (target == RuntimeTargets.UmRt ? " (its Start.bat; on the CI runner start-umrt.cmd)." : "."));
             string folder = Path.Combine(Path.GetFullPath(work), target + "-" + now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
             Directory.CreateDirectory(folder);
             string tsproj = Path.Combine(folder, "License.tsproj");

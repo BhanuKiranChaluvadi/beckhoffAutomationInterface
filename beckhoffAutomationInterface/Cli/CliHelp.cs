@@ -75,9 +75,10 @@ namespace BeckhoffAutomationInterface.Cli
             Entry("libraries", "Capture or verify compiled library baselines.", Release.ArtifactCommands.Usage,
                 @"bai libraries lock --project App.tsproj --machine MachineA --platform ""TwinCAT RT (x64)"" --output libraries.lock.json",
                 "lock|verify"),
-            Entry("toolchain", "Capture or verify an offline TwinCAT toolchain.", Release.ArtifactCommands.Usage,
+            Entry("toolchain", "Check or install the TwinCAT packages of a build PC, or capture or verify an offline TwinCAT toolchain.", Release.ArtifactCommands.Usage,
                 "bai toolchain verify --toolchain toolchain.zip --sha256 <hash> --twincat-version 3.1.4026.24",
-                "capture|verify"),
+                "check|install|capture|verify",
+                notes: "check and install use \"release\" \"packages\" of bai.machines.json: the TwinCAT packages decide the library versions of each build. install adds only missing packages and switches on the 64-bit XAE shell; it never changes an installed version (do that on purpose, then make a new library lock). install needs administrator rights and the Beckhoff Stable Feed signed in."),
             Entry("esi", "Install or verify an EtherCAT device catalog.", Release.ArtifactCommands.Usage,
                 @"bai esi verify --system-esi C:\TwinCAT\ESI --required-esi .\esi --user-esi C:\bai\esi",
                 "install|verify", notes: "Existing catalog files are never replaced."),
@@ -315,7 +316,8 @@ namespace BeckhoffAutomationInterface.Cli
                     return prefix + @" --project App.tsproj --machine MachineA --platform ""TwinCAT RT (x64)"""
                         + (mode == "lock" ? " --output libraries.lock.json" : " --library-lock libraries.lock.json --library-lock-sha256 <hash>");
                 case "toolchain":
-                    return mode == "verify" ? command.Example
+                    return mode == "check" || mode == "install" ? prefix
+                        : mode == "verify" ? command.Example
                         : prefix + @" --components C:\TwinCAT\Components --xae-shell C:\TwinCAT\TcXaeShell --twincat-version 3.1.4026.24 --output toolchain.zip";
                 case "esi": return prefix + @" --system-esi C:\TwinCAT\ESI --required-esi .\esi --user-esi C:\bai\esi";
                 case "license": return mode == "trial" ? prefix + " --target umrt" : prefix + " --target umrt --package NFPro.zip";
@@ -331,7 +333,7 @@ namespace BeckhoffAutomationInterface.Cli
                     : command == "activate" ? "Wait for PLC Run, in seconds (default: 60)."
                     : command == "test" ? "Wait for PLC Run, in seconds (default: 60). Scenario timeouts come from the scenario files."
                     : Descriptions[name];
-            if (name == "--manifest" && (command == "machine" || command == "release")) return "bai.machines.json path; discovered from the current directory when omitted.";
+            if (name == "--manifest" && (command == "machine" || command == "release" || command == "toolchain")) return "bai.machines.json path; discovered from the current directory when omitted.";
             if (command == "license" && name == "--target") return "Runtime on this PC: local or umrt (default local).";
             if (command == "license" && name == "--work") return @"Folder for the license-only project (default C:\bai\work\license).";
                         return Descriptions.TryGetValue(name, out string description) ? description : "See the command reference in README.md.";
@@ -361,6 +363,8 @@ namespace BeckhoffAutomationInterface.Cli
                 case "libraries verify": return "Compare compiled libraries with a baseline";
                 case "toolchain capture": return "Archive the TwinCAT components and XAE shell";
                 case "toolchain verify": return "Verify archive hash, version, and optional installed files";
+                case "toolchain check": return "Compare the installed TwinCAT packages with \"release\" \"packages\" of bai.machines.json; change nothing";
+                case "toolchain install": return "Install the missing TwinCAT packages of bai.machines.json (dry run, then you type y); never change an installed version";
                 case "esi install": return "Install missing EtherCAT catalog files";
                 case "esi verify": return "Check required EtherCAT catalog files";
                 default:

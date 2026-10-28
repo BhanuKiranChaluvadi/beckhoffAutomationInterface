@@ -500,6 +500,7 @@ bai libraries lock --project <tsproj> --machine <label> --platform <platform> [-
 bai libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --library-lock <json> --library-lock-sha256 <hash> [--json]
 bai toolchain capture --components <folder> --xae-shell <folder> --twincat-version <version> --output <new-zip> [--json]
 bai toolchain verify --toolchain <zip> --sha256 <hash> --twincat-version <version> [--check-installed] [--json]
+bai toolchain check|install [--manifest <bai.machines.json>]
 bai esi install|verify --system-esi <folder> --required-esi <folder> --user-esi <folder> [--output <new-json>] [--json]
 ```
 
@@ -511,6 +512,8 @@ bai esi install|verify --system-esi <folder> --required-esi <folder> --user-esi 
 | `libraries verify` | Compares the project with an approved lock file. Never make an approved lock file again only to pass a check. |
 | `toolchain capture` | Archives the TwinCAT `Components` folder and the XAE shell folder. Give the real folders; the tool does not guess. The archive does not install Windows parts, register COM or supply licenses. |
 | `toolchain verify` | Checks an archive. `--check-installed` also compares it with the folders on this PC. |
+| `toolchain check` | Compares the installed TwinCAT packages (`tcpkg list -i`) with `"release"` `"packages"` of `bai.machines.json` (name, exact version, why; `alias` = an older name of the package, `lib` = the library package that also counts). Also checks the 64-bit XAE shell setting and the feed sign-in. It changes nothing. Exit code 0 = all there, 1 = a package missing or the 64-bit shell off. |
+| `toolchain install` | As administrator: switches on the 64-bit XAE shell, shows a TcPkg dry run of the missing packages and installs them after you type `y`. It never changes an installed version: the packages decide the library versions of each build, so change one on purpose and then make a new library lock. |
 | `esi install` | Copies ESI catalog files into the system and user folders. It checks all conflicts first and never replaces a different file. Open a new XAE session after the install. |
 | `esi verify` | Checks the catalog folders. It writes no file. |
 

@@ -13,6 +13,8 @@ namespace BeckhoffAutomationInterface.Release
             "package create --payload <folder> --metadata <json-without-files> --output <new-zip> [--json]\n" +
             "toolchain capture --components <folder> --xae-shell <folder> --twincat-version <version> --output <new-zip> [--json]\n" +
             "toolchain verify --toolchain <zip> --sha256 <retained-hash> --twincat-version <version> [--check-installed] [--json]\n" +
+            "toolchain check [--manifest <bai.machines.json>]\n" +
+            "toolchain install [--manifest <bai.machines.json>]\n" +
             "package verify --package <zip> [--sha256 <retained-hash>] [--json]\n" +
             "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --output <new-json> [--json]\n" +
             "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --library-lock <json> --library-lock-sha256 <retained-hash> [--json]\n" +
@@ -50,6 +52,8 @@ namespace BeckhoffAutomationInterface.Release
                 if (args.Length < 2) throw new ArgumentException("A subcommand is required.");
                 Dictionary<string, object> result;
                 Dictionary<string, string> options;
+                if (args[0] == "toolchain" && (args[1] == "check" || args[1] == "install"))
+                    return TwinCatPackages.Run(args);
                 if (args[0] == "esi" && (args[1] == "install" || args[1] == "verify"))
                 {
                     options = Options(args, new[] { "--system-esi", "--required-esi", "--user-esi" }, new[] { "--output" }, new[] { "--json" });
@@ -105,7 +109,8 @@ namespace BeckhoffAutomationInterface.Release
                 return 0;
             }
             catch (ArgumentException ex) { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 2; }
-            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is System.Xml.XmlException || ex is InvalidOperationException)
+            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is System.Xml.XmlException || ex is InvalidOperationException
+                                       || ex is FormatException)
             { Console.Error.WriteLine("FAIL: " + ex.Message); return 1; }
         }
     }
