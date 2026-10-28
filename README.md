@@ -354,6 +354,26 @@ bai doctor
 It shows the DTE shells, the TwinCAT version, the state of the local runtime and UmRT, the boot
 projects and the license expiry dates. It changes nothing. Exit code 0.
 
+### `license check` and `license trial`: the licenses of a runtime
+
+```
+bai license check [--target local|umrt] [--licenses <name[,name]>]
+bai license trial [--target local|umrt] --licenses <name[,name]> [--work <folder>] [--wait <minutes>]
+```
+
+`check` lists each license file of the runtime on this PC (local: `3.1\License`, older builds
+`3.1\Target\License`; UmRT: its `Target\License`) with its system id, expiry and licenses. With
+`--licenses` it checks each one: OK, expired or missing. A license on a dongle is not in a file:
+see XAE > SYSTEM > License > Online Licenses. Exit code 0 = all valid, 1 = one is missing or expired.
+
+`trial` makes a license-only project in a new folder below `--work` (default `C:\bai\work\license`)
+that selects only the licenses that are missing or end within 2 days. It opens XAE on it with
+the target set, and waits (default 15 min) while you click "7 Days Trial License..." and type the
+security code (Beckhoff makes that step manual). Then it checks the new file and closes XAE
+without saving. It never activates: activation would replace the boot project of the target.
+Names: `TC3 ADS`, `TC3 IO`, `TC3 PLC`, `TC3 NC PTP`, `TC3 NC PTP Axis`, `TC3 Controller Toolbox`,
+`TC3 Temperature-Controller`, `TC3 Modbus-RTU`, or a license id `{...}`.
+
 ### `machine build` and `machine test`: the machines of a PLC repository
 
 ```
@@ -505,9 +525,12 @@ bai release build --machines <M[,M]> [--tag <tag> | --working-tree] [--bundle <n
 bai release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--work <folder>] [--platform <name>]
 bai package preflight --current <zip> --current-sha256 <hash> --service-project <folder> --report <new-folder>
     [--target local|umrt|<AMS-Net-ID>] [--rehearsal]
+bai package preflight --legacy --report <new-folder> [--target local]
 bai package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash>
     --service-project <folder> --evidence <new-folder> [--target local|umrt] [--rehearsal] --yes
+bai package install --package <zip> --sha256 <hash> --legacy --evidence <new-folder> [--target local] --yes
 bai package install ... --target <AMS-Net-ID> --ssh <user@host> --yes
+bai package rollback --evidence <install-folder> [--target local|umrt] --yes
 bai package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>
 ```
 
@@ -517,14 +540,15 @@ Run `release` in the PLC repository. It reads `bai.machines.json`.
 |---|---|
 | `release build` | Makes a release bundle in a new folder. The default folder is `<work>\release\<machines>-<version>[-dirty]-<time>`. With `--tag`, the tag must be on `HEAD`. Without `--tag`, the version is `git describe`, and `HEAD` must be on the server (push it first). Without `--working-tree`, the repository must be clean. `--working-tree` also builds the uncommitted and untracked files of the build inputs and keeps `working-tree.patch`. This gives a `DevelopmentValidation` package: use it only for a rehearsal on UmRT. The tool checks its own SHA256, the library lock and the release manifests. `--twincat-version` is the TwinCAT major, for example `3.1.4026` (a build such as `3.1.4026.24` also works; only `3.1.4026` is compared): the project and the library lock must have that major, any build. `release.json` records the build of each project. The library lock still compares each compiled library byte by byte, so other library versions need a new, examined lock. `--toolchain` is optional: with it, the tool also checks that archive against the installed TwinCAT files (before and after the build) and keeps it in the bundle. It copies the source, the tool and the ESI files into the bundle. The tool copy builds each machine with the `machine build --release` steps (always fresh, no SIMULATION). Then the tool checks the compiled project and writes `packages\<M>.zip` and `<M>.zip.sha256`. It never activates. When a step fails, `release.json` has status `Failed` and the reason. |
 | `release lock` | Makes a candidate library lock from built machines. The default folder is the `work` of `bai.machines.json`. For a bundle, give `--work <bundle>\build`. Examine the lock one time and keep its SHA256. Do not make it again for each release; make it again only when the compiled libraries change (for example after a TwinCAT update). |
-| `package preflight` | Checks the package that is installed now. The saved service project must agree with its `project.zip`. The live identity must agree with the package, and the online-change counter must be 0. It writes no runtime value. |
-| `package install` | Installs a compiled package without XAE. It verifies both packages and does the preflight. Then it sets Config, copies the boot files, sets Run and verifies the live identity. It keeps the old image, `*.bootdata` and the event journal. When a step after Config fails, it puts the old image back and verifies the old identity. A machine accepts only a `ReleaseCandidate`. `--rehearsal` (UmRT only) also accepts a development package. With `--ssh`, the target is TwinCAT/BSD: the tool copies the package and a helper over SSH. The BSD host needs `python3`, a known host key and `doas` for the helper. Without `--yes`, nothing changes. |
+| `package preflight` | Checks the package that is installed now. The saved service project must agree with its `project.zip`. The live identity must agree with the package, and the online-change counter must be 0. It writes no runtime value. With `--legacy` (a machine without a bai package), it only checks that the PLC is in Run and the online-change counter is 0. |
+| `package install` | Installs a compiled package without XAE. It verifies both packages and does the preflight. Then it sets Config, copies the boot files, sets Run and verifies the live identity. It keeps the old image, `*.bootdata` and the event journal. When a step after Config fails, it puts the old image back and verifies the old identity. A machine accepts only a `ReleaseCandidate`. `--rehearsal` (UmRT only) also accepts a development package. With `--ssh`, the target is TwinCAT/BSD: the tool copies the package and a helper over SSH. The BSD host needs `python3`, a known host key and `doas` for the helper. Without `--yes`, nothing changes. On Windows, the old image is also written to `boot-before.zip` (+ `.sha256`) in the evidence folder, read back and checked before the first boot file changes: copy it off the IPC. `--legacy` is the first update of a Windows machine that has no bai package: no `--current` and no `--service-project`; the rollback check is the PLC in Run with no online change. |
+| `package rollback` | Puts back the image that an install replaced, for example after a failed acceptance check (Windows: run it on the IPC). It sets Config, restores the old files from `Boot.before.<id>`, sets Run and verifies the old identity (for `--legacy`: the PLC runs). The replaced files go to `Boot.rolled-back.<id>`. It writes `rollback\rollback.json` in the install evidence folder and runs only once for each install. Without `--yes`, nothing changes. |
 | `package drift` | Compares a saved service project with a `project.zip`. It ignores the XML format. Code, values, element order and comments must agree. Exit code 0 = same, 1 = drift, 2 = error. |
 
 Only one update can run at a time. The lock is `C:\bai\lock\umrt.lock` (UmRT),
 `%ProgramData%\Beckhoff\TwinCAT\3.1\boot-update.lock` (local) or `plc-release.lock` on the BSD
-host. The evidence folder of `install` has `install.json`, `preflight\`, `transaction.json` and
-one log for each step. These commands do not prove that the hardware is ready: physical
+host. The evidence folder of `install` has `install.json`, `preflight\`, `transaction.json`,
+`boot-before.zip` (Windows) and one log for each step. These commands do not prove that the hardware is ready: physical
 acceptance is a separate step.
 
 Exit code: 0 = pass, 1 = refused or failed (the evidence gives the reason), 2 = wrong arguments.

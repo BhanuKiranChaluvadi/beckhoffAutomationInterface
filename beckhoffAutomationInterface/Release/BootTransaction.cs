@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using BeckhoffAutomationInterface.Machines;
@@ -52,9 +53,27 @@ namespace BeckhoffAutomationInterface.Release
         static void Save(string record, Dictionary<string, object> transaction) =>
             File.WriteAllText(record, Encode(transaction), new UTF8Encoding(false));
 
+        /// <summary>The old image as one ZIP, the copy to keep off the IPC. It is read back and must
+        /// hold the same files; archive.sha256 holds its hash.</summary>
+        internal static string Archive(string source, List<Dictionary<string, object>> files, string archive)
+        {
+            using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+                foreach (var file in files) zip.CreateEntryFromFile(Path.Combine(source, Text(file, "path")), Text(file, "path"));
+            var read = new List<Dictionary<string, object>>();
+            using (var zip = ZipFile.OpenRead(archive))
+                foreach (var entry in zip.Entries)
+                    using (var stream = entry.Open())
+                        read.Add(new Dictionary<string, object> { ["path"] = entry.FullName, ["bytes"] = entry.Length, ["sha256"] = Hash(stream).ToUpperInvariant() });
+            SameFiles(files, read, "Backup archive");
+            string hash = Hash(archive).ToUpperInvariant();
+            File.WriteAllText(archive + ".sha256", hash + "  " + Path.GetFileName(archive) + "\n");
+            return hash;
+        }
+
         /// <summary>Installs the payload folder into the boot folder. On a copy failure the old image
-        /// is put back (state RestoredAfterFailure) and the error is thrown again.</summary>
-        internal static Dictionary<string, object> Install(string payload, string boot, string record)
+        /// is put back (state RestoredAfterFailure) and the error is thrown again. With archive, the
+        /// old image is also written to that new ZIP before the first boot file changes.</summary>
+        internal static Dictionary<string, object> Install(string payload, string boot, string record, string archive = null)
         {
             payload = Path.GetFullPath(payload).TrimEnd('\\');
             boot = Path.GetFullPath(boot).TrimEnd('\\');
@@ -80,9 +99,11 @@ namespace BeckhoffAutomationInterface.Release
             Directory.CreateDirectory(backup);
             CopyFiles(boot, backup, before);
             SameFiles(before, Evidence(backup), "Retained rollback image");
+            string archiveHash = archive == null ? null : Archive(backup, before, archive);
             SameFiles(before, BootInventory(boot), "Current boot before replacement");
             var transaction = new Dictionary<string, object> { ["schemaVersion"] = 2, ["state"] = "Prepared", ["boot"] = boot, ["stage"] = stage,
                 ["backup"] = backup, ["before"] = before, ["installed"] = Evidence(stage), ["journalPreserved"] = true };
+            if (archive != null) { transaction["archive"] = Path.GetFullPath(archive); transaction["archiveSha256"] = archiveHash; }
             Directory.CreateDirectory(Path.GetDirectoryName(record));
             Save(record, transaction);
             try

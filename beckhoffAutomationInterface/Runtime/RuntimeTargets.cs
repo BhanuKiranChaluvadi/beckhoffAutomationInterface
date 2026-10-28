@@ -60,7 +60,8 @@ namespace BeckhoffAutomationInterface.Runtime
             ? throw new InvalidOperationException("Remote boot files must be accessed on the target IPC.")
             : target == UmRt ? Path.Combine(UmRtFolder, "Boot") : Path.Combine(TwinCatData, "Boot");
 
-        /// <summary>Folders that hold the target's license files (*.tclrs).</summary>
+        /// <summary>Folders that hold the target's license files (*.tclrs). TwinCAT 4026 keeps the
+        /// local licenses in 3.1\License; older builds in Target\License.</summary>
         public static IReadOnlyList<string> LicenseFolders(string target)
         {
             if (IsNetId(Normalize(target))) return new string[0];
@@ -68,6 +69,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 return new[] { Path.Combine(UmRtFolder, "Target", "License") };
             return new[]
             {
+                Path.Combine(TwinCatData, "License"),
                 Path.Combine(TwinCatData, "Target", "License"),
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Beckhoff", "TwinCAT", "3.1", "Target", "License"),
             };

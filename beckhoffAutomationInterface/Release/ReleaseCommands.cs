@@ -20,13 +20,14 @@ namespace BeckhoffAutomationInterface.Release
             "release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
             PackageUsage;
         internal const string PackageUsage =
-            "package preflight --current <zip> --current-sha256 <hash> --service-project <folder> --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
-            "package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash> --service-project <folder> --evidence <new-folder>\n" +
+            "package preflight --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
+            "package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   --evidence <new-folder>\n" +
             "                [--target local|umrt] [--rehearsal] | --target <AMS-Net-ID> --ssh <user@host>   --yes\n" +
+            "package rollback --evidence <install-folder> [--target local|umrt] --yes\n" +
             "package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>";
 
         internal static bool Handles(string[] args) => args.Length >= 2 &&
-            (args[0] == "release" || (args[0] == "package" && (args[1] == "preflight" || args[1] == "install" || args[1] == "drift")));
+            (args[0] == "release" || (args[0] == "package" && (args[1] == "preflight" || args[1] == "install" || args[1] == "rollback" || args[1] == "drift")));
 
         static string Manifest(Dictionary<string, string> o) => MachineManifest.Find(Get(o, "--manifest"), Directory.GetCurrentDirectory());
 
@@ -70,20 +71,31 @@ namespace BeckhoffAutomationInterface.Release
                         o = Options(args, new[] { "--baseline", "--sha256", "--project", "--report" }, new string[0]);
                         return ProjectDrift.Run(o["--baseline"], o["--sha256"], o["--project"], o["--report"]);
                     case "package preflight":
-                        o = Options(args, new[] { "--current", "--current-sha256", "--service-project", "--report" }, new[] { "--target" }, new[] { "--rehearsal" });
-                        PackageInstaller.Preflight(new UpdateRequest { Current = o["--current"], CurrentSha256 = o["--current-sha256"], ServiceProject = o["--service-project"],
-                            Report = o["--report"], Target = Get(o, "--target", "local"), Rehearsal = Get(o, "--rehearsal") != null }, host);
+                        o = Options(args, new[] { "--report" }, new[] { "--current", "--current-sha256", "--service-project", "--target" }, new[] { "--rehearsal", "--legacy" });
+                        PackageInstaller.Preflight(new UpdateRequest { Current = Get(o, "--current"), CurrentSha256 = Get(o, "--current-sha256"), ServiceProject = Get(o, "--service-project"),
+                            Report = o["--report"], Target = Get(o, "--target", "local"), Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--legacy") != null }, host);
                         return 0;
                     case "package install":
-                        o = Options(args, new[] { "--package", "--sha256", "--current", "--current-sha256", "--service-project", "--evidence" }, new[] { "--target", "--ssh" }, new[] { "--rehearsal", "--yes" });
+                        o = Options(args, new[] { "--package", "--sha256", "--evidence" }, new[] { "--current", "--current-sha256", "--service-project", "--target", "--ssh" },
+                            new[] { "--rehearsal", "--legacy", "--yes" });
+                        var install = new UpdateRequest { Package = o["--package"], PackageSha256 = o["--sha256"], Current = Get(o, "--current"), CurrentSha256 = Get(o, "--current-sha256"),
+                            ServiceProject = Get(o, "--service-project"), Evidence = o["--evidence"], Target = Get(o, "--target", "local"), SshHost = Get(o, "--ssh"),
+                            Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--legacy") != null };
                         if (Get(o, "--yes") == null)
                         {
                             Console.WriteLine("Nothing changed. Repeat with --yes to install: the runtime goes to Config, then to Run.");
                             return 1;
                         }
-                        PackageInstaller.Install(new UpdateRequest { Package = o["--package"], PackageSha256 = o["--sha256"], Current = o["--current"], CurrentSha256 = o["--current-sha256"],
-                            ServiceProject = o["--service-project"], Evidence = o["--evidence"], Target = Get(o, "--target", "local"), SshHost = Get(o, "--ssh"),
-                            Rehearsal = Get(o, "--rehearsal") != null }, host);
+                        PackageInstaller.Install(install, host);
+                        return 0;
+                    case "package rollback":
+                        o = Options(args, new[] { "--evidence" }, new[] { "--target" }, new[] { "--yes" });
+                        if (Get(o, "--yes") == null)
+                        {
+                            Console.WriteLine("Nothing changed. Repeat with --yes to put the previous boot image back: the runtime goes to Config, then to Run.");
+                            return 1;
+                        }
+                        PackageInstaller.Rollback(new UpdateRequest { Evidence = o["--evidence"], Target = Get(o, "--target", "local") }, host);
                         return 0;
                     default:
                         throw new ArgumentException("Unknown command: " + command + ".");

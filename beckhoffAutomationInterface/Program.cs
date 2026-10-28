@@ -212,6 +212,9 @@ namespace BeckhoffAutomationInterface
                 case "test":
                     Environment.Exit(Runtime.RuntimeCommands.Test(args));
                     break;
+                case "license":
+                    Environment.Exit(Runtime.LicenseCommands.Run(args, shell));
+                    break;
                 case "doctor":
                     if (args.Length != 1)
                     {

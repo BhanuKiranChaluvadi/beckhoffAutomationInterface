@@ -36,9 +36,7 @@ namespace BeckhoffAutomationInterface.Runtime
             try { localNetId = AdsClient.LocalNetId(); }
             catch (Exception ex) { Console.WriteLine("  ADS router: {0}", ex.Message); }
             if (localNetId != null)
-                ReportRuntime(localNetId, Path.Combine(twinCatData, "Boot"),
-                    new[] { Path.Combine(twinCatData, "Target", "License"),
-                            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Beckhoff", "TwinCAT", "3.1", "Target", "License") });
+                ReportRuntime(localNetId, Path.Combine(twinCatData, "Boot"), RuntimeTargets.LicenseFolders(RuntimeTargets.Local));
 
             string runtimes = Path.Combine(twinCatData, "Runtimes");
             foreach (string dir in Directory.Exists(runtimes) ? Directory.GetDirectories(runtimes) : new string[0])
@@ -75,7 +73,7 @@ namespace BeckhoffAutomationInterface.Runtime
             List<string> licenses = licenseFolders.Where(Directory.Exists)
                 .SelectMany(d => Directory.GetFiles(d, "*.tclrs")).ToList();
             if (licenses.Count == 0)
-                Console.WriteLine("  License:      none found — TwinCAT cannot go to Run (create a 7-day trial license in XAE)");
+                Console.WriteLine("  License:      no license file — without one (or a license dongle) TwinCAT cannot go to Run; see 'bai license check'");
             foreach (string file in licenses)
             {
                 DateTime? expires = LicenseExpiry(File.ReadAllText(file));

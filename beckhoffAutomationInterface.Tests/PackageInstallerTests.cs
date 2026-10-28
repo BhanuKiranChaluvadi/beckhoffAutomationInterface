@@ -206,6 +206,84 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal("Installed", Read(Path.Combine(host.Root, "evidence", "transaction.json"))["state"]);
             Assert.Equal(new[] { "online", "config", "confirm-config", "run", "identity" }, host.Steps);
             Assert.Equal("run", host.Mode);
+            Assert.True(File.Exists(Path.Combine(host.Root, "evidence", PackageInstaller.BackupArchive + ".sha256")));
+        }
+
+        /// <summary>A legacy request: no current package or service project.</summary>
+        UpdateRequest Legacy(FakeHost host, string package) => new UpdateRequest
+        {
+            Package = package, PackageSha256 = Hash(package), Evidence = Path.Combine(host.Root, "evidence"), Target = "local", Boot = host.Boot,
+            LockFile = Path.Combine(host.Root, "update.lock"), Legacy = true,
+        };
+
+        /// <summary>The files of a ZIP as evidence records.</summary>
+        static List<Dictionary<string, object>> ZipRecords(string zipPath)
+        {
+            using (var zip = ZipFile.OpenRead(zipPath))
+                return zip.Entries.Select(e => { using (var s = e.Open()) return new Dictionary<string, object> { ["path"] = e.FullName, ["bytes"] = e.Length, ["sha256"] = Hash(s) }; }).ToList();
+        }
+
+        [Fact]
+        public void LegacyInstallKeepsTheOldImageAsAZip()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("legacy", a);
+            File.WriteAllText(Path.Combine(host.Boot, "Plc", "Port_851.bootdata"), "persistent");
+            var before = BootTransaction.BootInventory(host.Boot);
+            var record = PackageInstaller.Install(Legacy(host, b), host);
+            string evidence = Path.Combine(host.Root, "evidence"), archive = Path.Combine(evidence, PackageInstaller.BackupArchive);
+            Assert.Equal("Installed", record["status"]);
+            Assert.Equal(true, record["legacy"]);
+            Assert.Equal("b", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
+            Assert.Equal("persistent", File.ReadAllText(Path.Combine(host.Boot, "Plc", "Port_851.bootdata")));
+            SameFiles(before, ZipRecords(archive), "Backup archive");
+            Assert.StartsWith(Hash(archive).ToUpperInvariant(), File.ReadAllText(archive + ".sha256"));
+            Assert.Equal(Hash(archive).ToUpperInvariant(), record["backupArchiveSha256"]);
+            Assert.Equal(true, Read(Path.Combine(evidence, "preflight", "preflight.json"))["legacy"]);
+            Assert.Equal(new[] { "online", "config", "confirm-config", "run", "identity" }, host.Steps);
+        }
+
+        [Fact]
+        public void LegacyWrongIdentityRollsBackAndChecksTheOldPlcRuns()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), wrong = Package("wrong", "TwinCAT RT (x64)");
+            var host = Host("legacy-wrong", a);
+            var before = BootTransaction.BootInventory(host.Boot);
+            Assert.Contains("restored", Assert.Throws<InvalidOperationException>(() => PackageInstaller.Install(Legacy(host, wrong), host)).Message);
+            SameFiles(before, BootTransaction.BootInventory(host.Boot), "Rolled back boot");
+            Assert.Equal("RolledBack", Read(Path.Combine(host.Root, "evidence", "install.json"))["status"]);
+            Assert.Contains("rollback-identity", host.Steps);
+        }
+
+        [Fact]
+        public void RollbackPutsTheOldImageBackOnce()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("rollback", a);
+            var before = BootTransaction.BootInventory(host.Boot);
+            PackageInstaller.Install(Request(host, b, a), host);
+            var rollback = new UpdateRequest { Evidence = Path.Combine(host.Root, "evidence"), Target = "local", Boot = host.Boot, LockFile = Path.Combine(host.Root, "update.lock") };
+            host.Steps.Clear();
+            Assert.Equal("RolledBack", PackageInstaller.Rollback(rollback, host)["status"]);
+            SameFiles(before, BootTransaction.BootInventory(host.Boot), "Rolled back boot");
+            Assert.Equal(new[] { "config", "confirm-config", "run", "identity" }, host.Steps);
+            Assert.Equal("RolledBack", Read(Path.Combine(host.Root, "evidence", "rollback", "rollback.json"))["status"]);
+            Assert.Throws<IOException>(() => PackageInstaller.Rollback(rollback, host));
+        }
+
+        [Fact]
+        public void CurrentPackageOrLegacyNotBoth()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("options", a);
+            var both = Request(host, b, a); both.Legacy = true;
+            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(both, host));
+            var neither = Legacy(host, b); neither.Legacy = false;
+            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(neither, host));
+            var bsd = Legacy(host, b); bsd.Target = "1.2.3.4.1.1"; bsd.SshHost = "fixture@fixture";
+            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(bsd, host));
+            Assert.Empty(host.Steps);
+            Assert.False(Directory.Exists(Path.Combine(host.Root, "evidence")));
         }
 
         [Fact]

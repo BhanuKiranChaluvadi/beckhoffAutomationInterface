@@ -243,7 +243,7 @@ namespace BeckhoffAutomationInterface
         /// or the timeout is reached. Handles RPC_E_SERVERCALL_RETRYLATER (0x8001010A)
         /// which VS raises while its message pump is busy initializing.
         /// </summary>
-        static void WaitForVsToLoad(EnvDTE80.DTE2 dte)
+        internal static void WaitForVsToLoad(EnvDTE80.DTE2 dte)
         {
             int elapsed = 0;
             while (elapsed < VS_LOAD_TIMEOUT_MS)

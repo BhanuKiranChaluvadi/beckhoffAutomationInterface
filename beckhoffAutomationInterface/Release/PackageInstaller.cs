@@ -44,7 +44,9 @@ namespace BeckhoffAutomationInterface.Release
     {
         public string Package, PackageSha256, Current, CurrentSha256, ServiceProject, Evidence, Report, SshHost;
         public string Target = RuntimeTargets.Local;
-        public bool Rehearsal;
+        /// <summary>Legacy: the machine has no bai package yet (its first update), so there is no
+        /// current package or service project to compare.</summary>
+        public bool Rehearsal, Legacy;
         /// <summary>Default: the boot folder and update lock of the target.</summary>
         public string Boot, LockFile;
     }
@@ -60,6 +62,27 @@ namespace BeckhoffAutomationInterface.Release
     {
         internal const string UmRtLock = @"C:\bai\lock\umrt.lock";
         const string OsX64 = "TwinCAT OS (x64)";
+        const string OnlineChanges = "TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt";
+        /// <summary>The expect-file variant of a legacy machine: only the online-change counter.</summary>
+        const string LegacyVariant = "legacy";
+        /// <summary>The copy of the old boot image in the evidence folder.</summary>
+        internal const string BackupArchive = "boot-before.zip";
+
+        /// <summary>Either the installed package (--current, --current-sha256, --service-project) or --legacy.</summary>
+        static void CheckCurrent(UpdateRequest q)
+        {
+            if (q.Legacy ? (q.Current ?? q.CurrentSha256 ?? q.ServiceProject) != null : q.Current == null || q.CurrentSha256 == null || q.ServiceProject == null)
+                throw new ArgumentException("Give --current, --current-sha256 and --service-project, or --legacy for a machine without a bai package.");
+            if (q.Legacy && q.Rehearsal) throw new ArgumentException("--legacy is for a machine, not for a rehearsal.");
+        }
+
+        /// <summary>The expect file and variant that prove the old program runs again after a rollback.</summary>
+        static (string Expect, string Variant) OldIdentity(string evidence, bool legacy, string machine) => legacy
+            ? (Path.Combine(evidence, "preflight", "current.expect.json"), LegacyVariant)
+            : (Path.Combine(evidence, "preflight", "identity.expect.json"), machine);
+
+        static string LockPath(UpdateRequest q, string target, string boot) =>
+            q.LockFile ?? (target == RuntimeTargets.UmRt ? UmRtLock : Path.Combine(Path.GetDirectoryName(boot), "boot-update.lock"));
 
         static void Write(string path, object value) => File.WriteAllText(path, Encode(value), new UTF8Encoding(false));
 
@@ -109,6 +132,8 @@ namespace BeckhoffAutomationInterface.Release
         /// <summary>Checks the CURRENT installed release before it is replaced. No runtime writes.</summary>
         internal static Dictionary<string, object> Preflight(UpdateRequest q, IUpdateHost host)
         {
+            CheckCurrent(q);
+            if (q.Legacy) return LegacyPreflight(q, host);
             string target = RuntimeTargets.Normalize(q.Target);
             if (q.Rehearsal && target != RuntimeTargets.UmRt) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
             string project = Path.GetFullPath(q.ServiceProject), report = Path.GetFullPath(q.Report);
@@ -131,7 +156,7 @@ namespace BeckhoffAutomationInterface.Release
                 if (ProjectDrift.Run(baseline, baselineHash, project, Path.Combine(report, "drift.json")) != 0)
                     throw new InvalidDataException("Saved project differs from the installed release. Export and reconcile it before updating.");
                 string expect = Path.Combine(report, "current.expect.json");
-                WriteChecks(identity, machine, Check("TwinCAT_SystemInfoVarList._AppInfo.OnlineChangeCnt", "UDINT", 0), expect);
+                WriteChecks(identity, machine, Check(OnlineChanges, "UDINT", 0), expect);
                 if (host.Bai(Path.Combine(report, "online.log"), "verify", "--target", target, "--expect", expect, "--variant", machine) != 0)
                     throw new InvalidOperationException("Live identity or online-change counter differs. No update is permitted.");
                 record["status"] = "Passed";
@@ -148,10 +173,41 @@ namespace BeckhoffAutomationInterface.Release
             }
         }
 
+        /// <summary>The preflight of a machine without a bai package: no saved project or identity to
+        /// compare. The PLC must run with no online change, so that the boot image is the running
+        /// program and a rollback brings that program back. No runtime writes.</summary>
+        static Dictionary<string, object> LegacyPreflight(UpdateRequest q, IUpdateHost host)
+        {
+            string target = RuntimeTargets.Normalize(q.Target), report = Path.GetFullPath(q.Report);
+            if (Directory.Exists(report) || File.Exists(report)) throw new IOException("Use a new report directory.");
+            Directory.CreateDirectory(report);
+            var record = new Dictionary<string, object> { ["schemaVersion"] = 1, ["status"] = "Checking", ["target"] = target, ["legacy"] = true };
+            try
+            {
+                string expect = Path.Combine(report, "current.expect.json");
+                Write(expect, new Dictionary<string, object> { ["variants"] = new Dictionary<string, object> { [LegacyVariant] = new[] { Check(OnlineChanges, "UDINT", 0) } } });
+                if (host.Bai(Path.Combine(report, "online.log"), "verify", "--target", target, "--expect", expect, "--variant", LegacyVariant) != 0)
+                    throw new InvalidOperationException("The PLC is not in Run or has online changes. No update is permitted.");
+                record["status"] = "Passed";
+                record["baiSha256"] = host.BaiSha256;
+                Console.WriteLine("PASS: legacy machine, PLC in Run, online-change counter 0. There is no installed package to compare.");
+                return record;
+            }
+            catch (Exception ex) { record["status"] = "Failed"; record["error"] = ex.Message; throw; }
+            finally
+            {
+                record["completedUtc"] = DateTime.UtcNow.ToString("o");
+                Write(Path.Combine(report, "preflight.json"), record);
+            }
+        }
+
+        /// <summary>Both packages, verified; current is null for a legacy machine.</summary>
         static (Dictionary<string, object> Candidate, Dictionary<string, object> Current) Packages(UpdateRequest q)
         {
             var candidate = PackageVerifier.Verify(q.Package, q.PackageSha256);
-            var current = PackageVerifier.Verify(q.Current, q.CurrentSha256);
+            var current = q.Legacy ? null : PackageVerifier.Verify(q.Current, q.CurrentSha256);
+            if (Number(candidate, "schemaVersion") != 2 || (current != null && Text(candidate, "machine") != Text(current, "machine")))
+                throw new InvalidDataException("Candidate identity/machine does not match the installed release.");
             return (candidate, current);
         }
 
@@ -172,24 +228,26 @@ namespace BeckhoffAutomationInterface.Release
             string target = RuntimeTargets.Normalize(q.Target);
             if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt) throw new ArgumentException("A Windows update runs on the IPC itself: --target local or umrt. For TwinCAT/BSD give --ssh.");
             if (q.Rehearsal && target != RuntimeTargets.UmRt) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
+            CheckCurrent(q);
             string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
             string evidence = NewEvidence(q, boot);
             var (candidate, current) = Packages(q);
             string machine = Text(candidate, "machine");
-            if (Number(candidate, "schemaVersion") != 2 || machine != Text(current, "machine")) throw new InvalidDataException("Candidate identity/machine does not match the installed release.");
             if (!q.Rehearsal && Text(candidate, "kind") != "ReleaseCandidate") throw new InvalidDataException("Development packages cannot be installed on a machine.");
-            if ((string)Xml(Path.Combine(boot, "CurrentConfig.xml")).Root.Attribute("Platform") != Text(candidate, "targetPlatform"))
-                throw new InvalidDataException("Candidate platform differs from the current runtime boot platform.");
-            string lockPath = q.LockFile ?? (target == RuntimeTargets.UmRt ? UmRtLock : Path.Combine(Path.GetDirectoryName(boot), "boot-update.lock"));
+            string bootPlatform = (string)Xml(Path.Combine(boot, "CurrentConfig.xml")).Root.Attribute("Platform");
+            if (bootPlatform != Text(candidate, "targetPlatform"))
+                throw new InvalidDataException("Candidate platform " + Text(candidate, "targetPlatform") + " differs from the current runtime boot platform " + bootPlatform + ".");
+            string lockPath = LockPath(q, target, boot);
             Directory.CreateDirectory(Path.GetDirectoryName(lockPath));
             FileStream held = MachineCommands.TryLock(lockPath) ?? throw new IOException("Another update or test holds the lock: " + lockPath);
             Directory.CreateDirectory(evidence);
             var record = new Dictionary<string, object> { ["schemaVersion"] = 1, ["status"] = "Checking", ["machine"] = machine, ["packageSha256"] = q.PackageSha256,
-                ["target"] = target, ["rehearsal"] = q.Rehearsal, ["physicalAcceptance"] = false };
+                ["target"] = target, ["rehearsal"] = q.Rehearsal, ["legacy"] = q.Legacy, ["physicalAcceptance"] = false };
+            var (oldExpect, oldVariant) = OldIdentity(evidence, q.Legacy, current == null ? null : Text(current, "machine"));
             try
             {
                 Preflight(new UpdateRequest { Current = q.Current, CurrentSha256 = q.CurrentSha256, ServiceProject = q.ServiceProject,
-                    Report = Path.Combine(evidence, "preflight"), Target = target, Rehearsal = q.Rehearsal }, host);
+                    Report = Path.Combine(evidence, "preflight"), Target = target, Rehearsal = q.Rehearsal, Legacy = q.Legacy }, host);
                 using (var zip = ZipFile.OpenRead(q.Package))
                     foreach (var entry in PackageVerifier.Entries(zip).Where(e => e.Key.StartsWith("boot/", StringComparison.Ordinal) || e.Key == "identity.expect.json"))
                     {
@@ -203,7 +261,9 @@ namespace BeckhoffAutomationInterface.Release
                 {
                     Step(host, evidence, "config", "runtime-state", "--target", target, "--state", "config", "--yes");
                     Step(host, evidence, "confirm-config", "runtime-state", "--target", target, "--expect", "config");
-                    BootTransaction.Install(Path.Combine(evidence, "boot"), boot, transactionFile);
+                    var transaction = BootTransaction.Install(Path.Combine(evidence, "boot"), boot, transactionFile, Path.Combine(evidence, BackupArchive));
+                    record["backupArchive"] = transaction["archive"];
+                    record["backupArchiveSha256"] = transaction["archiveSha256"];
                     Step(host, evidence, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
                     Step(host, evidence, "identity", "verify", "--target", target, "--expect", installed, "--variant", machine);
                     record["status"] = "Installed";
@@ -221,7 +281,7 @@ namespace BeckhoffAutomationInterface.Release
                             BootTransaction.Restore(transactionFile);
                     }
                     Step(host, evidence, "rollback-run", "runtime-state", "--target", target, "--state", "run", "--yes");
-                    Step(host, evidence, "rollback-identity", "verify", "--target", target, "--expect", Path.Combine(evidence, "preflight", "identity.expect.json"), "--variant", Text(current, "machine"));
+                    Step(host, evidence, "rollback-identity", "verify", "--target", target, "--expect", oldExpect, "--variant", oldVariant);
                     record["status"] = "RolledBack";
                     throw new InvalidOperationException("Installation failed; the previous boot image and identity were restored. " + ex.Message);
                 }
@@ -234,6 +294,48 @@ namespace BeckhoffAutomationInterface.Release
                 held.Dispose();
             }
             Console.WriteLine("PASS: compiled files installed and live identity verified. Evidence: " + evidence);
+            Console.WriteLine("Copy " + Path.Combine(evidence, BackupArchive) + " and its .sha256 (the old boot image) off the IPC.");
+            return record;
+        }
+
+        /// <summary>'package rollback': puts back the image that an install replaced, for example after
+        /// a failed acceptance check. Config, restore, Run, then the old identity. The evidence folder of
+        /// the install gets a new 'rollback' folder; the replaced files go to Boot.rolled-back.&lt;id&gt;.</summary>
+        internal static Dictionary<string, object> Rollback(UpdateRequest q, IUpdateHost host)
+        {
+            string target = RuntimeTargets.Normalize(q.Target);
+            if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt) throw new ArgumentException("A Windows rollback runs on the IPC itself: --target local or umrt.");
+            string evidence = Path.GetFullPath(q.Evidence), transactionFile = Path.Combine(evidence, "transaction.json");
+            var installed = Read(Path.Combine(evidence, "install.json"));
+            if (Text(installed, "status") != "Installed") throw new InvalidOperationException("Only an installed update can be rolled back; install.json has status " + Text(installed, "status") + ".");
+            string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
+            if (!Names.Equals(Path.GetFullPath(Text(Read(transactionFile), "boot")).TrimEnd('\\'), boot))
+                throw new InvalidDataException("The update was installed in another boot folder: " + Text(Read(transactionFile), "boot"));
+            string folder = Path.Combine(evidence, "rollback");
+            if (Directory.Exists(folder)) throw new IOException("This update was already rolled back (or a rollback started): " + folder);
+            bool legacy = installed.TryGetValue("legacy", out object flag) && flag is bool b && b;
+            var (oldExpect, oldVariant) = OldIdentity(evidence, legacy, Text(installed, "machine"));
+            string lockPath = LockPath(q, target, boot);
+            FileStream held = MachineCommands.TryLock(lockPath) ?? throw new IOException("Another update or test holds the lock: " + lockPath);
+            Directory.CreateDirectory(folder);
+            var record = new Dictionary<string, object> { ["schemaVersion"] = 1, ["status"] = "Checking", ["target"] = target, ["install"] = evidence };
+            try
+            {
+                Step(host, folder, "config", "runtime-state", "--target", target, "--state", "config", "--yes");
+                Step(host, folder, "confirm-config", "runtime-state", "--target", target, "--expect", "config");
+                record["replacedImage"] = BootTransaction.Restore(transactionFile)["replacedImage"];
+                Step(host, folder, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                Step(host, folder, "identity", "verify", "--target", target, "--expect", oldExpect, "--variant", oldVariant);
+                record["status"] = "RolledBack";
+            }
+            catch (Exception ex) { record["status"] = "Failed"; record["error"] = ex.Message; throw; }
+            finally
+            {
+                record["completedUtc"] = DateTime.UtcNow.ToString("o");
+                Write(Path.Combine(folder, "rollback.json"), record);
+                held.Dispose();
+            }
+            Console.WriteLine("PASS: the previous boot image is back and runs. Evidence: " + folder);
             return record;
         }
 
@@ -246,10 +348,12 @@ namespace BeckhoffAutomationInterface.Release
             string target = RuntimeTargets.Normalize(q.Target), ssh = q.SshHost;
             if (!Regex.IsMatch(ssh, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*\z")) throw new ArgumentException("--ssh must be user@host.");
             if (q.Rehearsal) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
+            if (q.Legacy) throw new ArgumentException("--legacy is for a Windows IPC only.");
+            CheckCurrent(q);
             string evidence = NewEvidence(q, q.ServiceProject);
             var (candidate, current) = Packages(q);
             string machine = Text(candidate, "machine");
-            if (Number(candidate, "schemaVersion") != 2 || Text(candidate, "kind") != "ReleaseCandidate" || Text(candidate, "targetPlatform") != OsX64 || machine != Text(current, "machine"))
+            if (Text(candidate, "kind") != "ReleaseCandidate" || Text(candidate, "targetPlatform") != OsX64)
                 throw new InvalidDataException("Candidate must be an OS x64 release for the current machine.");
             Directory.CreateDirectory(evidence);
             string remote = "/var/tmp/plc-release-" + Guid.NewGuid().ToString("N");
