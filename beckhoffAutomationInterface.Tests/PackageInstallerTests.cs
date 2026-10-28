@@ -274,6 +274,42 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<IOException>(() => PackageInstaller.Rollback(rollback, host));
         }
 
+        /// <summary>No --current, no --legacy: bai finds the installed package beside the boot folder.</summary>
+        UpdateRequest Auto(FakeHost host, string package, string evidence) => new UpdateRequest
+        {
+            Package = package, PackageSha256 = Hash(package), Evidence = Path.Combine(host.Root, evidence), Target = "local", Boot = host.Boot,
+            LockFile = Path.Combine(host.Root, "update.lock"),
+        };
+
+        [Fact]
+        public void BaiRemembersTheInstalledPackageForTheNextUpdateAndRollback()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)"), c = Package("c", "TwinCAT RT (x64)");
+            var host = Host("auto", a);
+            string current = Path.Combine(host.Root, PackageInstaller.InstalledStore, "current.json");
+
+            var first = PackageInstaller.Install(Auto(host, b, "e1"), host);
+            Assert.Equal(true, first["legacy"]);
+            Assert.StartsWith("first install", (string)first["currentSource"]);
+            Assert.Equal(Hash(b).ToUpperInvariant(), Read(current)["sha256"]);
+
+            var second = PackageInstaller.Install(Auto(host, c, "e2"), host);
+            Assert.Equal(false, second["legacy"]);
+            Assert.Equal("installed by bai", second["currentSource"]);
+            Assert.Equal(Hash(c).ToUpperInvariant(), Read(current)["sha256"]);
+            Assert.Equal("c", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
+
+            var rollback = new UpdateRequest { Evidence = Path.Combine(host.Root, "e2"), Target = "local", Boot = host.Boot, LockFile = Path.Combine(host.Root, "update.lock") };
+            PackageInstaller.Rollback(rollback, host);
+            Assert.Equal("b", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
+            Assert.Equal(Hash(b).ToUpperInvariant(), Read(current)["sha256"]);
+
+            rollback.Evidence = Path.Combine(host.Root, "e1");
+            PackageInstaller.Rollback(rollback, host);
+            Assert.Equal("a", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
+            Assert.False(File.Exists(current));
+        }
+
         [Fact]
         public void CheckOnlyRunsTheReadOnlyChecksAndChangesNothing()
         {
@@ -308,8 +344,8 @@ namespace BeckhoffAutomationInterface.Tests
             var host = Host("options", a);
             var both = Request(host, b, a); both.Legacy = true;
             Assert.Throws<ArgumentException>(() => PackageInstaller.Install(both, host));
-            var neither = Legacy(host, b); neither.Legacy = false;
-            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(neither, host));
+            var project = Legacy(host, b); project.Legacy = false; project.ServiceProject = Service;
+            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(project, host));
             var bsd = Legacy(host, b); bsd.Target = "1.2.3.4.1.1"; bsd.SshHost = "fixture@fixture";
             Assert.Throws<ArgumentException>(() => PackageInstaller.Install(bsd, host));
             Assert.Empty(host.Steps);

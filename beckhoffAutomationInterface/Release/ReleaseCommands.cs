@@ -20,8 +20,8 @@ namespace BeckhoffAutomationInterface.Release
             "release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--platform <name>] [--work <folder>] [--manifest <file>]\n" +
             PackageUsage;
         internal const string PackageUsage =
-            "package preflight --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
-            "package install --package <zip> [--sha256 <hash>] --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   [--evidence <new-folder>]\n" +
+            "package preflight --current <zip> --current-sha256 <hash> [--service-project <folder>] | --legacy   --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
+            "package install --package <zip> [--sha256 <hash>] [--current <zip> [--current-sha256 <hash>] [--service-project <folder>] | --legacy] [--evidence <new-folder>]\n" +
             "                [--target local|umrt] [--rehearsal] | --target <AMS-Net-ID> --ssh <user@host>   --yes\n" +
             "package rollback --evidence <install-folder> [--target local|umrt] --yes\n" +
             "package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>";

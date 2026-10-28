@@ -75,12 +75,65 @@ namespace BeckhoffAutomationInterface.Release
         /// <summary>The default parent of the evidence folders of a Windows install.</summary>
         internal const string DefaultUpdates = @"C:\bai\updates";
 
-        /// <summary>Either the installed package (--current, --current-sha256, --service-project) or --legacy.</summary>
+        /// <summary>Beside the boot folder: the packages that bai installed and current.json (the installed one).</summary>
+        internal const string InstalledStore = "Boot.installed";
+
+        /// <summary>Either the installed package (--current, --current-sha256; --service-project optional) or --legacy.</summary>
         static void CheckCurrent(UpdateRequest q)
         {
-            if (q.Legacy ? (q.Current ?? q.CurrentSha256 ?? q.ServiceProject) != null : q.Current == null || q.CurrentSha256 == null || q.ServiceProject == null)
-                throw new ArgumentException("Give --current, --current-sha256 and --service-project, or --legacy for a machine without a bai package.");
+            if (q.Legacy && (q.Current ?? q.CurrentSha256 ?? q.ServiceProject) != null)
+                throw new ArgumentException("--legacy means no installed package: do not give --current, --current-sha256 or --service-project.");
+            if (!q.Legacy && (q.Current == null || q.CurrentSha256 == null))
+                throw new ArgumentException("Give --current and --current-sha256, or --legacy for a machine without a bai package.");
+            if (q.ServiceProject != null && q.Current == null) throw new ArgumentException("--service-project needs --current.");
             if (q.Legacy && q.Rehearsal) throw new ArgumentException("--legacy is for a machine, not for a rehearsal.");
+        }
+
+        static string Store(string boot) => Path.Combine(Path.GetDirectoryName(boot), InstalledStore);
+
+        /// <summary>current.json of the target: the package that bai installed last; null when bai installed none.</summary>
+        internal static Dictionary<string, object> Installed(string boot)
+        {
+            string file = Path.Combine(Store(boot), "current.json");
+            return File.Exists(file) ? Read(file) : null;
+        }
+
+        /// <summary>The current package when the command line names none: the one bai installed on this
+        /// target, else a first install (legacy). Returns where the answer came from (evidence).</summary>
+        static string ResolveCurrent(UpdateRequest q, string boot)
+        {
+            if (q.Legacy) return "legacy (--legacy)";
+            if (q.Current != null)
+            {
+                if (q.CurrentSha256 == null && File.Exists(q.Current + ".sha256"))
+                    q.CurrentSha256 = File.ReadAllText(q.Current + ".sha256").Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                return "--current";
+            }
+            if (q.ServiceProject != null) return "--current missing";
+            var installed = Installed(boot);
+            if (installed != null)
+            {
+                q.Current = Path.Combine(Store(boot), Text(installed, "file"));
+                q.CurrentSha256 = Text(installed, "sha256");
+                Console.WriteLine("Current package: {0} {1}, installed by bai {2}.", Text(installed, "machine"), Field(installed, "sourceTag"), Field(installed, "installedUtc"));
+                return "installed by bai";
+            }
+            q.Legacy = true;
+            Console.WriteLine("Current package: none installed by bai on this target. First install: the PLC must run with no online change; the whole boot folder is kept.");
+            return "first install (no package installed by bai)";
+        }
+
+        /// <summary>Keeps a copy of the installed package and makes it current.json. Returns the previous current.json (null: none).</summary>
+        static Dictionary<string, object> RecordInstalled(string boot, string package, string sha256, Dictionary<string, object> candidate)
+        {
+            string store = Store(boot), file = sha256.ToUpperInvariant() + ".zip", copy = Path.Combine(store, file);
+            Directory.CreateDirectory(store);
+            if (!File.Exists(copy)) File.Copy(package, copy);
+            CheckHash(Hash(copy), sha256);
+            var previous = Installed(boot);
+            Write(Path.Combine(store, "current.json"), new Dictionary<string, object> { ["machine"] = Text(candidate, "machine"), ["file"] = file,
+                ["sha256"] = sha256.ToUpperInvariant(), ["sourceTag"] = candidate.TryGetValue("sourceTag", out object tag) ? tag : null, ["installedUtc"] = DateTime.UtcNow.ToString("o") });
+            return previous;
         }
 
         /// <summary>The expect file and variant that prove the old program runs again after a rollback.</summary>
@@ -143,9 +196,10 @@ namespace BeckhoffAutomationInterface.Release
             if (q.Legacy) return LegacyPreflight(q, host);
             string target = RuntimeTargets.Normalize(q.Target);
             if (q.Rehearsal && target != RuntimeTargets.UmRt) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
-            string project = Path.GetFullPath(q.ServiceProject), report = Path.GetFullPath(q.Report);
-            if (!Directory.Exists(project)) throw new DirectoryNotFoundException("Service project not found: " + project);
-            BuildLocation.Assert(project, report);
+            // The saved service project is optional: without it there is no drift check (the live identity check stays).
+            string project = q.ServiceProject == null ? null : Path.GetFullPath(q.ServiceProject), report = Path.GetFullPath(q.Report);
+            if (project != null && !Directory.Exists(project)) throw new DirectoryNotFoundException("Service project not found: " + project);
+            if (project != null) BuildLocation.Assert(project, report);
             if (Directory.Exists(report) || File.Exists(report)) throw new IOException("Use a new report directory.");
             var package = PackageVerifier.Verify(q.Current, q.CurrentSha256);
             if (Number(package, "schemaVersion") != 2) throw new InvalidDataException("Update gate requires a schema 2 package with compiled identity.");
@@ -160,7 +214,9 @@ namespace BeckhoffAutomationInterface.Release
                 Extract(q.Current, "project.zip", baseline);
                 Extract(q.Current, "identity.expect.json", identity);
                 string baselineHash = Hash(baseline).ToUpperInvariant();
-                if (ProjectDrift.Run(baseline, baselineHash, project, Path.Combine(report, "drift.json")) != 0)
+                if (project == null)
+                    Console.WriteLine("SKIP: no saved service project (--service-project): no drift check.");
+                else if (ProjectDrift.Run(baseline, baselineHash, project, Path.Combine(report, "drift.json")) != 0)
                     throw new InvalidDataException("Saved project differs from the installed release. Export and reconcile it before updating.");
                 string expect = Path.Combine(report, "current.expect.json");
                 WriteChecks(identity, machine, Check(OnlineChanges, "UDINT", 0), expect);
@@ -235,8 +291,9 @@ namespace BeckhoffAutomationInterface.Release
             string target = RuntimeTargets.Normalize(q.Target);
             if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt) throw new ArgumentException("A Windows update runs on the IPC itself: --target local or umrt. For TwinCAT/BSD give --ssh.");
             if (q.Rehearsal && target != RuntimeTargets.UmRt) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
-            CheckCurrent(q);
             string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
+            string currentSource = ResolveCurrent(q, boot);
+            CheckCurrent(q);
             var (candidate, current) = Packages(q);
             string machine = Text(candidate, "machine");
             if (q.Evidence == null) q.Evidence = Path.Combine(DefaultUpdates, machine + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
@@ -267,7 +324,7 @@ namespace BeckhoffAutomationInterface.Release
             FileStream held = MachineCommands.TryLock(lockPath) ?? throw new IOException("Another update or test holds the lock: " + lockPath);
             Directory.CreateDirectory(evidence);
             var record = new Dictionary<string, object> { ["schemaVersion"] = 1, ["status"] = "Checking", ["machine"] = machine, ["packageSha256"] = q.PackageSha256,
-                ["target"] = target, ["rehearsal"] = q.Rehearsal, ["legacy"] = q.Legacy, ["physicalAcceptance"] = false };
+                ["target"] = target, ["rehearsal"] = q.Rehearsal, ["legacy"] = q.Legacy, ["currentSource"] = currentSource, ["physicalAcceptance"] = false };
             var (oldExpect, oldVariant) = OldIdentity(evidence, q.Legacy, current == null ? null : Text(current, "machine"));
             try
             {
@@ -318,6 +375,17 @@ namespace BeckhoffAutomationInterface.Release
                 Write(Path.Combine(evidence, "install.json"), record);
                 held.Dispose();
             }
+            // The program runs and is verified: a failure to keep the package copy only costs --current next time.
+            try
+            {
+                record["previousInstalled"] = RecordInstalled(boot, q.Package, q.PackageSha256, candidate);
+                record["installedPackage"] = Path.Combine(Store(boot), "current.json");
+                Write(Path.Combine(evidence, "install.json"), record);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidDataException)
+            {
+                Console.WriteLine("WARNING: could not keep a copy of the installed package (" + ex.Message + "). The next update needs --current.");
+            }
             Console.WriteLine("PASS: compiled files installed and live identity verified. Evidence: " + evidence);
             Console.WriteLine("Copy " + Path.Combine(evidence, BackupArchive) + " and its .sha256 (the old boot image) off the IPC.");
             return record;
@@ -352,6 +420,13 @@ namespace BeckhoffAutomationInterface.Release
                 Step(host, folder, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
                 Step(host, folder, "identity", "verify", "--target", target, "--expect", oldExpect, "--variant", oldVariant);
                 record["status"] = "RolledBack";
+                // The old program runs again: so is its package the installed one again (none after a first install).
+                if (installed.ContainsKey("installedPackage"))
+                {
+                    string current = Path.Combine(Store(boot), "current.json");
+                    if (installed.TryGetValue("previousInstalled", out object previous) && previous is Dictionary<string, object> before) Write(current, before);
+                    else if (File.Exists(current)) File.Delete(current);
+                }
             }
             catch (Exception ex) { record["status"] = "Failed"; record["error"] = ex.Message; throw; }
             finally
@@ -374,7 +449,7 @@ namespace BeckhoffAutomationInterface.Release
             if (!Regex.IsMatch(ssh, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*\z")) throw new ArgumentException("--ssh must be user@host.");
             if (q.Rehearsal) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
             if (q.Legacy) throw new ArgumentException("--legacy is for a Windows IPC only.");
-            if (q.Evidence == null) throw new ArgumentException("--ssh needs --evidence <new-folder>.");
+            if (q.Evidence == null || q.ServiceProject == null) throw new ArgumentException("--ssh needs --evidence <new-folder>, --current, --current-sha256 and --service-project.");
             CheckCurrent(q);
             string evidence = NewEvidence(q, q.ServiceProject);
             var (candidate, current) = Packages(q);
