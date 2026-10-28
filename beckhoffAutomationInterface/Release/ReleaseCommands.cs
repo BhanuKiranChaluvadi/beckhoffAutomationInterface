@@ -21,13 +21,23 @@ namespace BeckhoffAutomationInterface.Release
             PackageUsage;
         internal const string PackageUsage =
             "package preflight --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   --report <new-folder> [--target local|umrt|<AMS-Net-ID>] [--rehearsal]\n" +
-            "package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   --evidence <new-folder>\n" +
+            "package install --package <zip> [--sha256 <hash>] --current <zip> --current-sha256 <hash> --service-project <folder> | --legacy   [--evidence <new-folder>]\n" +
             "                [--target local|umrt] [--rehearsal] | --target <AMS-Net-ID> --ssh <user@host>   --yes\n" +
             "package rollback --evidence <install-folder> [--target local|umrt] --yes\n" +
             "package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>";
 
         internal static bool Handles(string[] args) => args.Length >= 2 &&
             (args[0] == "release" || (args[0] == "package" && (args[1] == "preflight" || args[1] == "install" || args[1] == "rollback" || args[1] == "drift")));
+
+        /// <summary>The hash in &lt;package&gt;.sha256 (written by release build) when --sha256 is not given.</summary>
+        static string HashFile(string package)
+        {
+            string file = package + ".sha256";
+            if (!File.Exists(file)) throw new ArgumentException("--sha256 is required: there is no " + Path.GetFileName(file) + " next to the package.");
+            string hash = File.ReadAllText(file).Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            Console.WriteLine("SHA256 from {0}: {1}", file, hash);
+            return hash;
+        }
 
         static string Manifest(Dictionary<string, string> o) => MachineManifest.Find(Get(o, "--manifest"), Directory.GetCurrentDirectory());
 
@@ -76,15 +86,20 @@ namespace BeckhoffAutomationInterface.Release
                             Report = o["--report"], Target = Get(o, "--target", "local"), Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--legacy") != null }, host);
                         return 0;
                     case "package install":
-                        o = Options(args, new[] { "--package", "--sha256", "--evidence" }, new[] { "--current", "--current-sha256", "--service-project", "--target", "--ssh" },
+                        o = Options(args, new[] { "--package" }, new[] { "--sha256", "--evidence", "--current", "--current-sha256", "--service-project", "--target", "--ssh" },
                             new[] { "--rehearsal", "--legacy", "--yes" });
-                        var install = new UpdateRequest { Package = o["--package"], PackageSha256 = o["--sha256"], Current = Get(o, "--current"), CurrentSha256 = Get(o, "--current-sha256"),
-                            ServiceProject = Get(o, "--service-project"), Evidence = o["--evidence"], Target = Get(o, "--target", "local"), SshHost = Get(o, "--ssh"),
-                            Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--legacy") != null };
+                        var install = new UpdateRequest { Package = o["--package"], PackageSha256 = Get(o, "--sha256") ?? HashFile(o["--package"]), Current = Get(o, "--current"),
+                            CurrentSha256 = Get(o, "--current-sha256"), ServiceProject = Get(o, "--service-project"), Evidence = Get(o, "--evidence"), Target = Get(o, "--target", "local"),
+                            SshHost = Get(o, "--ssh"), Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--legacy") != null };
                         if (Get(o, "--yes") == null)
                         {
-                            Console.WriteLine("Nothing changed. Repeat with --yes to install: the runtime goes to Config, then to Run.");
-                            return 1;
+                            if (install.SshHost != null)
+                            {
+                                Console.WriteLine("Nothing changed. Repeat with --yes to install: the runtime goes to Config, then to Run.");
+                                return 1;
+                            }
+                            // Without --yes: every read-only check, then stop.
+                            install.CheckOnly = true;
                         }
                         PackageInstaller.Install(install, host);
                         return 0;

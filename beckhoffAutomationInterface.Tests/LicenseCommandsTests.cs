@@ -61,6 +61,23 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void PackageLicensesComeFromTheBootDriversAndThePlcTmc()
+        {
+            string package = Path.Combine(work, "NFPro.zip");
+            using (var zip = System.IO.Compression.ZipFile.Open(package, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                void Entry(string name, string text) { using (var w = new StreamWriter(zip.CreateEntry(name).Open())) w.Write(text); }
+                Entry("boot/CurrentConfig.xml", "<TcBootProject><Drivers><Driver><ServiceName>TcIo</ServiceName></Driver><Driver><ServiceName>TcNc</ServiceName></Driver>" +
+                    "<Driver><ServiceName>TcPlc30</ServiceName></Driver></Drivers></TcBootProject>");
+                Entry("boot/Plc/Port_851.tmc", "<TcModuleClass><Licenses><License><LicenseId>{1eebbaaa-51e1-4750-9d6a-7b04116ea32b}</LicenseId><Comment>TF4110</Comment></License>" +
+                    "<License><LicenseId>{1EEBBAAA-51E1-4750-9D6A-7B04116EA32B}</LicenseId></License><License><LicenseId>{12345678-0000-0000-0000-000000000000}</LicenseId><Comment>TF9999 Other</Comment></License></Licenses></TcModuleClass>");
+            }
+            var required = LicenseCommands.FromPackage(package);
+            Assert.Equal(new[] { "TC3 ADS", "TC3 IO", "TC3 PLC", "TC3 NC PTP", "TC3 NC PTP Axis", "TC3 Temperature-Controller", "TF9999 Other" }, required.Select(r => r.Key));
+            Assert.Equal("{12345678-0000-0000-0000-000000000000}", required.Last().Value);
+        }
+
+        [Fact]
         public void ProjectSelectsEachLicenseOnce()
         {
             string xml = LicenseCommands.ProjectXml(new[] { LicenseCommands.Known["TC3 NC PTP"], LicenseCommands.Known["TC3 PLC"] });

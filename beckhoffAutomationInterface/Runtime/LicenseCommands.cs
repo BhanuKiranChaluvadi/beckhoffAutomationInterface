@@ -40,8 +40,8 @@ namespace BeckhoffAutomationInterface.Runtime
     static class LicenseCommands
     {
         internal const string Usage =
-            "license check [--target local|umrt] [--licenses <name[,name]>]\n" +
-            "license trial [--target local|umrt] --licenses <name[,name]> [--work <folder>] [--wait <minutes>]";
+            "license check [--target local|umrt] [--package <zip> | --licenses <name[,name]>]\n" +
+            "license trial [--target local|umrt] --package <zip> | --licenses <name[,name]>   [--work <folder>] [--wait <minutes>]";
 
         /// <summary>The TwinCAT 3 licenses bai can select: name -> license id. XAE selects a license by id.</summary>
         internal static readonly IReadOnlyDictionary<string, string> Known = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -72,6 +72,44 @@ namespace BeckhoffAutomationInterface.Runtime
             if (result.Count == 0) throw new ArgumentException("--licenses needs at least one license name.");
             return result;
         }
+
+        /// <summary>The licenses a compiled package needs, from its boot files: TC3 ADS always; TC3 IO,
+        /// TC3 PLC and TC3 NC PTP (+ Axis) for the TcIo, TcPlc30 and TcNc drivers of CurrentConfig.xml;
+        /// and each LicenseId that the PLC .tmc lists (its libraries, for example TF4110).</summary>
+        internal static List<KeyValuePair<string, string>> FromPackage(string package)
+        {
+            var names = new List<string> { "TC3 ADS" };
+            var ids = new List<KeyValuePair<string, string>>();
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(package))
+            {
+                var config = zip.GetEntry("boot/CurrentConfig.xml") ?? throw new InvalidDataException("Package has no boot/CurrentConfig.xml: " + package);
+                XDocument boot;
+                using (var stream = config.Open()) boot = XDocument.Load(stream);
+                var drivers = new HashSet<string>(boot.Descendants().Where(e => e.Name.LocalName == "ServiceName").Select(e => e.Value.Trim()), StringComparer.OrdinalIgnoreCase);
+                if (drivers.Contains("TcIo")) names.Add("TC3 IO");
+                if (drivers.Contains("TcPlc30")) names.Add("TC3 PLC");
+                if (drivers.Contains("TcNc")) names.AddRange(new[] { "TC3 NC PTP", "TC3 NC PTP Axis" });
+                foreach (var tmc in zip.Entries.Where(e => e.FullName.StartsWith("boot/Plc/", StringComparison.Ordinal) && e.FullName.EndsWith(".tmc", StringComparison.OrdinalIgnoreCase)))
+                {
+                    XDocument doc;
+                    using (var stream = tmc.Open()) doc = XDocument.Load(stream);
+                    foreach (XElement license in doc.Descendants().Where(e => e.Name.LocalName == "License"))
+                    {
+                        string id = license.Elements().FirstOrDefault(e => e.Name.LocalName == "LicenseId")?.Value.Trim().ToUpperInvariant();
+                        if (string.IsNullOrEmpty(id)) continue;
+                        string name = Known.FirstOrDefault(k => k.Value == id).Key ?? license.Elements().FirstOrDefault(e => e.Name.LocalName == "Comment")?.Value.Trim() ?? id;
+                        ids.Add(new KeyValuePair<string, string>(name, id));
+                    }
+                }
+            }
+            return names.Select(n => new KeyValuePair<string, string>(n, Known[n])).Concat(ids)
+                .GroupBy(p => p.Value).Select(g => g.First()).ToList();
+        }
+
+        /// <summary>The required licenses of a package that are missing or expired on the target (local or UmRT).</summary>
+        internal static List<string> Missing(string target, string package) =>
+            Check(Read(RuntimeTargets.LicenseFolders(target), new List<string>()), FromPackage(package), DateTime.Now)
+                .Where(c => c.File == null).Select(c => c.Name + " (" + c.Problem + ")").ToList();
 
         /// <summary>The LicenseInfo blocks of one .tclrs file.</summary>
         internal static IEnumerable<LicenseFile> Parse(string path, string xml)
@@ -158,17 +196,21 @@ namespace BeckhoffAutomationInterface.Runtime
             try
             {
                 if (args.Length < 2 || (args[1] != "check" && args[1] != "trial")) throw new ArgumentException("license needs a subcommand: check or trial.");
-                o = Release.ArtifactCommands.Options(args, new string[0], new[] { "--target", "--licenses", "--work", "--wait" });
+                o = Release.ArtifactCommands.Options(args, new string[0], new[] { "--target", "--licenses", "--package", "--work", "--wait" });
                 target = RuntimeTargets.Normalize(Release.ArtifactCommands.Get(o, "--target", RuntimeTargets.Local));
                 if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt)
                     throw new ArgumentException("license reads the license files on this PC: --target local or umrt. For an IPC, run bai on the IPC.");
-                string list = Release.ArtifactCommands.Get(o, "--licenses");
-                required = list == null ? null : Select(list);
-                if (args[1] == "trial" && required == null) throw new ArgumentException("license trial needs --licenses.");
+                string list = Release.ArtifactCommands.Get(o, "--licenses"), package = Release.ArtifactCommands.Get(o, "--package");
+                if (list != null && package != null) throw new ArgumentException("use --package or --licenses, not both.");
+                if (package != null && !File.Exists(package)) throw new ArgumentException("package not found: " + package);
+                required = list != null ? Select(list) : package != null ? FromPackage(package) : null;
+                if (args[1] == "trial" && required == null) throw new ArgumentException("license trial needs --package or --licenses.");
                 if (args[1] == "check" && (o.ContainsKey("--work") || o.ContainsKey("--wait"))) throw new ArgumentException("--work and --wait are for license trial.");
                 if (o.ContainsKey("--wait") && (!int.TryParse(o["--wait"], out waitMinutes) || waitMinutes < 1)) throw new ArgumentException("--wait needs a number of minutes (1 or more).");
             }
             catch (ArgumentException ex) { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 2; }
+            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is System.Xml.XmlException)
+            { Console.Error.WriteLine("FAIL: cannot read the package: " + ex.Message); return 1; }
 
             var folders = RuntimeTargets.LicenseFolders(target);
             if (args[1] == "check")

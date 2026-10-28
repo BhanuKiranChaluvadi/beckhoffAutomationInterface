@@ -67,6 +67,9 @@ namespace BeckhoffAutomationInterface.Tests
         public readonly List<string> Steps = new List<string>();
         public FakeHost(string root) { Root = root; Directory.CreateDirectory(root); Mode = "Run"; }
         public string BaiSha256 => new string('A', 64);
+        /// <summary>The answer of the license check: empty = all licenses valid.</summary>
+        public List<string> Missing = new List<string>();
+        public List<string> MissingLicenses(string target, string package) => Missing;
 
         static string After(string[] args, string name) => args[System.Array.IndexOf(args, name) + 1];
 
@@ -272,6 +275,33 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void CheckOnlyRunsTheReadOnlyChecksAndChangesNothing()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("check", a);
+            var before = BootTransaction.BootInventory(host.Boot);
+            var q = Legacy(host, b); q.CheckOnly = true;
+            Assert.Equal("Ready", PackageInstaller.Install(q, host)["status"]);
+            Assert.Equal(new[] { "online" }, host.Steps);
+            SameFiles(before, BootTransaction.BootInventory(host.Boot), "Boot after a check");
+            Assert.False(Directory.Exists(Path.Combine(host.Root, "evidence")));
+            Assert.Equal("Run", host.Mode);
+        }
+
+        [Fact]
+        public void MissingLicensesStopBeforeAnyChange()
+        {
+            string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("license", a);
+            host.Missing.Add("TC3 Temperature-Controller (missing)");
+            var before = BootTransaction.BootInventory(host.Boot);
+            Assert.Contains("license trial", Assert.Throws<InvalidOperationException>(() => PackageInstaller.Install(Legacy(host, b), host)).Message);
+            Assert.Empty(host.Steps);
+            SameFiles(before, BootTransaction.BootInventory(host.Boot), "Boot after a refusal");
+            Assert.False(Directory.Exists(Path.Combine(host.Root, "evidence")));
+        }
+
+        [Fact]
         public void CurrentPackageOrLegacyNotBoth()
         {
             string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
@@ -361,9 +391,10 @@ namespace BeckhoffAutomationInterface.Tests
             string evidence = Path.Combine(host.Root, "evidence");
             var install = new[] { "package", "install", "--package", b, "--sha256", Hash(b), "--current", a, "--current-sha256", Hash(a),
                 "--service-project", Service, "--evidence", evidence, "--target", "umrt" };
-            Assert.Equal(1, ReleaseCommands.Run(install, null, host));
+            // Without --yes only the read-only checks run (their result depends on this PC's UmRT boot folder).
+            ReleaseCommands.Run(install, null, host);
             Assert.False(Directory.Exists(evidence));
-            Assert.Empty(host.Steps);
+            Assert.DoesNotContain("config", host.Steps);
             Assert.Equal(2, ReleaseCommands.Run(new[] { "release", "build", "--machines", "M1" }, null, host));
             Assert.Equal(2, ArtifactCommands.Run(new[] { "package", "install", "--package", b }));
             string project = Path.Combine(work, "project.zip");

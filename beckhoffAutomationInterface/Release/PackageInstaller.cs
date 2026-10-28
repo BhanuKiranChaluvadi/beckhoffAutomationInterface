@@ -20,6 +20,8 @@ namespace BeckhoffAutomationInterface.Release
         int Run(string log, string program, params string[] args);
         /// <summary>SHA256 of the running bai (evidence).</summary>
         string BaiSha256 { get; }
+        /// <summary>The licenses the package needs that are missing or expired on the target.</summary>
+        List<string> MissingLicenses(string target, string package);
     }
 
     /// <summary>The real host: bai commands in this process, programs as child processes.</summary>
@@ -38,6 +40,7 @@ namespace BeckhoffAutomationInterface.Release
                 return MachineBuilder.RunCommand(new[] { program }.Concat(args).ToList(), Path.GetDirectoryName(log));
         }
         public string BaiSha256 => Hash(System.Reflection.Assembly.GetEntryAssembly().Location).ToUpperInvariant();
+        public List<string> MissingLicenses(string target, string package) => LicenseCommands.Missing(target, package);
     }
 
     internal sealed class UpdateRequest
@@ -47,6 +50,8 @@ namespace BeckhoffAutomationInterface.Release
         /// <summary>Legacy: the machine has no bai package yet (its first update), so there is no
         /// current package or service project to compare.</summary>
         public bool Rehearsal, Legacy;
+        /// <summary>Only the read-only checks (no --yes): nothing changes, no evidence folder.</summary>
+        public bool CheckOnly;
         /// <summary>Default: the boot folder and update lock of the target.</summary>
         public string Boot, LockFile;
     }
@@ -67,6 +72,8 @@ namespace BeckhoffAutomationInterface.Release
         const string LegacyVariant = "legacy";
         /// <summary>The copy of the old boot image in the evidence folder.</summary>
         internal const string BackupArchive = "boot-before.zip";
+        /// <summary>The default parent of the evidence folders of a Windows install.</summary>
+        internal const string DefaultUpdates = @"C:\bai\updates";
 
         /// <summary>Either the installed package (--current, --current-sha256, --service-project) or --legacy.</summary>
         static void CheckCurrent(UpdateRequest q)
@@ -230,13 +237,31 @@ namespace BeckhoffAutomationInterface.Release
             if (q.Rehearsal && target != RuntimeTargets.UmRt) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
             CheckCurrent(q);
             string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
-            string evidence = NewEvidence(q, boot);
             var (candidate, current) = Packages(q);
             string machine = Text(candidate, "machine");
+            if (q.Evidence == null) q.Evidence = Path.Combine(DefaultUpdates, machine + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            string evidence = NewEvidence(q, boot);
+            Console.WriteLine("PASS: package {0} ({1}, {2}, {3}).", machine, Text(candidate, "kind"), Text(candidate, "targetPlatform"), candidate.TryGetValue("sourceTag", out object tag) ? tag : "no tag");
             if (!q.Rehearsal && Text(candidate, "kind") != "ReleaseCandidate") throw new InvalidDataException("Development packages cannot be installed on a machine.");
+            if (!File.Exists(Path.Combine(boot, "CurrentConfig.xml")))
+                throw new InvalidDataException("The target has no boot project (" + Path.Combine(boot, "CurrentConfig.xml") + " is missing): there is no image to keep or to roll back to.");
             string bootPlatform = (string)Xml(Path.Combine(boot, "CurrentConfig.xml")).Root.Attribute("Platform");
             if (bootPlatform != Text(candidate, "targetPlatform"))
                 throw new InvalidDataException("Candidate platform " + Text(candidate, "targetPlatform") + " differs from the current runtime boot platform " + bootPlatform + ".");
+            Console.WriteLine("PASS: platform {0} = the boot platform of the target.", bootPlatform);
+            var missing = host.MissingLicenses(target, q.Package);
+            if (missing.Count > 0)
+                throw new InvalidOperationException("Missing or expired licenses: " + string.Join(", ", missing) + ". The new program would not start. Make a 7-day trial: bai license trial --package \""
+                    + q.Package + "\", or load the ordered licenses. Nothing changed.");
+            Console.WriteLine("PASS: every license the package needs is valid on the target.");
+            if (q.CheckOnly)
+            {
+                string report = Path.Combine(Path.GetTempPath(), "bai-install-check-" + Guid.NewGuid().ToString("N"));
+                Preflight(new UpdateRequest { Current = q.Current, CurrentSha256 = q.CurrentSha256, ServiceProject = q.ServiceProject,
+                    Report = report, Target = target, Rehearsal = q.Rehearsal, Legacy = q.Legacy }, host);
+                Console.WriteLine("READY: nothing changed. Repeat the command with --yes to install (the runtime goes to Config, then to Run).");
+                return new Dictionary<string, object> { ["status"] = "Ready", ["report"] = report };
+            }
             string lockPath = LockPath(q, target, boot);
             Directory.CreateDirectory(Path.GetDirectoryName(lockPath));
             FileStream held = MachineCommands.TryLock(lockPath) ?? throw new IOException("Another update or test holds the lock: " + lockPath);
@@ -349,6 +374,7 @@ namespace BeckhoffAutomationInterface.Release
             if (!Regex.IsMatch(ssh, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*\z")) throw new ArgumentException("--ssh must be user@host.");
             if (q.Rehearsal) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
             if (q.Legacy) throw new ArgumentException("--legacy is for a Windows IPC only.");
+            if (q.Evidence == null) throw new ArgumentException("--ssh needs --evidence <new-folder>.");
             CheckCurrent(q);
             string evidence = NewEvidence(q, q.ServiceProject);
             var (candidate, current) = Packages(q);
