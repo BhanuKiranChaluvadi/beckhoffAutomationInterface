@@ -21,7 +21,7 @@ namespace BeckhoffAutomationInterface.Machines
         public const string Usage =
             "machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>]\n" +
             "                [--manifest <file>] [--work <folder>]\n" +
-            "  machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout <s>]\n" +
+            "  machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]\n" +
             "                [--manifest <file>] [--work <folder>]";
 
         /// <summary>The exit codes of 'machine'.</summary>
@@ -46,7 +46,7 @@ namespace BeckhoffAutomationInterface.Machines
             public int? TimeoutS;
         }
 
-        static readonly string[] Options = { "--platform", "--manifest", "--work", "--tags", "--junit", "--timeout", "--result" };
+        static readonly string[] Options = { "--platform", "--manifest", "--work", "--tags", "--junit", "--timeout-seconds", "--result" };
         static readonly string[] Switches = { "--fresh", "--release", "--simulation", "--parallel" };
 
         /// <summary>args[0] = "machine". Throws ArgumentException on a command-line problem (pure).</summary>
@@ -71,9 +71,9 @@ namespace BeckhoffAutomationInterface.Machines
                         case "--tags": q.Tags = v; break;
                         case "--junit": q.JUnit = v; break;
                         case "--result": q.ResultFile = v; break;
-                        case "--timeout":
+                        case "--timeout-seconds":
                             if (!int.TryParse(v, out int t) || t <= 0)
-                                throw new ArgumentException("--timeout needs a number of seconds (more than 0).");
+                                throw new ArgumentException("--timeout-seconds needs a number of seconds (more than 0).");
                             q.TimeoutS = t;
                             break;
                     }
@@ -92,7 +92,7 @@ namespace BeckhoffAutomationInterface.Machines
             }
 
             string[] buildOnly = { "--release", "--simulation", "--parallel", "--platform", "--result" };
-            string[] testOnly = { "--tags", "--junit", "--timeout" };
+            string[] testOnly = { "--tags", "--junit", "--timeout-seconds" };
             string wrong = (q.Command == "build" ? testOnly : buildOnly).FirstOrDefault(o => args.Skip(2).Contains(o));
             if (wrong != null)
                 throw new ArgumentException(string.Format("'machine {0}' does not take {1}.", q.Command, wrong));
@@ -403,10 +403,10 @@ namespace BeckhoffAutomationInterface.Machines
             var argv = new List<string> { "test", "--target", "umrt", "--scenarios", MachineSources.RepoPath(manifest.Root, l.Family.Tests) };
             // A native family has no variants: every scenario applies.
             if (!l.Family.IsNative)
-                argv.AddRange(new[] { "--variants", Path.Combine(l.MachineFolder, "variants.xml"), "--variant", l.Machine });
+                argv.AddRange(new[] { "--variants-file", Path.Combine(l.MachineFolder, "variants.xml"), "--variant", l.Machine });
             argv.AddRange(new[] { "--junit", junit });
             if (q.Tags != null) argv.AddRange(new[] { "--tags", q.Tags });
-            if (q.TimeoutS != null) argv.AddRange(new[] { "--timeout", q.TimeoutS.Value.ToString() });
+            if (q.TimeoutS != null) argv.AddRange(new[] { "--timeout-seconds", q.TimeoutS.Value.ToString() });
             int code = Runtime.RuntimeCommands.Test(argv.ToArray());
             if (code != 0)
                 return code == 1 ? "FAIL" : "ERROR (" + code + ")";

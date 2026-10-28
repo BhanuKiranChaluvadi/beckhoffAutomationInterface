@@ -91,7 +91,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--target", "1.2.3.4.1.1" }, null));
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "trial", "--target", "umrt" }, null));
-            Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--wait", "5" }, null));
+            Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--wait-minutes", "5" }, null));
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "renew" }, null));
         }
     }

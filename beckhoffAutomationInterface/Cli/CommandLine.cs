@@ -29,14 +29,14 @@ namespace BeckhoffAutomationInterface.Cli
             "sync code|libs|io|events|variants|safety|tasks|all <source> --project <project> [--plc <name>] [--clean]\n" +
             "       [--confirm-delete-io] [--ignore <glob>]... [--variant <name> | --all-variants] [--platform <name>]";
         public const string ExportUsage =
-            "export code|libs|io|events|tasks|safety|variants|native|links|all <source> --project <project> [--plc <name>] [--overwrite]\n" +
-            "  export object <ObjectName> <source> --project <project> [--plc <name>] [--overwrite]";
+            "export code|libs|io|events|tasks|safety|variants|native|links|all <output> --project <project> [--plc <name>] [--overwrite]\n" +
+            "  export object <ObjectName> <output> --project <project> [--plc <name>] [--overwrite]";
         public const string InitUsage =
             "init <source> --into <folder> [--name <name>] [--plc <name>] [--platform <name>] [--ignore <glob>]...";
         // Parsed in Runtime/RuntimeCommands.Test (runtime command style); the text is here with the others.
         public const string TestUsage =
-            "test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>] [--variants <variants.xml> | --groups <G1,G2>]\n" +
-            "       [--tags <a,b>] [--junit <file>] [--timeout <s>]";
+            "test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>] [--variants-file <variants.xml> | --groups <G1,G2>]\n" +
+            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]";
 
         // Every command: where .stconfig is read from, and whether at all.
         static readonly string[] ConfigOptions = { "--config" };

@@ -9,13 +9,13 @@ namespace BeckhoffAutomationInterface.Release
     internal static class ArtifactCommands
     {
         internal const string Usage =
-            "esi install|verify --system-directory <folder> --devices <folder> --user-directory <folder> [--report <new-json>] [--json]\n" +
-            "package create --directory <payload> --metadata <json-without-files> --output <new-zip> [--json]\n" +
-            "toolchain capture --components <folder> --xae-shell <folder> --version <version> --archive <new-zip> [--json]\n" +
-            "toolchain verify --archive <zip> --sha256 <retained-hash> --version <version> [--installed] [--json]\n" +
+            "esi install|verify --system-esi <folder> --required-esi <folder> --user-esi <folder> [--output <new-json>] [--json]\n" +
+            "package create --payload <folder> --metadata <json-without-files> --output <new-zip> [--json]\n" +
+            "toolchain capture --components <folder> --xae-shell <folder> --twincat-version <version> --output <new-zip> [--json]\n" +
+            "toolchain verify --toolchain <zip> --sha256 <retained-hash> --twincat-version <version> [--check-installed] [--json]\n" +
             "package verify --package <zip> [--sha256 <retained-hash>] [--json]\n" +
-            "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json> [--json]\n" +
-            "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <retained-hash> [--json]\n" +
+            "libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --output <new-json> [--json]\n" +
+            "libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --library-lock <json> --library-lock-sha256 <retained-hash> [--json]\n" +
             ReleaseCommands.PackageUsage;
 
         internal static Dictionary<string, string> Options(string[] args, string[] required, string[] optional, string[] switches = null)
@@ -52,27 +52,27 @@ namespace BeckhoffAutomationInterface.Release
                 Dictionary<string, string> options;
                 if (args[0] == "esi" && (args[1] == "install" || args[1] == "verify"))
                 {
-                    options = Options(args, new[] { "--system-directory", "--devices", "--user-directory" }, new[] { "--report" }, new[] { "--json" });
-                    string report = Get(options, "--report");
-                    if (report != null && (File.Exists(report) || Inside(report, options["--system-directory"]) || Inside(report, options["--devices"]) || Inside(report, options["--user-directory"])))
+                    options = Options(args, new[] { "--system-esi", "--required-esi", "--user-esi" }, new[] { "--output" }, new[] { "--json" });
+                    string report = Get(options, "--output");
+                    if (report != null && (File.Exists(report) || Inside(report, options["--system-esi"]) || Inside(report, options["--required-esi"]) || Inside(report, options["--user-esi"])))
                         throw new IOException("Use a new report outside the catalog directories.");
-                    result = EsiCatalog.Execute(options["--system-directory"], options["--devices"], options["--user-directory"], args[1] == "install");
+                    result = EsiCatalog.Execute(options["--system-esi"], options["--required-esi"], options["--user-esi"], args[1] == "install");
                     if (report != null) WriteNew(report, result);
                 }
                 else if (args[0] == "package" && args[1] == "create")
                 {
-                    options = Options(args, new[] { "--directory", "--metadata", "--output" }, new string[0], new[] { "--json" });
-                    result = ArtifactArchives.CreatePackage(options["--directory"], options["--metadata"], options["--output"]);
+                    options = Options(args, new[] { "--payload", "--metadata", "--output" }, new string[0], new[] { "--json" });
+                    result = ArtifactArchives.CreatePackage(options["--payload"], options["--metadata"], options["--output"]);
                 }
                 else if (args[0] == "toolchain" && args[1] == "capture")
                 {
-                    options = Options(args, new[] { "--components", "--xae-shell", "--version", "--archive" }, new string[0], new[] { "--json" });
-                    result = ArtifactArchives.CaptureToolchain(options["--components"], options["--xae-shell"], options["--version"], options["--archive"]);
+                    options = Options(args, new[] { "--components", "--xae-shell", "--twincat-version", "--output" }, new string[0], new[] { "--json" });
+                    result = ArtifactArchives.CaptureToolchain(options["--components"], options["--xae-shell"], options["--twincat-version"], options["--output"]);
                 }
                 else if (args[0] == "toolchain" && args[1] == "verify")
                 {
-                    options = Options(args, new[] { "--archive", "--sha256", "--version" }, new string[0], new[] { "--installed", "--json" });
-                    result = ArtifactArchives.VerifyToolchain(options["--archive"], options["--sha256"], options["--version"], Get(options, "--installed") != null);
+                    options = Options(args, new[] { "--toolchain", "--sha256", "--twincat-version" }, new string[0], new[] { "--check-installed", "--json" });
+                    result = ArtifactArchives.VerifyToolchain(options["--toolchain"], options["--sha256"], options["--twincat-version"], Get(options, "--check-installed") != null);
                 }
                 else if (args[0] == "package" && args[1] == "verify")
                 {
@@ -82,11 +82,11 @@ namespace BeckhoffAutomationInterface.Release
                 else if (args[0] == "libraries" && (args[1] == "lock" || args[1] == "verify"))
                 {
                     bool capture = args[1] == "lock";
-                    options = Options(args, new[] { "--project", "--machine", "--platform" }.Concat(capture ? new[] { "--output" } : new[] { "--lock", "--sha256" }).ToArray(),
-                        new[] { "--variant", "--manifest" }, new[] { "--json" });
+                    options = Options(args, new[] { "--project", "--machine", "--platform" }.Concat(capture ? new[] { "--output" } : new[] { "--library-lock", "--library-lock-sha256" }).ToArray(),
+                        new[] { "--variant", "--library-list" }, new[] { "--json" });
                     // Read the approved baseline before inspecting current cache bytes.
-                    var baseline = capture ? null : LibraryBaseline.ReadLock(options["--lock"], options["--sha256"]);
-                    var actual = LibraryBaseline.Capture(options["--project"], options["--machine"], options["--platform"], Get(options, "--variant", ""), Get(options, "--manifest"));
+                    var baseline = capture ? null : LibraryBaseline.ReadLock(options["--library-lock"], options["--library-lock-sha256"]);
+                    var actual = LibraryBaseline.Capture(options["--project"], options["--machine"], options["--platform"], Get(options, "--variant", ""), Get(options, "--library-list"));
                     if (capture)
                     {
                         result = new Dictionary<string, object> { ["schemaVersion"] = 1, ["machines"] = new[] { actual } };

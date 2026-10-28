@@ -51,8 +51,8 @@ namespace BeckhoffAutomationInterface.Cli
             Entry("doctor", "Inspect installed shells, runtimes, and licenses.", "doctor", "bai doctor",
                 notes: "Read-only diagnostics for this PC. Reports TwinCAT versions, boot projects, and license expiry."),
             Entry("activate", "Build and activate a project on a TwinCAT runtime.", Runtime.RuntimeCommands.ActivateUsage,
-                @"bai activate C:\bai\work\sample --target umrt --yes", shell: true,
-                notes: "Without --yes, reports the target and makes no changes. Activation replaces the target boot project."),
+                @"bai activate C:\bai\work\sample --target umrt", shell: true,
+                notes: "Activation replaces the target boot project. It first prints the boot project that is on the target now."),
             Entry("license", "Check TwinCAT licenses or make a 7-day trial license.", Runtime.LicenseCommands.Usage,
                 @"bai license check --target local --licenses ""TC3 PLC,TC3 NC PTP""", "check|trial", shell: true,
                 notes: "Reads the license files on this PC (local runtime or UmRT). Trial opens XAE on a license-only project with the missing licenses; you click '7 Days Trial License...' and type the code. It never activates."),
@@ -61,25 +61,25 @@ namespace BeckhoffAutomationInterface.Cli
                 notes: "Reads values over ADS. Use --variant when the expectation file has no default entry."),
             Entry("test", "Run PLC scenarios over ADS and report their results.", Runtime.RuntimeCommands.TestUsage,
                 @"bai test --target umrt --scenarios Tests --tags smoke --junit results.xml",
-                notes: "Scenarios can send commands and write PLC values. Choose --variants or --groups, not both. At least one scenario must execute."),
+                notes: "Scenarios can send commands and write PLC values. Choose --variants-file or --groups, not both. At least one scenario must execute."),
             Entry("runtime-state", "Read, check, or change the runtime state over ADS.", Runtime.RuntimeStateCommand.Usage,
-                "bai runtime-state --target umrt --expect run",
-                notes: "Choose --expect to check a state or --state with --yes to change it. No XAE session is needed."),
+                "bai runtime-state --target umrt --check run",
+                notes: "--check reads the state and changes nothing; --set changes it. No XAE session is needed."),
             Entry("release", "Build release bundles or capture library baselines.", Release.ReleaseCommands.Usage,
                 @"bai release lock --machines MachineA --twincat-version 3.1.4026 --output libraries.lock.json",
                 "build|lock", shell: true,
                 notes: "Build requires retained hashes for the tool and the library lock; a toolchain archive is optional. Only the TwinCAT major is compared; the build is recorded. It creates a bundle without activating a runtime."),
             Entry("package", "Create, verify, compare, or install compiled packages.", Release.ArtifactCommands.Usage,
-                @"bai package verify --package release.zip", "create|verify|preflight|install|rollback|drift",
-                notes: "Install and rollback require --yes; without --yes, nothing changes. Install keeps the old image (Boot.before.<id>, and boot-before.zip in the evidence folder). --legacy: the first update of a machine without a bai package."),
+                @"bai package check --package NFPro.zip", "create|verify|check|install|rollback|drift",
+                notes: "check changes nothing. install checks first, then installs; it keeps the old image (Boot.before.<id>, and boot-before.zip in the record folder) and a copy of the package (Boot.installed), so the next install and a rollback need no other options. rollback undoes the last install."),
             Entry("libraries", "Capture or verify compiled library baselines.", Release.ArtifactCommands.Usage,
                 @"bai libraries lock --project App.tsproj --machine MachineA --platform ""TwinCAT RT (x64)"" --output libraries.lock.json",
                 "lock|verify"),
             Entry("toolchain", "Capture or verify an offline TwinCAT toolchain.", Release.ArtifactCommands.Usage,
-                "bai toolchain verify --archive toolchain.zip --sha256 <hash> --version 3.1.4026.24",
+                "bai toolchain verify --toolchain toolchain.zip --sha256 <hash> --twincat-version 3.1.4026.24",
                 "capture|verify"),
             Entry("esi", "Install or verify an EtherCAT device catalog.", Release.ArtifactCommands.Usage,
-                @"bai esi verify --system-directory C:\TwinCAT\ESI --devices .\esi --user-directory C:\bai\esi",
+                @"bai esi verify --system-esi C:\TwinCAT\ESI --required-esi .\esi --user-esi C:\bai\esi",
                 "install|verify", notes: "Existing catalog files are never replaced."),
         };
 
@@ -103,14 +103,14 @@ namespace BeckhoffAutomationInterface.Cli
             ["--overwrite"] = "Allow replacing files in the export folder.",
             ["--target"] = "Runtime: umrt, local, or an AMS Net ID.",
             ["--expect"] = "Expectation JSON file to compare with live PLC values.",
-            ["--timeout"] = "Positive timeout in seconds.",
-            ["--yes"] = "Confirm the requested runtime change.",
+            ["--timeout-seconds"] = "Positive timeout in seconds.",
             ["--scenarios"] = "Scenario JSON file or folder (required).",
-            ["--variants"] = "variants.xml used to resolve feature groups.",
-            ["--groups"] = "Comma-separated feature groups; alternative to --variants.",
+            ["--variants-file"] = "variants.xml used to resolve feature groups.",
+            ["--groups"] = "Comma-separated feature groups; alternative to --variants-file.",
             ["--tags"] = "Run scenarios matching these comma-separated tags.",
             ["--junit"] = "Write test results as JUnit XML.",
-            ["--state"] = "Requested runtime state: config or run. Requires --yes.",
+            ["--set"] = "Change the runtime state to config or run.",
+            ["--check"] = "Check that the runtime state is config or run. Changes nothing.",
             ["--fresh"] = "Create a fresh machine project instead of reusing a kept build.",
             ["--release"] = "Require a clean, tagged repository for a production build.",
             ["--simulation"] = "Build with the SIMULATION compiler define.",
@@ -118,46 +118,40 @@ namespace BeckhoffAutomationInterface.Cli
             ["--manifest"] = "Manifest file for this command.",
             ["--work"] = "Build workspace folder outside the source repository.",
             ["--licenses"] = "Comma-separated license names (for example \"TC3 PLC,TC3 NC PTP\") or license ids {...}.",
-            ["--wait"] = "Minutes to wait for the new license file (default 15).",
+            ["--wait-minutes"] = "Minutes to wait for the new license file (default 15).",
             ["--configuration"] = "Retained native configuration.xml file.",
             ["--output"] = "Destination path for the generated artifact.",
             ["--machines"] = "Comma-separated machine names (required).",
             ["--machine"] = "Machine label recorded in the library baseline.",
-            ["--tag"] = "Git tag to build; alternative to --working-tree.",
-            ["--working-tree"] = "Build from the working tree instead of a release tag.",
-            ["--bundle"] = "New release bundle folder.",
+            ["--tag"] = "Git tag to build; alternative to --include-uncommitted.",
+            ["--include-uncommitted"] = "Build the working tree with its uncommitted changes (a development package, not for a machine).",
             ["--bai-sha256"] = "Retained SHA-256 hash of the bai executable (required).",
             ["--twincat-version"] = "Required TwinCAT major, for example 3.1.4026 (a build such as 3.1.4026.24 also works; only the major is compared).",
             ["--library-lock"] = "Approved library baseline JSON.",
             ["--library-lock-sha256"] = "Retained SHA-256 hash of the library baseline.",
             ["--toolchain"] = "Optional retained TwinCAT toolchain ZIP of one exact build (with --toolchain-sha256).",
             ["--toolchain-sha256"] = "Retained SHA-256 hash of the toolchain ZIP (with --toolchain).",
-            ["--esi-directory"] = "System EtherCAT device catalog folder.",
-            ["--user-esi-directory"] = "User EtherCAT device catalog folder.",
-            ["--directory"] = "Folder containing the package payload.",
+            ["--system-esi"] = "System EtherCAT device catalog folder (ESI files).",
+            ["--user-esi"] = "User EtherCAT device catalog folder (ESI files).",
+            ["--required-esi"] = "Folder with the ESI files that the machines need.",
+            ["--payload"] = "Folder with the package payload.",
             ["--metadata"] = "Package metadata JSON without file records.",
             ["--package"] = "Compiled package ZIP.",
             ["--sha256"] = "Retained SHA-256 hash of the input artifact.",
-            ["--current"] = "The package installed now. Install on Windows finds it itself (Boot.installed); give it only to override.",
-            ["--current-sha256"] = "Retained SHA-256 hash of the current package.",
-            ["--service-project"] = "Optional saved service project: adds the drift check against the current package.",
-            ["--report"] = "New report destination (see usage for file or folder).",
+            ["--installed"] = "The package installed on the target now. bai finds it itself (Boot.installed); give it only to override.",
+            ["--installed-sha256"] = "Retained SHA-256 hash of the installed package (default: <zip>.sha256).",
+            ["--saved-project"] = "Saved XAE project of the installed package: adds the drift check.",
             ["--rehearsal"] = "Run the package operation as an UmRT rehearsal.",
-            ["--evidence"] = "New folder for installation evidence; for rollback, the evidence folder of the install.",
-            ["--legacy"] = "Force a first update (no current package). Install on Windows chooses it itself when bai installed nothing on the target.",
+            ["--record"] = "Install: new folder for the install record (logs, install.json, boot-before.zip); default C:\\bai\\updates\\<machine>-<time>. Rollback: the record folder of the install to undo; default the last install.",
+            ["--first-install"] = "Force a first install (no installed package). bai chooses it itself when it installed nothing on the target.",
             ["--ssh"] = "SSH user@host for a remote TwinCAT/BSD installation.",
             ["--baseline"] = "Retained project ZIP used for drift comparison.",
             ["--components"] = "TwinCAT Components folder to archive.",
             ["--xae-shell"] = "TwinCAT XAE shell folder to archive.",
-            ["--version"] = "TwinCAT version recorded or checked in the archive.",
-            ["--archive"] = "Toolchain ZIP path.",
-            ["--installed"] = "Also verify the installed toolchain.",
-            ["--lock"] = "Approved library baseline JSON to verify against.",
+            ["--check-installed"] = "Also verify the installed toolchain files.",
+            ["--library-list"] = "Optional libraries.xml to validate against the compiled cache.",
             ["--json"] = "Emit machine-readable JSON instead of a text report.",
-            ["--system-directory"] = "System EtherCAT catalog folder.",
-            ["--devices"] = "Folder containing required device ESI files.",
-            ["--user-directory"] = "User EtherCAT catalog folder.",
-        };
+                    };
 
         static readonly Dictionary<string, string> ModeDescriptions = new Dictionary<string, string>
         {
@@ -232,7 +226,7 @@ namespace BeckhoffAutomationInterface.Cli
             }
             var arguments = new List<KeyValuePair<string, string>>();
             if (new[] { "init", "sync", "check", "export" }.Contains(command.Name))
-                arguments.Add(Pair("<source>", command.Name == "export" ? "Destination folder for exported source and manifests." : "Folder containing .st source files and manifests."));
+                arguments.Add(command.Name == "export" ? Pair("<output>", "Destination folder for exported source and manifests.") : Pair("<source>", "Folder containing .st source files and manifests."));
             if (command.Name == "build" || command.Name == "activate")
                 arguments.Add(Pair("<project>", "A .tsproj, a .sln, or a folder containing one TwinCAT project."));
             if (command.Name == "machine") arguments.Add(Pair("<Machine>...", "Machine names, separated by spaces or commas. Defaults to all machines."));
@@ -275,7 +269,7 @@ namespace BeckhoffAutomationInterface.Cli
         static string OptionLabel(string command, string option)
         {
             if (option == "--target") return "--target <target>";
-            if (option == "--state" || (command == "runtime-state" && option == "--expect")) return option + " <state>";
+            if (option == "--set" || option == "--check") return option + " <state>";
             return option;
         }
 
@@ -300,21 +294,21 @@ namespace BeckhoffAutomationInterface.Cli
                 case "package":
                     switch (mode)
                     {
-                        case "create": return prefix + @" --directory .\payload --metadata metadata.json --output release.zip";
+                        case "create": return prefix + @" --payload .\payload --metadata metadata.json --output release.zip";
                         case "verify": return command.Example;
-                        case "preflight": return prefix + @" --current current.zip --current-sha256 <hash> --service-project C:\bai\service --report C:\bai\preflight";
-                        case "install": return prefix + @" --package release.zip --sha256 <hash> --current current.zip --current-sha256 <hash> --service-project C:\bai\service --evidence C:\bai\evidence --target umrt --rehearsal --yes";
-                        case "rollback": return prefix + @" --evidence C:\bai\evidence --target local --yes";
-                        case "drift": return prefix + @" --baseline project.zip --sha256 <hash> --project C:\bai\service --report drift.json";
+                        case "check": return prefix + @" --package NFPro.zip";
+                        case "install": return prefix + @" --package NFPro.zip";
+                        case "rollback": return prefix;
+                        case "drift": return prefix + @" --baseline project.zip --sha256 <hash> --saved-project C:\bai\service --output drift.json";
                     }
                     break;
                 case "libraries":
                     return prefix + @" --project App.tsproj --machine MachineA --platform ""TwinCAT RT (x64)"""
-                        + (mode == "lock" ? " --output libraries.lock.json" : " --lock libraries.lock.json --sha256 <hash>");
+                        + (mode == "lock" ? " --output libraries.lock.json" : " --library-lock libraries.lock.json --library-lock-sha256 <hash>");
                 case "toolchain":
                     return mode == "verify" ? command.Example
-                        : prefix + @" --components C:\TwinCAT\Components --xae-shell C:\TwinCAT\TcXaeShell --version 3.1.4026.24 --archive toolchain.zip";
-                case "esi": return prefix + @" --system-directory C:\TwinCAT\ESI --devices .\esi --user-directory C:\bai\esi";
+                        : prefix + @" --components C:\TwinCAT\Components --xae-shell C:\TwinCAT\TcXaeShell --twincat-version 3.1.4026.24 --output toolchain.zip";
+                case "esi": return prefix + @" --system-esi C:\TwinCAT\ESI --required-esi .\esi --user-esi C:\bai\esi";
             }
             return command.Example;
         }
@@ -322,15 +316,13 @@ namespace BeckhoffAutomationInterface.Cli
         static string Description(string command, string option)
         {
             string name = option.Split(' ')[0].TrimEnd(',');
-            if (command == "runtime-state" && name == "--expect") return "Expected runtime state: config or run. Does not change the state.";
-            if (name == "--timeout")
+            if (name == "--timeout-seconds")
                 return command == "verify" ? "Wait for PLC Run, in seconds (default: 60)."
                     : command == "activate" ? "Wait for PLC Run, in seconds (default: 60)."
                     : command == "test" ? "Wait for PLC Run, in seconds (default: 60). Scenario timeouts come from the scenario files."
                     : Descriptions[name];
             if (name == "--manifest" && (command == "machine" || command == "release")) return "bai.machines.json path; discovered from the current directory when omitted.";
-            if (name == "--manifest" && command == "libraries") return "Optional libraries.xml to validate against the compiled cache.";
-            return Descriptions.TryGetValue(name, out string description) ? description : "See the command reference in README.md.";
+                        return Descriptions.TryGetValue(name, out string description) ? description : "See the command reference in README.md.";
         }
 
         static string ModeSummary(string command, string mode)
@@ -348,9 +340,9 @@ namespace BeckhoffAutomationInterface.Cli
                 case "release lock": return "Capture a candidate library baseline";
                 case "package create": return "Create a package from payload and metadata";
                 case "package verify": return "Verify package contents and optional retained hash";
-                case "package preflight": return "Check readiness before installation";
-                case "package install": return "Install a compiled package with rollback";
-                case "package rollback": return "Put back the boot image that an install replaced";
+                case "package check": return "Run every check of an install; change nothing";
+                case "package install": return "Check, then install a compiled package (automatic rollback on a failure)";
+                case "package rollback": return "Undo the last install (or the one in --record)";
                 case "package drift": return "Compare a project with its retained baseline";
                 case "libraries lock": return "Capture compiled library versions and hashes";
                 case "libraries verify": return "Compare compiled libraries with a baseline";

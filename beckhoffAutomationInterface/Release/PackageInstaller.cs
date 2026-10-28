@@ -78,15 +78,15 @@ namespace BeckhoffAutomationInterface.Release
         /// <summary>Beside the boot folder: the packages that bai installed and current.json (the installed one).</summary>
         internal const string InstalledStore = "Boot.installed";
 
-        /// <summary>Either the installed package (--current, --current-sha256; --service-project optional) or --legacy.</summary>
+        /// <summary>Either the installed package (--installed, --installed-sha256; --saved-project optional) or --first-install.</summary>
         static void CheckCurrent(UpdateRequest q)
         {
             if (q.Legacy && (q.Current ?? q.CurrentSha256 ?? q.ServiceProject) != null)
-                throw new ArgumentException("--legacy means no installed package: do not give --current, --current-sha256 or --service-project.");
+                throw new ArgumentException("--first-install means no installed package: do not give --installed, --installed-sha256 or --saved-project.");
             if (!q.Legacy && (q.Current == null || q.CurrentSha256 == null))
-                throw new ArgumentException("Give --current and --current-sha256, or --legacy for a machine without a bai package.");
-            if (q.ServiceProject != null && q.Current == null) throw new ArgumentException("--service-project needs --current.");
-            if (q.Legacy && q.Rehearsal) throw new ArgumentException("--legacy is for a machine, not for a rehearsal.");
+                throw new ArgumentException("Give --installed and --installed-sha256, or --first-install for a machine without a bai package.");
+            if (q.ServiceProject != null && q.Current == null) throw new ArgumentException("--saved-project needs --installed.");
+            if (q.Legacy && q.Rehearsal) throw new ArgumentException("--first-install is for a machine, not for a rehearsal.");
         }
 
         static string Store(string boot) => Path.Combine(Path.GetDirectoryName(boot), InstalledStore);
@@ -102,14 +102,14 @@ namespace BeckhoffAutomationInterface.Release
         /// target, else a first install (legacy). Returns where the answer came from (evidence).</summary>
         static string ResolveCurrent(UpdateRequest q, string boot)
         {
-            if (q.Legacy) return "legacy (--legacy)";
+            if (q.Legacy) return "first install (--first-install)";
             if (q.Current != null)
             {
                 if (q.CurrentSha256 == null && File.Exists(q.Current + ".sha256"))
                     q.CurrentSha256 = File.ReadAllText(q.Current + ".sha256").Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                return "--current";
+                return "--installed";
             }
-            if (q.ServiceProject != null) return "--current missing";
+            if (q.ServiceProject != null) return "--installed missing";
             var installed = Installed(boot);
             if (installed != null)
             {
@@ -124,7 +124,7 @@ namespace BeckhoffAutomationInterface.Release
         }
 
         /// <summary>Keeps a copy of the installed package and makes it current.json. Returns the previous current.json (null: none).</summary>
-        static Dictionary<string, object> RecordInstalled(string boot, string package, string sha256, Dictionary<string, object> candidate)
+        static Dictionary<string, object> RecordInstalled(string boot, string package, string sha256, Dictionary<string, object> candidate, string record)
         {
             string store = Store(boot), file = sha256.ToUpperInvariant() + ".zip", copy = Path.Combine(store, file);
             Directory.CreateDirectory(store);
@@ -132,7 +132,8 @@ namespace BeckhoffAutomationInterface.Release
             CheckHash(Hash(copy), sha256);
             var previous = Installed(boot);
             Write(Path.Combine(store, "current.json"), new Dictionary<string, object> { ["machine"] = Text(candidate, "machine"), ["file"] = file,
-                ["sha256"] = sha256.ToUpperInvariant(), ["sourceTag"] = candidate.TryGetValue("sourceTag", out object tag) ? tag : null, ["installedUtc"] = DateTime.UtcNow.ToString("o") });
+                ["sha256"] = sha256.ToUpperInvariant(), ["sourceTag"] = candidate.TryGetValue("sourceTag", out object tag) ? tag : null, ["installedUtc"] = DateTime.UtcNow.ToString("o"),
+                ["record"] = record });
             return previous;
         }
 
@@ -278,7 +279,7 @@ namespace BeckhoffAutomationInterface.Release
         {
             string evidence = Path.GetFullPath(q.Evidence);
             BuildLocation.Assert(protectedRoot, evidence);
-            if (Directory.Exists(evidence) || File.Exists(evidence)) throw new IOException("Use a new evidence directory.");
+            if (Directory.Exists(evidence) || File.Exists(evidence)) throw new IOException("Use a new record folder.");
             return evidence;
         }
 
@@ -316,7 +317,7 @@ namespace BeckhoffAutomationInterface.Release
                 string report = Path.Combine(Path.GetTempPath(), "bai-install-check-" + Guid.NewGuid().ToString("N"));
                 Preflight(new UpdateRequest { Current = q.Current, CurrentSha256 = q.CurrentSha256, ServiceProject = q.ServiceProject,
                     Report = report, Target = target, Rehearsal = q.Rehearsal, Legacy = q.Legacy }, host);
-                Console.WriteLine("READY: nothing changed. Repeat the command with --yes to install (the runtime goes to Config, then to Run).");
+                Console.WriteLine("READY: nothing changed. To install, run 'bai package install' with the same options (the runtime goes to Config, then to Run).");
                 return new Dictionary<string, object> { ["status"] = "Ready", ["report"] = report };
             }
             string lockPath = LockPath(q, target, boot);
@@ -341,19 +342,19 @@ namespace BeckhoffAutomationInterface.Release
                 WriteChecks(Path.Combine(evidence, "identity.expect.json"), machine, Check("GVL_Simulation.bActive", "BOOL", false), installed);
                 try
                 {
-                    Step(host, evidence, "config", "runtime-state", "--target", target, "--state", "config", "--yes");
-                    Step(host, evidence, "confirm-config", "runtime-state", "--target", target, "--expect", "config");
+                    Step(host, evidence, "config", "runtime-state", "--target", target, "--set", "config");
+                    Step(host, evidence, "confirm-config", "runtime-state", "--target", target, "--check", "config");
                     var transaction = BootTransaction.Install(Path.Combine(evidence, "boot"), boot, transactionFile, Path.Combine(evidence, BackupArchive));
                     record["backupArchive"] = transaction["archive"];
                     record["backupArchiveSha256"] = transaction["archiveSha256"];
-                    Step(host, evidence, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                    Step(host, evidence, "run", "runtime-state", "--target", target, "--set", "run");
                     Step(host, evidence, "identity", "verify", "--target", target, "--expect", installed, "--variant", machine);
                     record["status"] = "Installed";
                 }
                 catch (Exception ex)
                 {
                     record["installError"] = ex.Message;
-                    Step(host, evidence, "rollback-config", "runtime-state", "--target", target, "--state", "config", "--yes");
+                    Step(host, evidence, "rollback-config", "runtime-state", "--target", target, "--set", "config");
                     if (File.Exists(transactionFile))
                     {
                         var transaction = Read(transactionFile);
@@ -362,7 +363,7 @@ namespace BeckhoffAutomationInterface.Release
                         else
                             BootTransaction.Restore(transactionFile);
                     }
-                    Step(host, evidence, "rollback-run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                    Step(host, evidence, "rollback-run", "runtime-state", "--target", target, "--set", "run");
                     Step(host, evidence, "rollback-identity", "verify", "--target", target, "--expect", oldExpect, "--variant", oldVariant);
                     record["status"] = "RolledBack";
                     throw new InvalidOperationException("Installation failed; the previous boot image and identity were restored. " + ex.Message);
@@ -375,33 +376,42 @@ namespace BeckhoffAutomationInterface.Release
                 Write(Path.Combine(evidence, "install.json"), record);
                 held.Dispose();
             }
-            // The program runs and is verified: a failure to keep the package copy only costs --current next time.
+            // The program runs and is verified: a failure to keep the package copy only costs --installed next time.
             try
             {
-                record["previousInstalled"] = RecordInstalled(boot, q.Package, q.PackageSha256, candidate);
+                record["previousInstalled"] = RecordInstalled(boot, q.Package, q.PackageSha256, candidate, evidence);
                 record["installedPackage"] = Path.Combine(Store(boot), "current.json");
                 Write(Path.Combine(evidence, "install.json"), record);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidDataException)
             {
-                Console.WriteLine("WARNING: could not keep a copy of the installed package (" + ex.Message + "). The next update needs --current.");
+                Console.WriteLine("WARNING: could not keep a copy of the installed package (" + ex.Message + "). The next update needs --installed.");
             }
-            Console.WriteLine("PASS: compiled files installed and live identity verified. Evidence: " + evidence);
+            Console.WriteLine("PASS: compiled files installed and live identity verified. Record: " + evidence);
             Console.WriteLine("Copy " + Path.Combine(evidence, BackupArchive) + " and its .sha256 (the old boot image) off the IPC.");
             return record;
         }
 
         /// <summary>'package rollback': puts back the image that an install replaced, for example after
-        /// a failed acceptance check. Config, restore, Run, then the old identity. The evidence folder of
-        /// the install gets a new 'rollback' folder; the replaced files go to Boot.rolled-back.&lt;id&gt;.</summary>
+        /// a failed acceptance check. Without a record folder: the last install on the target. Config,
+        /// restore, Run, then the old identity. The record folder of the install gets a new 'rollback'
+        /// folder; the replaced files go to Boot.rolled-back.&lt;id&gt;.</summary>
         internal static Dictionary<string, object> Rollback(UpdateRequest q, IUpdateHost host)
         {
             string target = RuntimeTargets.Normalize(q.Target);
             if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt) throw new ArgumentException("A Windows rollback runs on the IPC itself: --target local or umrt.");
+            string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
+            if (q.Evidence == null)
+            {
+                var last = Installed(boot);
+                if (last == null || !last.ContainsKey("record") || !(last["record"] is string lastRecord))
+                    throw new InvalidOperationException("bai has no record of an install on this target to roll back. Give --record <install-folder>.");
+                q.Evidence = lastRecord;
+                Console.WriteLine("Roll back the last install: {0} {1}, record {2}.", Field(last, "machine"), Field(last, "sourceTag"), lastRecord);
+            }
             string evidence = Path.GetFullPath(q.Evidence), transactionFile = Path.Combine(evidence, "transaction.json");
             var installed = Read(Path.Combine(evidence, "install.json"));
             if (Text(installed, "status") != "Installed") throw new InvalidOperationException("Only an installed update can be rolled back; install.json has status " + Text(installed, "status") + ".");
-            string boot = Path.GetFullPath(q.Boot ?? RuntimeTargets.BootFolder(target)).TrimEnd('\\');
             if (!Names.Equals(Path.GetFullPath(Text(Read(transactionFile), "boot")).TrimEnd('\\'), boot))
                 throw new InvalidDataException("The update was installed in another boot folder: " + Text(Read(transactionFile), "boot"));
             string folder = Path.Combine(evidence, "rollback");
@@ -414,10 +424,10 @@ namespace BeckhoffAutomationInterface.Release
             var record = new Dictionary<string, object> { ["schemaVersion"] = 1, ["status"] = "Checking", ["target"] = target, ["install"] = evidence };
             try
             {
-                Step(host, folder, "config", "runtime-state", "--target", target, "--state", "config", "--yes");
-                Step(host, folder, "confirm-config", "runtime-state", "--target", target, "--expect", "config");
+                Step(host, folder, "config", "runtime-state", "--target", target, "--set", "config");
+                Step(host, folder, "confirm-config", "runtime-state", "--target", target, "--check", "config");
                 record["replacedImage"] = BootTransaction.Restore(transactionFile)["replacedImage"];
-                Step(host, folder, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                Step(host, folder, "run", "runtime-state", "--target", target, "--set", "run");
                 Step(host, folder, "identity", "verify", "--target", target, "--expect", oldExpect, "--variant", oldVariant);
                 record["status"] = "RolledBack";
                 // The old program runs again: so is its package the installed one again (none after a first install).
@@ -435,7 +445,7 @@ namespace BeckhoffAutomationInterface.Release
                 Write(Path.Combine(folder, "rollback.json"), record);
                 held.Dispose();
             }
-            Console.WriteLine("PASS: the previous boot image is back and runs. Evidence: " + folder);
+            Console.WriteLine("PASS: the previous boot image is back and runs. Record: " + folder);
             return record;
         }
 
@@ -448,8 +458,8 @@ namespace BeckhoffAutomationInterface.Release
             string target = RuntimeTargets.Normalize(q.Target), ssh = q.SshHost;
             if (!Regex.IsMatch(ssh, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*\z")) throw new ArgumentException("--ssh must be user@host.");
             if (q.Rehearsal) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
-            if (q.Legacy) throw new ArgumentException("--legacy is for a Windows IPC only.");
-            if (q.Evidence == null || q.ServiceProject == null) throw new ArgumentException("--ssh needs --evidence <new-folder>, --current, --current-sha256 and --service-project.");
+            if (q.Legacy) throw new ArgumentException("--first-install is for a Windows IPC only.");
+            if (q.Evidence == null || q.ServiceProject == null) throw new ArgumentException("--ssh needs --record <new-folder>, --installed, --installed-sha256 and --saved-project.");
             CheckCurrent(q);
             string evidence = NewEvidence(q, q.ServiceProject);
             var (candidate, current) = Packages(q);
@@ -482,9 +492,9 @@ namespace BeckhoffAutomationInterface.Release
                 Remote(host, evidence, "reserve", ssh, helper + "reserve" + transaction);
                 try
                 {
-                    Step(host, evidence, "config", "runtime-state", "--target", target, "--state", "config", "--yes");
+                    Step(host, evidence, "config", "runtime-state", "--target", target, "--set", "config");
                     Remote(host, evidence, "install", ssh, helper + "install" + transaction + " --package " + remote + "/package.zip --sha256 " + q.PackageSha256);
-                    Step(host, evidence, "run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                    Step(host, evidence, "run", "runtime-state", "--target", target, "--set", "run");
                     Step(host, evidence, "identity", "verify", "--target", target, "--expect", installed, "--variant", machine);
                     Remote(host, evidence, "finish", ssh, helper + "finish" + transaction);
                     record["status"] = "Installed";
@@ -492,9 +502,9 @@ namespace BeckhoffAutomationInterface.Release
                 catch (Exception ex)
                 {
                     record["installError"] = ex.Message;
-                    Step(host, evidence, "rollback-config", "runtime-state", "--target", target, "--state", "config", "--yes");
+                    Step(host, evidence, "rollback-config", "runtime-state", "--target", target, "--set", "config");
                     Remote(host, evidence, "rollback", ssh, helper + "rollback" + transaction);
-                    Step(host, evidence, "rollback-run", "runtime-state", "--target", target, "--state", "run", "--yes");
+                    Step(host, evidence, "rollback-run", "runtime-state", "--target", target, "--set", "run");
                     Step(host, evidence, "rollback-identity", "verify", "--target", target, "--expect", Path.Combine(evidence, "preflight", "identity.expect.json"), "--variant", Text(current, "machine"));
                     Remote(host, evidence, "rollback-finish", ssh, helper + "finish" + transaction);
                     record["status"] = "RolledBack";
@@ -507,7 +517,7 @@ namespace BeckhoffAutomationInterface.Release
                 record["completedUtc"] = DateTime.UtcNow.ToString("o");
                 Write(Path.Combine(evidence, "install.json"), record);
             }
-            Console.WriteLine("PASS: compiled release copied to BSD and live identity verified. Evidence: " + evidence);
+            Console.WriteLine("PASS: compiled release copied to BSD and live identity verified. Record: " + evidence);
             return record;
         }
     }

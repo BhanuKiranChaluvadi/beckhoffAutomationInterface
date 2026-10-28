@@ -51,14 +51,14 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ verify
 
         internal const string VerifyUsage =
-            "Usage: beckhoffAutomationInterface verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout <s>]";
+            "Usage: beckhoffAutomationInterface verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout-seconds <s>]";
 
         public static int Verify(string[] args)
         {
             CommandArgs a;
             try
             {
-                a = CommandArgs.Parse(args, new[] { "--target", "--expect", "--variant", "--timeout" }, new string[0]);
+                a = CommandArgs.Parse(args, new[] { "--target", "--expect", "--variant", "--timeout-seconds" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--expect") == null)
                     throw new ArgumentException("'verify' needs --target umrt|local|<AMS-Net-ID> and --expect <expect.json>.");
             }
@@ -94,7 +94,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 return 1;
             }
 
-            int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
+            int timeoutS = int.TryParse(a.Get("--timeout-seconds"), out int t) ? t : 60;
             Console.WriteLine("{0}: Verify on {1} ({2}), boot project: {3}", Now(), target, netId,
                 RuntimeTargets.CurrentBootProject(target) ?? "(none)");
 
@@ -153,22 +153,22 @@ namespace BeckhoffAutomationInterface.Runtime
             try
             {
                 a = CommandArgs.Parse(args,
-                    new[] { "--target", "--scenarios", "--variant", "--variants", "--groups", "--tags", "--junit", "--timeout" }, new string[0]);
+                    new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--junit", "--timeout-seconds" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--scenarios") == null)
                     throw new ArgumentException("'test' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
-                if (a.Get("--groups") != null && a.Get("--variants") != null)
-                    throw new ArgumentException("use --groups or --variants, not both.");
+                if (a.Get("--groups") != null && a.Get("--variants-file") != null)
+                    throw new ArgumentException("use --groups or --variants-file, not both.");
                 timeoutS = 60;
-                if (a.Get("--timeout") != null && (!int.TryParse(a.Get("--timeout"), out timeoutS) || timeoutS <= 0))
-                    throw new ArgumentException("--timeout needs a number of seconds (more than 0).");
+                if (a.Get("--timeout-seconds") != null && (!int.TryParse(a.Get("--timeout-seconds"), out timeoutS) || timeoutS <= 0))
+                    throw new ArgumentException("--timeout-seconds needs a number of seconds (more than 0).");
                 target = RuntimeTargets.Normalize(a.Get("--target"));
 
                 variant = a.Get("--variant");
                 tags = SplitList(a.Get("--tags"));
                 if (a.Get("--groups") != null)
                     groups = SplitList(a.Get("--groups"));
-                else if (a.Get("--variants") != null)
-                    groups = GroupsOfVariant(Sync.VariantManifestParser.Parse(a.Get("--variants")), a.Get("--variants"), ref variant);
+                else if (a.Get("--variants-file") != null)
+                    groups = GroupsOfVariant(Sync.VariantManifestParser.Parse(a.Get("--variants-file")), a.Get("--variants-file"), ref variant);
             }
             catch (Exception ex) when (ex is ArgumentException || ex is Sync.VariantManifestException
                                        || ex is System.IO.IOException || ex is System.Xml.XmlException)
@@ -303,13 +303,12 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ activate
 
         internal const string ActivateUsage =
-            "Usage: beckhoffAutomationInterface activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]";
+            "Usage: beckhoffAutomationInterface activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout-seconds <s>]";
 
         /// <summary>
         /// Builds one variant and activates it on the target, then waits for the PLC to run.
-        /// Activation REPLACES the target's boot project, so without --yes it only reports what is
-        /// on the target now and changes nothing (no shell is started). The project is attached
-        /// read-only and never saved. Steps proven by the VariantDemo prototype (2026-10-14).
+        /// Activation REPLACES the target's boot project: it first reports what is on the target now.
+        /// The project is attached read-only and never saved. Steps proven by the VariantDemo prototype (2026-10-14).
         /// </summary>
         public static int Activate(string[] args, string shellName)
         {
@@ -317,7 +316,7 @@ namespace BeckhoffAutomationInterface.Runtime
             string target, netId, tsprojPath;
             try
             {
-                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout", "--define" }, new[] { "--yes" });
+                a = CommandArgs.Parse(args, new[] { "--target", "--variant", "--plc", "--timeout-seconds", "--define" }, new string[0]);
                 if (a.Positional == null || a.Get("--target") == null)
                     throw new ArgumentException("'activate' needs a project path and --target umrt|local|<AMS-Net-ID>.");
                 string defineProblem = Sync.CompilerDefines.Problem(a.GetAll("--define"));
@@ -338,14 +337,9 @@ namespace BeckhoffAutomationInterface.Runtime
 
             Console.WriteLine("{0}: Target {1} ({2}): TwinCAT {3}; boot project now: {4}", Now(), target, netId,
                 TwinCatState(netId), RuntimeTargets.CurrentBootProject(target) ?? "(none)");
-            if (!a.Has("--yes"))
-            {
-                Console.WriteLine("{0}: NOT ACTIVATED — activation replaces that boot project. Run again with --yes to do it.", Now());
-                return 1;
-            }
 
             string plcName = ProjectLocator.ResolvePlcName(tsprojPath, a.Get("--plc"));
-            int timeoutS = int.TryParse(a.Get("--timeout"), out int t) ? t : 60;
+            int timeoutS = int.TryParse(a.Get("--timeout-seconds"), out int t) ? t : 60;
             bool running = false;
             ProjectShadowCopy shadow = null;
             try

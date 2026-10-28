@@ -45,10 +45,9 @@ try {
     Step 'init (sync all + build all)'  0 @('init', $source, '--into', $Work)
     $tsproj = (Get-ChildItem $Work -Recurse -Filter 'VariantSample.tsproj' | Select-Object -First 1).FullName
     Step 'build (all variants)'         0 @('build', $tsproj)
-    Step 'activate without --yes'       1 @('activate', $tsproj, '--target', $Target, '--variant', 'MachineA')
     foreach ($pair in @(@('MachineA', 'MachineB'), @('MachineB', 'MachineA'))) {
         $run, $other = $pair
-        Step "activate $run"                     0 @('activate', $tsproj, '--target', $Target, '--variant', $run, '--yes')
+        Step "activate $run"                     0 @('activate', $tsproj, '--target', $Target, '--variant', $run)
         Step "verify $run (running)"             0 @('verify', '--target', $Target, '--expect', $expect, '--variant', $run)
         Step "verify $other (must fail)"         1 @('verify', '--target', $Target, '--expect', $expect, '--variant', $other)
     }

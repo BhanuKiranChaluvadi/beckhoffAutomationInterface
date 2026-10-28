@@ -79,8 +79,8 @@ namespace BeckhoffAutomationInterface.Tests
             Directory.CreateDirectory(Path.GetDirectoryName(log));
             string result;
             int code = 0;
-            if (args[0] == "runtime-state" && args.Contains("--state")) { Mode = After(args, "--state"); result = "Reached " + Mode; }
-            else if (args[0] == "runtime-state") { code = Mode == After(args, "--expect") ? 0 : 1; result = "Target: " + Mode; }
+            if (args[0] == "runtime-state" && args.Contains("--set")) { Mode = After(args, "--set"); result = "Reached " + Mode; }
+            else if (args[0] == "runtime-state") { code = Mode == After(args, "--check") ? 0 : 1; result = "Target: " + Mode; }
             else
             {
                 var actual = Read(Path.Combine(Boot, "Plc", "Port_851.app"));
@@ -299,15 +299,16 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(Hash(c).ToUpperInvariant(), Read(current)["sha256"]);
             Assert.Equal("c", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
 
-            var rollback = new UpdateRequest { Evidence = Path.Combine(host.Root, "e2"), Target = "local", Boot = host.Boot, LockFile = Path.Combine(host.Root, "update.lock") };
-            PackageInstaller.Rollback(rollback, host);
+            // No record folder: each rollback undoes the last install on the target.
+            UpdateRequest Last() => new UpdateRequest { Target = "local", Boot = host.Boot, LockFile = Path.Combine(host.Root, "update.lock") };
+            PackageInstaller.Rollback(Last(), host);
             Assert.Equal("b", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
             Assert.Equal(Hash(b).ToUpperInvariant(), Read(current)["sha256"]);
 
-            rollback.Evidence = Path.Combine(host.Root, "e1");
-            PackageInstaller.Rollback(rollback, host);
+            PackageInstaller.Rollback(Last(), host);
             Assert.Equal("a", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
             Assert.False(File.Exists(current));
+            Assert.Contains("no record of an install", Assert.Throws<InvalidOperationException>(() => PackageInstaller.Rollback(Last(), host)).Message);
         }
 
         [Fact]
@@ -420,14 +421,14 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void CommandLineNeedsYesAndRoutesPackageCommands()
+        public void CommandLineRoutesPackageCommands()
         {
             string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
             var host = Host("cli", a);
             string evidence = Path.Combine(host.Root, "evidence");
-            var install = new[] { "package", "install", "--package", b, "--sha256", Hash(b), "--current", a, "--current-sha256", Hash(a),
-                "--service-project", Service, "--evidence", evidence, "--target", "umrt" };
-            // Without --yes only the read-only checks run (their result depends on this PC's UmRT boot folder).
+            var install = new[] { "package", "check", "--package", b, "--sha256", Hash(b), "--installed", a, "--installed-sha256", Hash(a),
+                "--saved-project", Service, "--target", "umrt" };
+            // 'package check' runs only the read-only checks (their result depends on this PC's UmRT boot folder).
             ReleaseCommands.Run(install, null, host);
             Assert.False(Directory.Exists(evidence));
             Assert.DoesNotContain("config", host.Steps);
@@ -435,7 +436,7 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(2, ArtifactCommands.Run(new[] { "package", "install", "--package", b }));
             string project = Path.Combine(work, "project.zip");
             ZipFile.CreateFromDirectory(Service, project);
-            Assert.Equal(0, ArtifactCommands.Run(new[] { "package", "drift", "--baseline", project, "--sha256", Hash(project), "--project", Service, "--report", Path.Combine(work, "d.json") }));
+            Assert.Equal(0, ArtifactCommands.Run(new[] { "package", "drift", "--baseline", project, "--sha256", Hash(project), "--saved-project", Service, "--output", Path.Combine(work, "d.json") }));
             Assert.Equal(0, ReleaseCommands.Run(new[] { "release", "--help" }, null, host));
         }
 

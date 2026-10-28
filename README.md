@@ -136,7 +136,7 @@ and a command-specific help hint.
 | Code | Meaning |
 |---|---|
 | 0 | The command is done and the result is as expected (`BUILD PASSED`, `VERIFY PASSED`, `TEST PASSED`, no problem found). |
-| 1 | A problem: compile error, failed check, failed scenario, missing project, wrong command line (most commands), or `activate`/`runtime-state --state` without `--yes`. |
+| 1 | A problem: compile error, failed check, failed scenario, missing project, wrong command line (most commands), or a refused `package check`/`install`. |
 | 2 | Only `test`, `machine`, `native`, `release`, `package`, `libraries`, `toolchain`, `esi`: the command line or an input file is not correct. Nothing was changed. |
 | 3 | Only `machine test`: another run holds the UmRT lock. Nothing was changed. |
 
@@ -265,16 +265,16 @@ bai export object <ObjectName> <source> --project <project> [--plc <name>]
 ### `activate`: run a project on a target
 
 ```
-bai activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout <s>] [--yes]
+bai activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--plc <name>] [--define <NAME>]... [--timeout-seconds <s>]
 ```
 
-**CAUTION: Activation replaces the boot project of the target.**
+**CAUTION: Activation replaces the boot project of the target.** For a machine, use
+`package install` (it checks first and keeps the old image).
 
-- Without `--yes`, the tool shows the boot project that is on the target now. It changes nothing
-  and gives exit code 1.
-- With `--yes`, the tool selects the variant, sets the target, builds, activates, restarts
-  TwinCAT and waits until the PLC is in Run (`--timeout`, default 60 s). A failed build stops
-  before the activation, so the running program stays.
+- The tool first shows the boot project that is on the target now.
+- Then it selects the variant, sets the target, builds, activates, restarts TwinCAT and waits
+  until the PLC is in Run (`--timeout-seconds`, default 60). A failed build stops before the
+  activation, so the running program stays.
 - The tool works on a temporary copy. Your project files do not change.
 - On `umrt`, the tool disables the EtherCAT devices, because UmRT has no EtherCAT adapter.
 - `--define SIMULATION` starts the PLC in simulation for a test run.
@@ -284,10 +284,10 @@ bai activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--pl
 ### `verify`: check live values once
 
 ```
-bai verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout <s>]
+bai verify --target umrt|local|<AMS-Net-ID> --expect <expect.json> [--variant <name>] [--timeout-seconds <s>]
 ```
 
-The tool waits until the PLC is in Run (`--timeout`, default 60 s). Then it reads the values of
+The tool waits until the PLC is in Run (`--timeout-seconds`, default 60). Then it reads the values of
 `expect.json` (section 7) over ADS. Each check shows `OK` or `FAIL`, the actual value and the
 expected value. Exit code 0 = `VERIFY PASSED`. It needs no TwinCAT window.
 
@@ -295,7 +295,7 @@ expected value. Exit code 0 = `VERIFY PASSED`. It needs no TwinCAT window.
 
 ```
 bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>]
-         [--variants <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout <s>]
+         [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
 ```
 
 **CAUTION: A scenario sends real commands to the PLC. Use `test` only on a PLC in simulation.**
@@ -303,18 +303,18 @@ bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--varian
 | Option | Meaning |
 |---|---|
 | `--scenarios` | One scenario file, or a folder. The tool reads all `*.json` files in the folder and its subfolders. |
-| `--variants`, `--variant` | Read the feature groups of the variant from `variants.xml`. If the file has one variant, `--variant` is not necessary. |
-| `--groups` | The feature groups, for example `PCV_MODBUS,SPECTROMETER_PLC`. Use it instead of `--variants`. |
+| `--variants-file`, `--variant` | Read the feature groups of the variant from `variants.xml`. If the file has one variant, `--variant` is not necessary. |
+| `--groups` | The feature groups, for example `PCV_MODBUS,SPECTROMETER_PLC`. Use it instead of `--variants-file`. |
 | `--tags` | Run only the scenarios that have one of these tags. |
 | `--junit` | Write the results as JUnit XML (one test case for each scenario). |
-| `--timeout` | The time for the PLC to go to Run, and for the machine to become idle before each scenario. Default: 60 s. |
+| `--timeout-seconds` | The time for the PLC to go to Run, and for the machine to become idle before each scenario. Default: 60. |
 
 What the tool does:
 
 1. It reads all scenario files first. If a file is not correct, it shows `file: step n:` and the
    problem. It sends nothing (exit code 2).
 2. It skips a scenario if the machine does not have all its `requires` groups. Without
-   `--variants` or `--groups`, it skips each scenario that has `requires`.
+   `--variants-file` or `--groups`, it skips each scenario that has `requires`.
 3. Before each scenario, it requires `GVL_Simulation.bActive = TRUE` and a readable
    `GVL_Simulation.bReset`. It waits until no sequence runs (`eActiveSequence` = 0 or 99). It
    sends ErrorAcknowledge (9999), sets `bReset`, waits until `bReset` is FALSE, and waits for
@@ -322,7 +322,7 @@ What the tool does:
 4. It runs the steps and stops the scenario at the first failure. It keeps the value before each
    `write` step and writes it back after the scenario. It stops a failed scenario, or a sequence
    that still runs, with CancelProcess (1). It records the diagnostics before this cleanup.
-5. It runs the optional `cleanup` steps last, also after a failure, with their own `--timeout`.
+5. It runs the optional `cleanup` steps last, also after a failure, with their own timeout.
    A cleanup failure fails the scenario. After a failed cleanup or restore, the tool sends no
    more commands: the remaining scenarios fail.
 6. It shows one line for each scenario (`PASS`, `FAIL` or `SKIP`) and a summary. For a failure,
@@ -336,13 +336,12 @@ The tool cannot recover from a lost PLC connection. Check the runtime before you
 ### `runtime-state`: read or change the runtime state
 
 ```
-bai runtime-state --target umrt|local|<AMS-Net-ID> [--expect config|run] [--state config|run --yes]
+bai runtime-state --target umrt|local|<AMS-Net-ID> [--check config|run | --set config|run]
 ```
 
 - No option: show the state (Config or Run). Exit code 0.
-- `--expect config|run`: exit code 0 if the runtime is in that state, else 1.
-- `--state config|run --yes`: switch the runtime and wait until it is in that state (45 s
-  maximum). Without `--yes`, it changes nothing and gives exit code 1.
+- `--check config|run`: exit code 0 if the runtime is in that state, else 1. Changes nothing.
+- `--set config|run`: switch the runtime and wait until it is in that state (45 s maximum).
 - It uses the system service over ADS. It needs no TwinCAT window and no compiler.
 
 ### `doctor`: show the PC state
@@ -358,7 +357,7 @@ projects and the license expiry dates. It changes nothing. Exit code 0.
 
 ```
 bai license check [--target local|umrt] [--package <zip> | --licenses <name[,name]>]
-bai license trial [--target local|umrt] --package <zip> | --licenses <name[,name]> [--work <folder>] [--wait <minutes>]
+bai license trial [--target local|umrt] --package <zip> | --licenses <name[,name]> [--work <folder>] [--wait-minutes <minutes>]
 ```
 
 `check` lists each license file of the runtime on this PC (local: `3.1\License`, older builds
@@ -378,7 +377,7 @@ Names: `TC3 ADS`, `TC3 IO`, `TC3 PLC`, `TC3 NC PTP`, `TC3 NC PTP Axis`, `TC3 Con
 
 ```
 bai machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>] [--manifest <file>] [--work <folder>]
-bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout <s>] [--manifest <file>] [--work <folder>]
+bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
 ```
 
 Run these commands in a PLC repository that has a `bai.machines.json` file. The tool finds the
@@ -493,65 +492,65 @@ These commands work offline. They need no XAE and no runtime. Add `--json` for a
 JSON. A new archive or baseline file never overwrites an existing file.
 
 ```
-bai package create --directory <payload> --metadata <json> --output <new-zip> [--json]
+bai package create --payload <folder> --metadata <json> --output <new-zip> [--json]
 bai package verify --package <zip> [--sha256 <hash>] [--json]
-bai libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --output <new-json>
-bai libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--manifest <libraries.xml>] --lock <json> --sha256 <hash> [--json]
-bai toolchain capture --components <folder> --xae-shell <folder> --version <version> --archive <new-zip> [--json]
-bai toolchain verify --archive <zip> --sha256 <hash> --version <version> [--installed] [--json]
-bai esi install|verify --system-directory <folder> --devices <folder> --user-directory <folder> [--report <new-json>] [--json]
+bai libraries lock --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --output <new-json>
+bai libraries verify --project <tsproj> --machine <label> --platform <platform> [--variant <name>] [--library-list <libraries.xml>] --library-lock <json> --library-lock-sha256 <hash> [--json]
+bai toolchain capture --components <folder> --xae-shell <folder> --twincat-version <version> --output <new-zip> [--json]
+bai toolchain verify --toolchain <zip> --sha256 <hash> --twincat-version <version> [--check-installed] [--json]
+bai esi install|verify --system-esi <folder> --required-esi <folder> --user-esi <folder> [--output <new-json>] [--json]
 ```
 
 | Command | What it does |
 |---|---|
 | `package create` | Makes a PLC package ZIP from a payload folder (`boot\`, `project.zip`, `evidence.json`, and `identity.expect.json` for schema 2). The metadata JSON has the package fields but no `files` field. `status` must be `Packaged` and `deploymentApproved` must be false. The tool writes the inventory and `release.json`, then verifies the package. |
 | `package verify` | Checks a schema 1 or schema 2 package: the inventory, sizes, SHA256 hashes, boot files and identity data. It refuses unlisted files, duplicate names, links and unsafe paths. Without `--sha256`, it checks only the internal integrity. A pass is not a deployment approval. |
-| `libraries lock` | Reads the compiled TMC (platform and variant) and records all `_Libraries` files, also the dependencies, in a new lock file. The project must have one PLC. Omit `--variant` for a project with no variants. `--manifest` also checks the names and versions of `libraries.xml`. |
+| `libraries lock` | Reads the compiled TMC (platform and variant) and records all `_Libraries` files, also the dependencies, in a new lock file. The project must have one PLC. Omit `--variant` for a project with no variants. `--library-list` also checks the names and versions of `libraries.xml`. |
 | `libraries verify` | Compares the project with an approved lock file. Never make an approved lock file again only to pass a check. |
 | `toolchain capture` | Archives the TwinCAT `Components` folder and the XAE shell folder. Give the real folders; the tool does not guess. The archive does not install Windows parts, register COM or supply licenses. |
-| `toolchain verify` | Checks an archive. `--installed` also compares it with the folders on this PC. |
+| `toolchain verify` | Checks an archive. `--check-installed` also compares it with the folders on this PC. |
 | `esi install` | Copies ESI catalog files into the system and user folders. It checks all conflicts first and never replaces a different file. Open a new XAE session after the install. |
 | `esi verify` | Checks the catalog folders. It writes no file. |
 
 Exit code: 0 = pass, 1 = a check or file operation failed, 2 = wrong arguments.
 
-### `release` and `package install`: make a release and update a machine
+### `release` and `package check|install|rollback`: make a release and update a machine
 
 ```
-bai release build --machines <M[,M]> [--tag <tag> | --working-tree] [--bundle <new-folder>]
+bai release build --machines <M[,M]> [--tag <tag> | --include-uncommitted] [--output <new-folder>]
     --bai-sha256 <hash> --twincat-version <major> [--toolchain <zip> --toolchain-sha256 <hash>]
     --library-lock <json> --library-lock-sha256 <hash> [--platform <name>] [--manifest <file>]
-    [--esi-directory <folder>] [--user-esi-directory <folder>]
+    [--system-esi <folder>] [--user-esi <folder>]
 bai release lock --machines <M[,M]> --twincat-version <major> --output <new-json> [--work <folder>] [--platform <name>]
-bai package preflight --current <zip> --current-sha256 <hash> --service-project <folder> --report <new-folder>
-    [--target local|umrt|<AMS-Net-ID>] [--rehearsal]
-bai package preflight --legacy --report <new-folder> [--target local]
-bai package install --package <zip> --sha256 <hash> --current <zip> --current-sha256 <hash>
-    --service-project <folder> --evidence <new-folder> [--target local|umrt] [--rehearsal] --yes
-bai package install --package <zip> [--yes]          # Windows: the current package is found by bai
-bai package install ... --target <AMS-Net-ID> --ssh <user@host> --yes
-bai package rollback --evidence <install-folder> [--target local|umrt] --yes
-bai package drift --baseline <project.zip> --sha256 <hash> --project <folder> --report <new-json>
+bai package check   --package <zip>        # every check of an install; changes nothing
+bai package install --package <zip>        # the same checks, then the install
+bai package rollback                       # undo the last install
+    Options of check and install: [--sha256 <hash>] [--installed <zip> [--installed-sha256 <hash>]
+    [--saved-project <folder>] | --first-install] [--target local|umrt] [--rehearsal]; install also
+    [--record <new-folder>]; rollback [--record <install-folder>] [--target local|umrt].
+bai package install --package <zip> --installed <zip> --installed-sha256 <hash> --saved-project <folder>
+    --record <new-folder> --target <AMS-Net-ID> --ssh <user@host>      # TwinCAT/BSD
+bai package drift --baseline <project.zip> --sha256 <hash> --saved-project <folder> --output <new-json>
 ```
 
 Run `release` in the PLC repository. It reads `bai.machines.json`.
 
 | Command | What it does |
 |---|---|
-| `release build` | Makes a release bundle in a new folder. The default folder is `<work>\release\<machines>-<version>[-dirty]-<time>`. With `--tag`, the tag must be on `HEAD`. Without `--tag`, the version is `git describe`, and `HEAD` must be on the server (push it first). Without `--working-tree`, the repository must be clean. `--working-tree` also builds the uncommitted and untracked files of the build inputs and keeps `working-tree.patch`. This gives a `DevelopmentValidation` package: use it only for a rehearsal on UmRT. The tool checks its own SHA256, the library lock and the release manifests. `--twincat-version` is the TwinCAT major, for example `3.1.4026` (a build such as `3.1.4026.24` also works; only `3.1.4026` is compared): the project and the library lock must have that major, any build. `release.json` records the build of each project. The library lock still compares each compiled library byte by byte, so other library versions need a new, examined lock. `--toolchain` is optional: with it, the tool also checks that archive against the installed TwinCAT files (before and after the build) and keeps it in the bundle. It copies the source, the tool and the ESI files into the bundle. The tool copy builds each machine with the `machine build --release` steps (always fresh, no SIMULATION). Then the tool checks the compiled project and writes `packages\<M>.zip` and `<M>.zip.sha256`. It never activates. When a step fails, `release.json` has status `Failed` and the reason. |
+| `release build` | Makes a release bundle in a new folder. The default folder is `<work>\release\<machines>-<version>[-dirty]-<time>`. With `--tag`, the tag must be on `HEAD`. Without `--tag`, the version is `git describe`, and `HEAD` must be on the server (push it first). Without `--include-uncommitted`, the repository must be clean. `--include-uncommitted` also builds the uncommitted and untracked files of the build inputs and keeps `working-tree.patch`. This gives a `DevelopmentValidation` package: use it only for a rehearsal on UmRT. The tool checks its own SHA256, the library lock and the release manifests. `--twincat-version` is the TwinCAT major, for example `3.1.4026` (a build such as `3.1.4026.24` also works; only `3.1.4026` is compared): the project and the library lock must have that major, any build. `release.json` records the build of each project. The library lock still compares each compiled library byte by byte, so other library versions need a new, examined lock. `--toolchain` is optional: with it, the tool also checks that archive against the installed TwinCAT files (before and after the build) and keeps it in the bundle. It copies the source, the tool and the ESI files into the bundle. The tool copy builds each machine with the `machine build --release` steps (always fresh, no SIMULATION). Then the tool checks the compiled project and writes `packages\<M>.zip` and `<M>.zip.sha256`. It never activates. When a step fails, `release.json` has status `Failed` and the reason. |
 | `release lock` | Makes a candidate library lock from built machines. The default folder is the `work` of `bai.machines.json`. For a bundle, give `--work <bundle>\build`. Examine the lock one time and keep its SHA256. Do not make it again for each release; make it again only when the compiled libraries change (for example after a TwinCAT update). |
-| `package preflight` | Checks the package that is installed now. The saved service project must agree with its `project.zip`. The live identity must agree with the package, and the online-change counter must be 0. It writes no runtime value. With `--legacy` (a machine without a bai package), it only checks that the PLC is in Run and the online-change counter is 0. |
-| `package install` | Installs a compiled package without XAE. It verifies both packages and does the preflight. Then it sets Config, copies the boot files, sets Run and verifies the live identity. It keeps the old image, `*.bootdata` and the event journal. When a step after Config fails, it puts the old image back and verifies the old identity. A machine accepts only a `ReleaseCandidate`. `--rehearsal` (UmRT only) also accepts a development package. With `--ssh`, the target is TwinCAT/BSD: the tool copies the package and a helper over SSH. The BSD host needs `python3`, a known host key and `doas` for the helper. Without `--yes`, nothing changes. On Windows (local or UmRT), without `--yes` it runs every read-only check and stops: the package, the boot platform of the target, the licenses that the package needs (see `license check --package`) and the preflight. A missing or expired license stops the install before any change. Without `--sha256` it reads `<zip>.sha256`; without `--evidence` it uses `C:\bai\updates\<machine>-<time>`. The old image is also written to `boot-before.zip` (+ `.sha256`) in the evidence folder, read back and checked before the first boot file changes: copy it off the IPC. On Windows bai finds the current package itself: each install keeps a copy of the package and `current.json` in `Boot.installed` beside the boot folder, and the next install uses it. Without that record it is a first install (the same as `--legacy`): the PLC must run with no online change, and the rollback check is that the old PLC runs again. `--current` (hash from `--current-sha256` or `<zip>.sha256`) and `--legacy` still choose it by hand; `--service-project` is optional and adds the drift check. |
-| `package rollback` | Puts back the image that an install replaced, for example after a failed acceptance check (Windows: run it on the IPC). It sets Config, restores the old files from `Boot.before.<id>`, sets Run and verifies the old identity (for `--legacy`: the PLC runs). The replaced files go to `Boot.rolled-back.<id>`. It writes `rollback\rollback.json` in the install evidence folder and runs only once for each install. Without `--yes`, nothing changes. |
-| `package drift` | Compares a saved service project with a `project.zip`. It ignores the XML format. Code, values, element order and comments must agree. Exit code 0 = same, 1 = drift, 2 = error. |
+| `package check` | Runs every check of `install` and changes nothing: the package, the boot platform of the target, the licenses that the package needs (see `license check --package`) and the preflight of the installed program. Preflight: the live identity must agree with the installed package and the online-change counter must be 0; with `--saved-project`, that project must agree with the package's `project.zip`. On a first install (bai installed nothing on the target, or `--first-install`) it only checks that the PLC is in Run and the online-change counter is 0. |
+| `package install` | Installs a compiled package without XAE. It verifies both packages and does the preflight. Then it sets Config, copies the boot files, sets Run and verifies the live identity. It runs the checks of `package check` first. It keeps the old image, `*.bootdata` and the event journal. When a step after Config fails, it puts the old image back and verifies the old identity. A machine accepts only a `ReleaseCandidate`. `--rehearsal` (UmRT only) also accepts a development package. With `--ssh`, the target is TwinCAT/BSD: the tool copies the package and a helper over SSH. The BSD host needs `python3`, a known host key and `doas` for the helper. A missing or expired license stops the install before any change. Without `--sha256` it reads `<zip>.sha256`; without `--record` it uses `C:\bai\updates\<machine>-<time>`. The old image is also written to `boot-before.zip` (+ `.sha256`) in the record folder, read back and checked before the first boot file changes: copy it off the IPC. On Windows bai finds the current package itself: each install keeps a copy of the package and `current.json` in `Boot.installed` beside the boot folder, and the next install uses it. Without that record it is a first install (the same as `--first-install`): the PLC must run with no online change, and the rollback check is that the old PLC runs again. `--installed` (hash from `--installed-sha256` or `<zip>.sha256`) and `--first-install` still choose it by hand; `--saved-project` is optional and adds the drift check. |
+| `package rollback` | Undoes the last install on the target (or the one in `--record`), for example after a failed acceptance check (Windows: run it on the IPC). It sets Config, restores the old files from `Boot.before.<id>`, sets Run and verifies the old identity (after a first install: the PLC runs). The replaced files go to `Boot.rolled-back.<id>`, and `Boot.installed` names the previous package again, so a second `rollback` undoes the install before. It writes `rollback\rollback.json` in the record folder and runs only once for each install. |
+| `package drift` | Compares a saved XAE project (`--saved-project`) with a `project.zip`. It ignores the XML format. Code, values, element order and comments must agree. Exit code 0 = same, 1 = drift, 2 = error. |
 
 Only one update can run at a time. The lock is `C:\bai\lock\umrt.lock` (UmRT),
 `%ProgramData%\Beckhoff\TwinCAT\3.1\boot-update.lock` (local) or `plc-release.lock` on the BSD
-host. The evidence folder of `install` has `install.json`, `preflight\`, `transaction.json`,
+host. The record folder of `install` has `install.json`, `preflight\`, `transaction.json`,
 `boot-before.zip` (Windows) and one log for each step. These commands do not prove that the hardware is ready: physical
 acceptance is a separate step.
 
-Exit code: 0 = pass, 1 = refused or failed (the evidence gives the reason), 2 = wrong arguments.
+Exit code: 0 = pass, 1 = refused or failed (the record gives the reason), 2 = wrong arguments.
 
 ### What the tool never does
 
@@ -560,9 +559,9 @@ Exit code: 0 = pass, 1 = refused or failed (the evidence gives the reason), 2 = 
 - It never deletes PLC objects, tasks or task calls. It deletes I/O items only with
   `--confirm-delete-io`.
 - It never writes over source files on `export`, except with `--overwrite`.
-- It never activates, and never changes the runtime state, except with `--yes` or with
-  `machine test` (only on UmRT_Default).
-- It never reads `--confirm-delete-io`, `--overwrite`, `--plc` or `--yes` from `.stconfig`.
+- It never activates, and never changes the runtime state, except with `activate`, `package install`,
+  `package rollback`, `runtime-state --set` or `machine test` (only on UmRT_Default).
+- It never reads `--confirm-delete-io`, `--overwrite` or `--plc` from `.stconfig`.
 
 ## 5. The source folder
 

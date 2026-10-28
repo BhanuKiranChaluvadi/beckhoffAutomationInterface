@@ -41,7 +41,7 @@ namespace BeckhoffAutomationInterface.Runtime
     {
         internal const string Usage =
             "license check [--target local|umrt] [--package <zip> | --licenses <name[,name]>]\n" +
-            "license trial [--target local|umrt] --package <zip> | --licenses <name[,name]>   [--work <folder>] [--wait <minutes>]";
+            "license trial [--target local|umrt] --package <zip> | --licenses <name[,name]>   [--work <folder>] [--wait-minutes <minutes>]";
 
         /// <summary>The TwinCAT 3 licenses bai can select: name -> license id. XAE selects a license by id.</summary>
         internal static readonly IReadOnlyDictionary<string, string> Known = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -196,7 +196,7 @@ namespace BeckhoffAutomationInterface.Runtime
             try
             {
                 if (args.Length < 2 || (args[1] != "check" && args[1] != "trial")) throw new ArgumentException("license needs a subcommand: check or trial.");
-                o = Release.ArtifactCommands.Options(args, new string[0], new[] { "--target", "--licenses", "--package", "--work", "--wait" });
+                o = Release.ArtifactCommands.Options(args, new string[0], new[] { "--target", "--licenses", "--package", "--work", "--wait-minutes" });
                 target = RuntimeTargets.Normalize(Release.ArtifactCommands.Get(o, "--target", RuntimeTargets.Local));
                 if (target != RuntimeTargets.Local && target != RuntimeTargets.UmRt)
                     throw new ArgumentException("license reads the license files on this PC: --target local or umrt. For an IPC, run bai on the IPC.");
@@ -205,8 +205,8 @@ namespace BeckhoffAutomationInterface.Runtime
                 if (package != null && !File.Exists(package)) throw new ArgumentException("package not found: " + package);
                 required = list != null ? Select(list) : package != null ? FromPackage(package) : null;
                 if (args[1] == "trial" && required == null) throw new ArgumentException("license trial needs --package or --licenses.");
-                if (args[1] == "check" && (o.ContainsKey("--work") || o.ContainsKey("--wait"))) throw new ArgumentException("--work and --wait are for license trial.");
-                if (o.ContainsKey("--wait") && (!int.TryParse(o["--wait"], out waitMinutes) || waitMinutes < 1)) throw new ArgumentException("--wait needs a number of minutes (1 or more).");
+                if (args[1] == "check" && (o.ContainsKey("--work") || o.ContainsKey("--wait-minutes"))) throw new ArgumentException("--work and --wait-minutes are for license trial.");
+                if (o.ContainsKey("--wait-minutes") && (!int.TryParse(o["--wait-minutes"], out waitMinutes) || waitMinutes < 1)) throw new ArgumentException("--wait-minutes needs a number of minutes (1 or more).");
             }
             catch (ArgumentException ex) { Cli.CliHelp.WriteError(Console.Error, args, ex.Message); return 2; }
             catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is System.Xml.XmlException)

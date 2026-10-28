@@ -24,7 +24,7 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void Test_TakesTagsJUnitAndTimeout()
         {
-            MachineCommands.Request q = Parse("test", "Google", "--tags", "smoke,heaters", "--junit", @"C:\r.xml", "--timeout", "90");
+            MachineCommands.Request q = Parse("test", "Google", "--tags", "smoke,heaters", "--junit", @"C:\r.xml", "--timeout-seconds", "90");
             Assert.Equal("test", q.Command);
             Assert.Equal("smoke,heaters", q.Tags);
             Assert.Equal(@"C:\r.xml", q.JUnit);
@@ -41,7 +41,7 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData(new[] { "test", "--release" }, "does not take --release")]
         [InlineData(new[] { "test", "--simulation" }, "does not take --simulation")]
         [InlineData(new[] { "test", "--parallel" }, "does not take --parallel")]
-        [InlineData(new[] { "test", "--timeout", "0" }, "--timeout needs")]
+        [InlineData(new[] { "test", "--timeout-seconds", "0" }, "--timeout-seconds needs")]
         [InlineData(new[] { "build", "--platform", "x86" }, "--platform must be one of")]
         [InlineData(new[] { "build", "--work" }, "--work needs a value")]
         [InlineData(new[] { "build", "--clean" }, "unknown option --clean")]

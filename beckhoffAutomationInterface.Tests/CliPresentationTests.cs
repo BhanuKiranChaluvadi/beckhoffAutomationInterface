@@ -35,9 +35,9 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Theory]
-        [InlineData("package verify", "package create", "--directory")]
-        [InlineData("libraries verify", "toolchain capture", "--archive")]
-        [InlineData("release lock", "release build", "--bundle")]
+        [InlineData("package verify", "package create", "--payload")]
+        [InlineData("libraries verify", "toolchain capture", "--components")]
+        [InlineData("release lock", "release build", "--include-uncommitted")]
         [InlineData("export object", "export code", "--all-variants")]
         [InlineData("machine test", "machine build", "--parallel")]
         public void NestedHelpOnlyShowsRelevantSyntaxAndOptions(string topic, string unrelated, string unrelatedOption)
@@ -136,8 +136,8 @@ namespace BeckhoffAutomationInterface.Tests
                     Directory.CreateDirectory(Path.Combine(root, directory));
                 File.WriteAllText(Path.Combine(root, "system", "device.xml"), "<EtherCATInfo/>");
                 File.Copy(Path.Combine(root, "system", "device.xml"), Path.Combine(root, "user", "device.xml"));
-                string args = "esi verify --system-directory \"" + Path.Combine(root, "system")
-                    + "\" --devices \"" + Path.Combine(root, "devices") + "\" --user-directory \"" + Path.Combine(root, "user") + "\"";
+                string args = "esi verify --system-esi \"" + Path.Combine(root, "system")
+                    + "\" --required-esi \"" + Path.Combine(root, "devices") + "\" --user-esi \"" + Path.Combine(root, "user") + "\"";
                 var text = Run(args);
                 Assert.Equal(0, text.Exit);
                 Assert.Empty(text.Error);

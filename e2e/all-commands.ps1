@@ -174,11 +174,9 @@ try {
 
     # ------------------------------------------------------------ E: runtime (read-only)
     $other = if ($Running -eq 'MachineA') { 'MachineB' } else { 'MachineA' }
-    Step E 'activate preview on UmRT (no --yes)'      1 @('Target umrt', 'boot project now: VariantSample', 'NOT ACTIVATED') @('activate', $tsproj, '--target', 'umrt')
-    Step E 'activate preview on local (no --yes)'     1 @('Target local', 'NOT ACTIVATED') @('activate', $tsproj, '--target', 'local')
     Step E "verify $Running on UmRT (running)"        0 @('VERIFY PASSED') @('verify', '--target', 'umrt', '--expect', $expect, '--variant', $Running)
     Step E "verify $other on UmRT (must fail)"        1 @('VERIFY FAILED') @('verify', '--target', 'umrt', '--expect', $expect, '--variant', $other)
-    Step E 'verify on local (Config, no PLC)'         1 @() @('verify', '--target', 'local', '--expect', $expect, '--variant', $Running, '--timeout', '5') @('VERIFY PASSED')
+    Step E 'verify on local (Config, no PLC)'         1 @() @('verify', '--target', 'local', '--expect', $expect, '--variant', $Running, '--timeout-seconds', '5') @('VERIFY PASSED')
 }
 finally {
     Pop-Location
