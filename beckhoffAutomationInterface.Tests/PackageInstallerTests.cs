@@ -70,6 +70,8 @@ namespace BeckhoffAutomationInterface.Tests
         /// <summary>The answer of the license check: empty = all licenses valid.</summary>
         public List<string> Missing = new List<string>();
         public List<string> MissingLicenses(string target, string package) => Missing;
+        public string BaiPath => Path.Combine(Root, "bai", "bai.exe");
+        public string UpdatesFolder => Path.Combine(Root, "updates");
 
         static string After(string[] args, string name) => args[System.Array.IndexOf(args, name) + 1];
 
@@ -124,6 +126,7 @@ namespace BeckhoffAutomationInterface.Tests
                 return 0;
             }
             string command = args[args.Length - 1];
+            if (command == "cmd /c ver") { File.WriteAllText(log, "cmd: not found"); return 127; } // a BSD host is not Windows
             if (command == "TcSysExe.exe --netid") { File.WriteAllText(log, "    AMS Net Id: 1.2.3.4.1.1\r\n"); return 0; }
             if (command.StartsWith("mkdir ")) { Directory.CreateDirectory(remote); File.WriteAllText(log, ""); return 0; }
             var action = System.Text.RegularExpressions.Regex.Match(command, @"helper\.py (reserve|install|rollback|finish) ");
@@ -133,6 +136,29 @@ namespace BeckhoffAutomationInterface.Tests
             var (code, output) = Python.Run(harness, new Dictionary<string, string> { ["BSD_FIXTURE_ROOT"] = Root }, action.Groups[1].Value);
             File.WriteAllText(log, output);
             return code;
+        }
+    }
+
+    /// <summary>A Windows IPC over SSH: records each ssh/scp call; the remote bai run returns RemoteExit.</summary>
+    sealed class FakeWindowsIpc : IUpdateHost
+    {
+        public readonly string Root;
+        public readonly List<string> Calls = new List<string>();
+        public int AdminExit, RemoteExit;
+        public FakeWindowsIpc(string root) { Root = root; Directory.CreateDirectory(Path.Combine(root, "bai")); File.WriteAllText(BaiPath, "bai"); }
+        public string BaiSha256 => new string('A', 64);
+        public string BaiPath => Path.Combine(Root, "bai", "beckhoffAutomationInterface.exe");
+        public string UpdatesFolder => Path.Combine(Root, "updates");
+        public List<string> MissingLicenses(string target, string package) => new List<string>();
+        public int Bai(string log, params string[] args) => throw new InvalidOperationException("No local runtime step in a remote run.");
+        public int Run(string log, string program, params string[] args)
+        {
+            string last = args[args.Length - 1];
+            Calls.Add(program + " " + (program == "scp" ? args[args.Length - 2] + " -> " + last : last));
+            string output = last == "cmd /c ver" ? "Microsoft Windows [Version 10.0.19045]" : "";
+            if (program == "scp" && last.StartsWith(Root)) Directory.CreateDirectory(last); // the record copied back
+            File.WriteAllText(log, output);
+            return last == "cmd /c net session" ? AdminExit : last.Contains("beckhoffAutomationInterface.exe package ") ? RemoteExit : 0;
         }
     }
 
@@ -312,6 +338,31 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void WindowsIpcOverSshRunsTheSameInstallThereAndCopiesTheRecordBack()
+        {
+            string b = Package("b", "TwinCAT RT (x64)");
+            var ipc = new FakeWindowsIpc(Path.Combine(work, "ipc"));
+            var q = new UpdateRequest { Package = b, PackageSha256 = Hash(b), SshHost = "admin@10.10.30.215" };
+            var result = PackageInstaller.Install(q, ipc);
+            Assert.Equal("Installed", result["status"]);
+            string run = ipc.Calls.Single(c => c.Contains("package install"));
+            Assert.Matches(@"ssh cmd /c C:\\bai\\remote\\[0-9a-f]{32}\\bai\\beckhoffAutomationInterface\.exe package install --package C:\\bai\\remote\\[0-9a-f]{32}\\package\.zip --sha256 " + Hash(b) + @" --record C:\\bai\\updates\\NFPro-\d{8}-\d{6}\z", run);
+            Assert.Equal(new[] { "cmd /c ver", "cmd /c net session" }, ipc.Calls.Take(2).Select(c => c.Substring(4)));
+            Assert.Contains(ipc.Calls, c => c.StartsWith("scp admin@10.10.30.215:C:/bai/updates/NFPro-"));
+            Assert.StartsWith("ssh cmd /c rmdir /s /q C:\\bai\\remote\\", ipc.Calls.Last());
+            Assert.True(Directory.Exists((string)result["record"]));
+
+            ipc.Calls.Clear(); ipc.RemoteExit = 1;
+            Assert.Contains("failed", Assert.Throws<InvalidOperationException>(() => PackageInstaller.Install(new UpdateRequest { Package = b, PackageSha256 = Hash(b), SshHost = "admin@10.10.30.215" }, ipc)).Message);
+            Assert.StartsWith("ssh cmd /c rmdir", ipc.Calls.Last());
+
+            ipc.Calls.Clear(); ipc.AdminExit = 2;
+            Assert.Contains("not an administrator", Assert.Throws<InvalidOperationException>(() => PackageInstaller.Install(new UpdateRequest { Package = b, PackageSha256 = Hash(b), SshHost = "admin@10.10.30.215" }, ipc)).Message);
+            Assert.DoesNotContain(ipc.Calls, c => c.StartsWith("scp"));
+            Assert.Throws<ArgumentException>(() => PackageInstaller.Install(new UpdateRequest { Package = b, PackageSha256 = Hash(b), SshHost = "admin@10.10.30.215", Current = b }, ipc));
+        }
+
+        [Fact]
         public void CheckOnlyRunsTheReadOnlyChecksAndChangesNothing()
         {
             string a = Package("a", "TwinCAT RT (x64)"), b = Package("b", "TwinCAT RT (x64)");
@@ -349,7 +400,7 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<ArgumentException>(() => PackageInstaller.Install(project, host));
             var bsd = Legacy(host, b); bsd.Target = "1.2.3.4.1.1"; bsd.SshHost = "fixture@fixture";
             Assert.Throws<ArgumentException>(() => PackageInstaller.Install(bsd, host));
-            Assert.Empty(host.Steps);
+            Assert.All(host.Steps, s => Assert.Equal("windows", s)); // only the read-only "is it Windows" question over SSH
             Assert.False(Directory.Exists(Path.Combine(host.Root, "evidence")));
         }
 

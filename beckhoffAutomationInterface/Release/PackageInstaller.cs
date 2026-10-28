@@ -22,6 +22,10 @@ namespace BeckhoffAutomationInterface.Release
         string BaiSha256 { get; }
         /// <summary>The licenses the package needs that are missing or expired on the target.</summary>
         List<string> MissingLicenses(string target, string package);
+        /// <summary>The running bai executable (copied to a remote Windows IPC).</summary>
+        string BaiPath { get; }
+        /// <summary>The folder for the logs and record copies of a remote Windows run.</summary>
+        string UpdatesFolder { get; }
     }
 
     /// <summary>The real host: bai commands in this process, programs as child processes.</summary>
@@ -41,6 +45,8 @@ namespace BeckhoffAutomationInterface.Release
         }
         public string BaiSha256 => Hash(System.Reflection.Assembly.GetEntryAssembly().Location).ToUpperInvariant();
         public List<string> MissingLicenses(string target, string package) => LicenseCommands.Missing(target, package);
+        public string BaiPath => System.Reflection.Assembly.GetEntryAssembly().Location;
+        public string UpdatesFolder => PackageInstaller.DefaultUpdates;
     }
 
     internal sealed class UpdateRequest
@@ -285,7 +291,16 @@ namespace BeckhoffAutomationInterface.Release
 
         /// <summary>Installs the candidate. On a failure after Config, rolls back and throws.</summary>
         internal static Dictionary<string, object> Install(UpdateRequest q, IUpdateHost host) =>
-            q.SshHost != null ? InstallBsd(q, host) : InstallWindows(q, host);
+            q.SshHost == null ? InstallWindows(q, host)
+            : RemoteWindows.TryRun(q.CheckOnly ? "check" : "install", q, host, host.BaiPath) ?? InstallBsd(q, host);
+
+        /// <summary>A local install or rollback writes the TwinCAT boot folder: refuse early without administrator rights.</summary>
+        internal static void RequireAdministrator()
+        {
+            using (var identity = System.Security.Principal.WindowsIdentity.GetCurrent())
+                if (!new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator))
+                    throw new InvalidOperationException("Run bai as administrator: it writes the TwinCAT boot folder. Nothing changed.");
+        }
 
         static Dictionary<string, object> InstallWindows(UpdateRequest q, IUpdateHost host)
         {
@@ -459,6 +474,7 @@ namespace BeckhoffAutomationInterface.Release
             if (!Regex.IsMatch(ssh, @"\A[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*\z")) throw new ArgumentException("--ssh must be user@host.");
             if (q.Rehearsal) throw new ArgumentException("Development rehearsal is restricted to UmRT.");
             if (q.Legacy) throw new ArgumentException("--first-install is for a Windows IPC only.");
+            if (q.CheckOnly) throw new ArgumentException("package check over SSH is for a Windows IPC only.");
             if (q.Evidence == null || q.ServiceProject == null) throw new ArgumentException("--ssh needs --record <new-folder>, --installed, --installed-sha256 and --saved-project.");
             CheckCurrent(q);
             string evidence = NewEvidence(q, q.ServiceProject);

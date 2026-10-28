@@ -154,6 +154,7 @@ namespace BeckhoffAutomationInterface
         [STAThread]
         static void Main(string[] args)
         {
+            Cli.ColorConsole.Install();
             string shell;
             try { shell = TakeGlobalOption(ref args, "--shell"); }
             catch (Cli.UsageException ex)

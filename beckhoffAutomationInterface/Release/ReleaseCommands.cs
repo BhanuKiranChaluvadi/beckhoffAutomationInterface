@@ -86,16 +86,24 @@ namespace BeckhoffAutomationInterface.Release
                     case "package check":
                     case "package install":
                         bool check = args[1] == "check";
-                        o = Options(args, new[] { "--package" }, new[] { "--sha256", "--installed", "--installed-sha256", "--saved-project", "--target" }
-                            .Concat(check ? new string[0] : new[] { "--record", "--ssh" }).ToArray(), new[] { "--rehearsal", "--first-install" });
+                        o = Options(args, new[] { "--package" }, new[] { "--sha256", "--installed", "--installed-sha256", "--saved-project", "--target", "--ssh" }
+                            .Concat(check ? new string[0] : new[] { "--record" }).ToArray(), new[] { "--rehearsal", "--first-install" });
                         var install = new UpdateRequest { Package = o["--package"], PackageSha256 = Get(o, "--sha256") ?? HashFile(o["--package"]), Current = Get(o, "--installed"),
                             CurrentSha256 = Get(o, "--installed-sha256"), ServiceProject = Get(o, "--saved-project"), Evidence = Get(o, "--record"), Target = Get(o, "--target", "local"),
                             SshHost = Get(o, "--ssh"), Rehearsal = Get(o, "--rehearsal") != null, Legacy = Get(o, "--first-install") != null, CheckOnly = check };
+                        if (!check && install.SshHost == null && Runtime.RuntimeTargets.Normalize(install.Target) == Runtime.RuntimeTargets.Local) PackageInstaller.RequireAdministrator();
                         PackageInstaller.Install(install, host);
                         return 0;
                     case "package rollback":
-                        o = Options(args, new string[0], new[] { "--record", "--target" });
-                        PackageInstaller.Rollback(new UpdateRequest { Evidence = Get(o, "--record"), Target = Get(o, "--target", "local") }, host);
+                        o = Options(args, new string[0], new[] { "--record", "--target", "--ssh" });
+                        var rollback = new UpdateRequest { Evidence = Get(o, "--record"), Target = Get(o, "--target", "local"), SshHost = Get(o, "--ssh") };
+                        if (rollback.SshHost != null)
+                        {
+                            if (RemoteWindows.TryRun("rollback", rollback, host, host.BaiPath) == null) throw new InvalidOperationException("package rollback over SSH is for a Windows IPC only.");
+                            return 0;
+                        }
+                        if (Runtime.RuntimeTargets.Normalize(rollback.Target) == Runtime.RuntimeTargets.Local) PackageInstaller.RequireAdministrator();
+                        PackageInstaller.Rollback(rollback, host);
                         return 0;
                     default:
                         throw new ArgumentException("Unknown command: " + command + ".");

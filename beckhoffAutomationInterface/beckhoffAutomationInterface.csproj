@@ -9,7 +9,7 @@
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Keep equal to the release tag: bai prints it with the commit as its version. -->
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
