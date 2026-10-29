@@ -99,6 +99,18 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void TrialWithoutLicensesTakesAllKnownLicensesAndThoseOfTrialFiles()
+        {
+            Assert.Equal(LicenseCommands.Known.Keys, LicenseCommands.DefaultTrial(new List<LicenseFile>()).Select(r => r.Key));   // a new PC
+            var other = "{11111111-2222-3333-4444-555555555555}";
+            var files = LicenseCommands.Parse("t.tclrs", Tclrs("2026-11-04T00:00:00", "TC3 PLC").Replace("</LicenseInfo>",
+                "<License><LicenseId>" + other + "</LicenseId><Name>TF9999 Other</Name></License></LicenseInfo>")).ToList();
+            var all = LicenseCommands.DefaultTrial(files);
+            Assert.Equal(LicenseCommands.Known.Count + 1, all.Count);
+            Assert.Equal("TF9999 Other", all.Last().Key);
+        }
+
+        [Fact]
         public void CommandLineRefusesRemoteTargetsAndWrongOptions()
         {
             Assert.Equal(2, LicenseCommands.Run(new[] { "license", "check", "--target", "1.2.3.4.1.1" }, null));

@@ -100,6 +100,7 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData("package verify --invalid", 2, "Unknown or duplicate option")]
         [InlineData("help missing", 1, "Unknown help topic")]
         [InlineData("package missing --help", 2, "Unknown help topic")]
+        [InlineData("license trail --target umrt", 2, "Did you mean 'bai license trial'?")]
         public void InvalidArgumentsUseStderrAndKeepTheirExitCode(string arguments, int exit, string expected)
         {
             var result = Run(arguments);

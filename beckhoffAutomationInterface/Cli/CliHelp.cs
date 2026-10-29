@@ -55,7 +55,7 @@ namespace BeckhoffAutomationInterface.Cli
                 notes: "Activation replaces the target boot project. It first prints the boot project that is on the target now."),
             Entry("license", "Check TwinCAT licenses or make a 7-day trial license.", Runtime.LicenseCommands.Usage,
                 @"bai license check --target local --licenses ""TC3 PLC,TC3 NC PTP""", "check|trial", shell: true,
-                notes: "Reads the license files on this PC (local runtime or UmRT). 'bai license trial --target umrt' renews every trial license of UmRT that ends in less than 2 days. Trial opens XAE on a license-only project with the missing licenses; you click '7 Days Trial License...' and type the code. It never activates."),
+                notes: "Reads the license files on this PC (local runtime or UmRT). 'bai license trial --target umrt' makes or renews every license bai knows (the 8 that the machines and the CI need) that is missing or ends in less than 2 days: the same command for a new PC and each week. Trial opens XAE on a license-only project with the missing licenses; you click '7 Days Trial License...' and type the code. It never activates."),
             Entry("verify", "Compare live PLC values with an expectation file.", Runtime.RuntimeCommands.VerifyUsage,
                 @"bai verify --target umrt --expect ST\sample\expect.json",
                 notes: "Reads values over ADS. Use --variant when the expectation file has no default entry."),
@@ -345,7 +345,7 @@ namespace BeckhoffAutomationInterface.Cli
             {
                 case "check events": return "Check event classes";
                 case "license check": return "Show the license files of a runtime and when they expire; with --package or --licenses, check that each license is there and valid";
-                case "license trial": return "Make a 7-day trial license for each license that is missing or ends in less than 2 days (without --package or --licenses: the licenses of the trial files on the target). Opens XAE; you click '7 Days Trial License...' and type the code";
+                case "license trial": return "Make a 7-day trial license for each license that is missing or ends in less than 2 days (without --package or --licenses: every license bai knows, and those of the trial files on the target). Opens XAE; you click '7 Days Trial License...' and type the code";
                 case "machine build": return "Assemble source and build selected machines";
                 case "machine test": return "Build, activate on UmRT, verify, and run scenarios";
                 case "native capture": return "Capture configuration from a reviewed project";
@@ -428,6 +428,11 @@ namespace BeckhoffAutomationInterface.Cli
             if (command != null)
             {
                 string mode = args.Length > 1 && command.Modes.Contains(args[1]) ? args[1] : null;
+                if (mode == null && args.Length > 1 && !args[1].StartsWith("-"))
+                {
+                    string near = Closest(args[1], command.Modes);
+                    if (near != null) layout.Text("Did you mean 'bai " + command.Name + " " + near + "'?", 0);
+                }
                 layout.Section("Usage");
                 foreach (string line in Invocations(command, mode)) layout.Text("bai " + CompactModes(line, command, mode), 2, 6);
                 layout.Blank();
@@ -435,17 +440,18 @@ namespace BeckhoffAutomationInterface.Cli
             }
             else
             {
-                string suggestion = Suggest(args.FirstOrDefault());
+                string suggestion = Closest(args.FirstOrDefault(), Commands.Select(c => c.Name));
                 if (suggestion != null) layout.Text("Did you mean 'bai " + suggestion + "'?", 0);
                 layout.Blank();
                 layout.Text("Run 'bai --help' for available commands.", 0);
             }
         }
 
-        static string Suggest(string value)
+        /// <summary>The name nearest to a mistyped command or subcommand (2 edits at most), else null.</summary>
+        static string Closest(string value, IEnumerable<string> names)
         {
             if (string.IsNullOrEmpty(value) || value.Length > 30) return null;
-            return Commands.Select(c => new { c.Name, Distance = Distance(value, c.Name) })
+            return names.Select(n => new { Name = n, Distance = Distance(value, n) })
                 .Where(c => c.Distance <= 2).OrderBy(c => c.Distance).ThenBy(c => c.Name, StringComparer.Ordinal)
                 .FirstOrDefault()?.Name;
         }

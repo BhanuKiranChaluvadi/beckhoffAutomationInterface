@@ -367,8 +367,9 @@ see XAE > SYSTEM > License > Online Licenses. Exit code 0 = all valid, 1 = one i
 
 `trial` makes a license-only project in a new folder below `--work` (default `C:\bai\work\license`)
 that selects only the licenses that are missing or end within 2 days. Without `--package` or
-`--licenses` it takes the licenses of the trial files (files with an end date) on the target, so
-`bai license trial --target umrt` renews every trial license of UmRT. It opens XAE on it with
+`--licenses` it takes every license bai knows (the 8 names below: what the machines and the CI
+need) and any other license of the trial files on the target, so `bai license trial --target umrt`
+is the one command for a new PC and for each week. It opens XAE on it with
 the target set, and waits (default 15 min) while you click "7 Days Trial License..." and type the
 security code (Beckhoff makes that step manual). Then it checks the new file and closes XAE
 without saving. It never activates: activation would replace the boot project of the target.
