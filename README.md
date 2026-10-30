@@ -426,8 +426,7 @@ crashes or stops (RPC error or time-out), the tool keeps the failed folder in
 | `--release` | A build for a real machine: the tree must be clean, `HEAD` must have a tag, the manifests must not have `SIMULATION` or a test adapter address. Always fresh. A refused release gives exit code 2. |
 | `--parallel` | Build two machines at the same time (one process and one shell for each machine, about 1 GB RAM each). |
 
-`machine test` holds the lock file (one run on UmRT_Default at a time), runs `preCheck` once,
-then for each machine: `machine build --simulation`, activation on UmRT_Default in the same
+`machine test` runs `preCheck` once, then for each machine: `machine build --simulation`, activation on UmRT_Default in the same
 TwinCAT session (no second shell), `verify` with the machine's `expect.json` and the compiled
 build identity, and `test` with the scenarios of `tests` and the feature groups of the machine.
 The JUnit result is `<work>\<family>\<Machine>-sim\test-results.xml`. With `--junit <file>` and
@@ -435,6 +434,11 @@ more than one machine, the tool adds the machine name to the file name. When all
 the tool writes `validation.json` (and its `.sha256`) in the same folder: the scenarios with
 their hashes, the compiled identity, and the hashes of the TMC and of bai. If a scenario file
 changes during the run, the test fails.
+
+One run on UmRT_Default at a time: `machine test` takes the lock file just before the first
+activation and keeps it until its tests end. The build does not need it, so a second run can
+build while the first one tests; it then waits for the lock (a message once), at most 60 min,
+and else ends with exit code 3 (Busy, nothing activated).
 
 **CAUTION: `machine test` replaces the boot project of UmRT_Default.**
 

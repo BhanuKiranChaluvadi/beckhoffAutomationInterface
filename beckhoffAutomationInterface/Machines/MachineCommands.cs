@@ -33,7 +33,8 @@ namespace BeckhoffAutomationInterface.Machines
             Failed = 1,
             /// <summary>Wrong command line, manifest or machine name, or a release build was refused. Nothing was built.</summary>
             Usage = 2,
-            /// <summary>'machine test': another run holds the UmRT lock. Nothing was done.</summary>
+            /// <summary>'machine test': another run held the UmRT lock longer than <see cref="LockWaitLimit"/>.
+            /// The build ran; nothing was activated.</summary>
             Busy = 3,
         }
 
@@ -306,14 +307,13 @@ namespace BeckhoffAutomationInterface.Machines
                 return Exit.Failed;
             }
 
-            // One run on UmRT_Default at a time: hold the lock file open with no sharing until the end.
-            using (FileStream lockFile = TryLock(manifest.Lock))
+            // One run on UmRT_Default at a time, but only from the activation to the end of the tests:
+            // the build (XAE only) runs while another run tests. The lock file stays open with no
+            // sharing until the end.
+            FileStream lockFile = null;
+            Func<bool> acquireUmRt = () => (lockFile = lockFile ?? WaitLock(manifest.Lock, LockWaitLimit, LockPoll)) != null;
+            try
             {
-                if (lockFile == null)
-                {
-                    Console.Error.WriteLine("UmRT_Default is in use by another run (lock: {0}). Try again later.", manifest.Lock);
-                    return Exit.Busy;
-                }
                 if (manifest.PreCheck.Count > 0)
                 {
                     ConsoleReport.Heading("Source check");
@@ -326,14 +326,19 @@ namespace BeckhoffAutomationInterface.Machines
                 }
                 var rows = new List<MachineRow>();
                 foreach (MachineLayout l in layouts)
-                    rows.Add(TestOne(q, manifest, l, shell, netId, several: layouts.Count > 1));
-                return Summary(rows, test: true);
+                    rows.Add(TestOne(q, manifest, l, shell, netId, acquireUmRt, several: layouts.Count > 1));
+                Exit exit = Summary(rows, test: true);
+                return rows.Any(r => r.Activate == Busy) ? Exit.Busy : exit;
+            }
+            finally
+            {
+                lockFile?.Dispose();
             }
         }
 
         /// <summary>Build with SIMULATION (kept project by default) and activate on UmRT in the same
         /// session, then verify expect.json and run the scenarios.</summary>
-        static MachineRow TestOne(Request q, MachineManifest manifest, MachineLayout l, string shell, string netId, bool several)
+        static MachineRow TestOne(Request q, MachineManifest manifest, MachineLayout l, string shell, string netId, Func<bool> acquireUmRt, bool several)
         {
             var clock = Stopwatch.StartNew();
             MachineRow row = null;
@@ -352,7 +357,9 @@ namespace BeckhoffAutomationInterface.Machines
                         row.Time = Minutes(clock.Elapsed);
                         return row;
                     }
-                    row = MachineBuilder.Build(BuildRequest(q, manifest, l, shell, activate: true, netId: netId));
+                    MachineBuildRequest request = BuildRequest(q, manifest, l, shell, activate: true, netId: netId);
+                    request.AcquireUmRt = acquireUmRt;
+                    row = MachineBuilder.Build(request);
                     if (row.Activate == "PASS")
                     {
                         Console.WriteLine();
@@ -428,6 +435,37 @@ namespace BeckhoffAutomationInterface.Machines
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
             catch (IOException) { return null; }
+        }
+
+        /// <summary>The Activate value of a machine that did not get UmRT_Default in time.</summary>
+        internal const string Busy = "BUSY";
+        internal static readonly TimeSpan LockWaitLimit = TimeSpan.FromMinutes(60);
+        static readonly TimeSpan LockPoll = TimeSpan.FromSeconds(5);
+
+        /// <summary>The lock of <paramref name="path"/>; waits while another run holds it. Null after
+        /// <paramref name="limit"/>.</summary>
+        internal static FileStream WaitLock(string path, TimeSpan limit, TimeSpan poll)
+        {
+            var clock = Stopwatch.StartNew();
+            for (bool waited = false; ; waited = true)
+            {
+                FileStream lockFile = TryLock(path);
+                if (lockFile != null)
+                {
+                    if (waited)
+                        Console.WriteLine("{0}: UmRT_Default is free (waited {1:mm\\:ss}).", Now(), clock.Elapsed);
+                    return lockFile;
+                }
+                if (clock.Elapsed >= limit)
+                {
+                    Console.Error.WriteLine("{0}: UmRT_Default is still in use by another run after {1:F0} min (lock: {2}). Not activated.",
+                        Now(), limit.TotalMinutes, path);
+                    return null;
+                }
+                if (!waited)
+                    Console.WriteLine("{0}: Waiting for UmRT_Default: another run tests on it (lock: {1}).", Now(), path);
+                System.Threading.Thread.Sleep(poll);
+            }
         }
 
         // ------------------------------------------------------------------ summary

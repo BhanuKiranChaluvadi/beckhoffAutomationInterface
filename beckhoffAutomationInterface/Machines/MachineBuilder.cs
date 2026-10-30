@@ -45,6 +45,9 @@ namespace BeckhoffAutomationInterface.Machines
         /// <summary>Activate on UmRT in the same session after the build (machine test).</summary>
         public bool Activate;
         public string ActivateNetId;
+        /// <summary>With Activate: takes the UmRT lock just before the activation (waits while another
+        /// run tests); false = not activated, Activate is BUSY.</summary>
+        public Func<bool> AcquireUmRt;
         public int TimeoutS = 60;
     }
 
@@ -204,6 +207,11 @@ namespace BeckhoffAutomationInterface.Machines
                         if (links.StartsWith("FAIL"))
                         {
                             Console.WriteLine("{0}: Not activated: links {1}.", Now(), links);
+                            return;
+                        }
+                        if (r.AcquireUmRt != null && !r.AcquireUmRt())
+                        {
+                            row.Activate = MachineCommands.Busy;
                             return;
                         }
                         phase = "activate";

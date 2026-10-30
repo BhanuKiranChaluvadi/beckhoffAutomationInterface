@@ -163,6 +163,29 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.NotNull(again);
         }
 
+        [Fact]
+        public void WaitLock_WaitsUntilTheOtherRunEnds()
+        {
+            string file = Path.Combine(TestProjects.NewTempDir("bai_lock"), "umrt.lock");
+            TimeSpan poll = TimeSpan.FromMilliseconds(20);
+            using (FileStream free = MachineCommands.WaitLock(file, TimeSpan.Zero, poll))
+                Assert.NotNull(free);
+
+            FileStream other = MachineCommands.TryLock(file);
+            var release = System.Threading.Tasks.Task.Delay(300).ContinueWith(_ => other.Dispose());
+            using (FileStream waited = MachineCommands.WaitLock(file, TimeSpan.FromSeconds(10), poll))
+                Assert.NotNull(waited);
+            release.Wait();
+        }
+
+        [Fact]
+        public void WaitLock_GivesUpAfterTheLimit()
+        {
+            string file = Path.Combine(TestProjects.NewTempDir("bai_lock"), "umrt.lock");
+            using (FileStream other = MachineCommands.TryLock(file))
+                Assert.Null(MachineCommands.WaitLock(file, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(20)));
+        }
+
         [Theory]
         [InlineData(null, false, false)]
         [InlineData("passed", false, true)]
