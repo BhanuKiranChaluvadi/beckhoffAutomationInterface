@@ -24,6 +24,10 @@ namespace BeckhoffAutomationInterface.Sync
     ///   - The declaration/implementation split point within each FB/METHOD/
     ///     PROGRAM/FUNCTION section is the LAST "END_VAR" in that section, so
     ///     multiple VAR/VAR_INPUT/VAR_OUTPUT/VAR_IN_OUT blocks are supported.
+    ///   - A FUNCTION_BLOCK's or PROGRAM's body follows its METHODs/PROPERTYs, as
+    ///     in IEC 61131-3: the text after the last END_METHOD/END_PROPERTY is the
+    ///     POU's implementation. The older layout (body before the first METHOD)
+    ///     is still read; statements in both places are an error.
     ///     An INTERFACE's own header has no VAR block (interfaces don't declare
     ///     variables), only its methods do.
     ///   - DUTs (ENUM/STRUCT/ALIAS) and GVLs have no implementation section;
@@ -51,6 +55,8 @@ namespace BeckhoffAutomationInterface.Sync
         static readonly Regex InterfaceHeaderRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex InterfaceExtendsRegex = new Regex(@"^\s*INTERFACE\s+" + Modifiers + @"\w+\s+EXTENDS\s+(\w+)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
         static readonly Regex AliasBaseTypeRegex = new Regex(@"TYPE\s+\w+\s*:\s*(\w+)\s*;", RegexOptions.IgnoreCase);
+        static readonly Regex MemberEndRegex = new Regex(@"^\s*END_(?:METHOD|PROPERTY)\s*$", RegexOptions.IgnoreCase);
+        static readonly Regex PouEndRegex = new Regex(@"^\s*END_(?:FUNCTION_BLOCK|PROGRAM)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
         public static List<StPouSource> ParseFile(string stFilePath)
         {
@@ -183,12 +189,14 @@ namespace BeckhoffAutomationInterface.Sync
 
             var results = new List<StPouSource>();
             (string fbDeclaration, string fbImplementation, int fbImplLineOffset) = SplitAtLastEndVar(fbSegment, filePath, fbName);
+            (int lastMemberEnd, string body, int bodyLine) = SplitTrailingBody(lines, methodStarts);
+            (fbImplementation, fbImplLineOffset) = MergeBody(filePath, fbName, fbImplementation, fbImplLineOffset, body, bodyLine);
             results.Add(new StPouSource(fbName, PouKind.FunctionBlock, null, fbDeclaration, fbImplementation, fbExtends)
             {
                 DeclarationStartLine = FirstLineMatching(lines, FunctionBlockHeaderRegex, 0, fbSegmentEnd) + 1,
                 ImplementationStartLine = fbImplLineOffset >= 0 ? fbImplLineOffset + 1 : (int?)null,
             });
-            results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, fbName));
+            results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, fbName, lastMemberEnd));
             return results;
         }
 
@@ -218,13 +226,68 @@ namespace BeckhoffAutomationInterface.Sync
 
             var results = new List<StPouSource>();
             (string prgDeclaration, string prgImplementation, int prgImplLineOffset) = SplitAtLastEndVar(prgSegment, filePath, prgName);
+            (int lastMemberEnd, string body, int bodyLine) = SplitTrailingBody(lines, methodStarts);
+            (prgImplementation, prgImplLineOffset) = MergeBody(filePath, prgName, prgImplementation, prgImplLineOffset, body, bodyLine);
             results.Add(new StPouSource(prgName, PouKind.Program, null, prgDeclaration, prgImplementation)
             {
                 DeclarationStartLine = FirstLineMatching(lines, ProgramHeaderRegex, 0, prgSegmentEnd) + 1,
                 ImplementationStartLine = prgImplLineOffset >= 0 ? prgImplLineOffset + 1 : (int?)null,
             });
-            results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, prgName));
+            results.AddRange(ParseMethodSegments(filePath, lines, methodStarts, prgName, lastMemberEnd));
             return results;
+        }
+
+        /// <summary>
+        /// The IEC 61131-3 body: the text after the last member's END_METHOD/END_PROPERTY,
+        /// without the END_FUNCTION_BLOCK/END_PROGRAM line. Returns where the last member
+        /// ends (exclusive line index; lines.Length when there is no member or no
+        /// terminator), the body (null when only blank lines follow), and the 0-based
+        /// line of its first non-blank line.
+        /// </summary>
+        static (int lastMemberEnd, string body, int bodyLine) SplitTrailingBody(string[] lines, List<int> memberStarts)
+        {
+            if (memberStarts.Count == 0)
+                return (lines.Length, null, -1);
+            int header = FirstLineMatching(lines, MemberHeaderRegex, memberStarts[memberStarts.Count - 1], lines.Length);
+            int memberEnd = -1;
+            for (int i = header + 1; i < lines.Length && memberEnd < 0; i++)
+                if (MemberEndRegex.IsMatch(lines[i]))
+                    memberEnd = i;
+            if (memberEnd < 0)
+                return (lines.Length, null, -1);
+
+            var body = new List<string>();
+            int bodyLine = -1;
+            for (int i = memberEnd + 1; i < lines.Length; i++)
+            {
+                if (PouEndRegex.IsMatch(lines[i]) || (bodyLine < 0 && lines[i].Trim().Length == 0))
+                    continue;
+                if (bodyLine < 0)
+                    bodyLine = i;
+                body.Add(lines[i]);
+            }
+            string text = string.Join("\n", body).Trim();
+            return text.Length > 0 ? (memberEnd + 1, text, bodyLine) : (memberEnd + 1, null, -1);
+        }
+
+        /// <summary>
+        /// Combines the old-layout implementation (before the first member) with the IEC
+        /// body (after the last member). Comments before the first member stay in front;
+        /// statements in both places are refused, since one of them would be lost.
+        /// </summary>
+        static (string implementation, int implLineOffset) MergeBody(string filePath, string pouName,
+            string before, int beforeLine, string after, int afterLine)
+        {
+            if (after == null)
+                return (before, beforeLine);
+            string beforeCode = PouEndRegex.Replace(StripComments(before ?? ""), "").Trim();
+            if (beforeCode.Length > 0)
+                throw new FormatException(
+                    $"'{filePath}': {pouName} has statements both before and after its METHODs/PROPERTYs. " +
+                    "IEC 61131-3 puts the body after them.");
+            if (string.IsNullOrWhiteSpace(before))
+                return (after, afterLine);
+            return (before + "\n" + after, beforeLine);
         }
 
         /// <summary>
@@ -286,12 +349,14 @@ namespace BeckhoffAutomationInterface.Sync
             return starts;
         }
 
-        static IEnumerable<StPouSource> ParseMethodSegments(string filePath, string[] lines, List<int> memberStarts, string ownerName)
+        static IEnumerable<StPouSource> ParseMethodSegments(string filePath, string[] lines, List<int> memberStarts, string ownerName,
+            int lastSegmentEnd = -1)
         {
             for (int m = 0; m < memberStarts.Count; m++)
             {
                 int segStart = memberStarts[m];
-                int segEnd = (m + 1 < memberStarts.Count) ? memberStarts[m + 1] : lines.Length;
+                int segEnd = (m + 1 < memberStarts.Count) ? memberStarts[m + 1]
+                    : lastSegmentEnd >= 0 ? lastSegmentEnd : lines.Length;
                 string segment = string.Join("\n", lines, segStart, segEnd - segStart);
 
                 // The section's keyword line for provenance — segStart itself may point at

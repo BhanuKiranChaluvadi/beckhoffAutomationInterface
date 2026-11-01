@@ -20,12 +20,13 @@ namespace BeckhoffAutomationInterface.Sync
     /// it, done.
     ///
     /// Also supports FUNCTION_BLOCK/PROGRAM/FUNCTION/INTERFACE objects, with or without
-    /// child METHODs/PROPERTIES: Declaration + Implementation (if any) + the correct
-    /// POU-level terminator re-added (never stored in Declaration/ImplementationText —
-    /// see StPouSource.StripPouTerminators), followed by each child METHOD/PROPERTY
-    /// stitched back in as its own "METHOD ... END_METHOD" or "PROPERTY ... GET ...
-    /// END_GET SET ... END_SET END_PROPERTY" section, in tree (creation) order — the
-    /// exact reverse of PouSyncEngine.SyncMethods/SyncProperties. INTERFACE has no
+    /// child METHODs/PROPERTIES, in IEC 61131-3 order: Declaration, then each child
+    /// METHOD/PROPERTY stitched back in as its own "METHOD ... END_METHOD" or "PROPERTY
+    /// ... GET ... END_GET SET ... END_SET END_PROPERTY" section, in tree (creation)
+    /// order — the exact reverse of PouSyncEngine.SyncMethods/SyncProperties — then the
+    /// Implementation (if any), then the correct POU-level terminator re-added (never
+    /// stored in Declaration/ImplementationText — see StPouSource.StripPouTerminators).
+    /// StFileParser reads the text after the last member as the body. INTERFACE has no
     /// Implementation section at all (StFileParser never sets one for it), and
     /// interface members have no Implementation body (casting throws
     /// InvalidCastException, matching the write side's own catch pattern) — both
@@ -161,6 +162,12 @@ namespace BeckhoffAutomationInterface.Sync
             var text = new System.Text.StringBuilder();
             text.AppendLine(((ITcPlcDeclaration)item).DeclarationText);
 
+            for (int i = 1; i <= item.ChildCount; i++)
+            {
+                text.AppendLine();
+                AppendMember(text, item.get_Child(i));
+            }
+
             // INTERFACE has no Implementation section at all (StFileParser never sets one
             // for it — see ParseInterfaceFile), so skip reading it for that kind.
             if (!isInterface)
@@ -171,12 +178,6 @@ namespace BeckhoffAutomationInterface.Sync
                     text.AppendLine();
                     text.AppendLine(baseImplementation);
                 }
-            }
-
-            for (int i = 1; i <= item.ChildCount; i++)
-            {
-                text.AppendLine();
-                AppendMember(text, item.get_Child(i));
             }
 
             text.AppendLine(terminator);

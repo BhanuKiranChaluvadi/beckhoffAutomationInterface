@@ -169,5 +169,103 @@ END_METHOD
             Assert.Equal("Init", method.Name);
             Assert.Equal("FB_Motor", method.OwnerName);
         }
+
+        // IEC 61131-3 order: the POU body comes after its METHODs / PROPERTYs.
+        // Line numbers are 1-based in this literal ("FUNCTION_BLOCK FB_Iec" is line 2).
+        const string IecOrderFb = @"
+FUNCTION_BLOCK FB_Iec
+VAR
+    _x : INT;
+END_VAR
+
+METHOD Init
+    _x := 1;
+END_METHOD
+
+PROPERTY Value : INT
+    GET
+        Value := _x;
+    END_GET
+END_PROPERTY
+
+    // FB body
+    _x := _x + 1;
+END_FUNCTION_BLOCK
+";
+
+        [Fact]
+        public void FunctionBlock_IecOrder_BodyAfterMembersIsTheFbImplementation()
+        {
+            var sources = StFileParser.ParseFile(WriteFile("FB_Iec", IecOrderFb));
+
+            Assert.Equal(3, sources.Count);
+            StPouSource fb = sources.Single(s => s.Name == "FB_Iec");
+            Assert.Equal("// FB body\r\n    _x := _x + 1;", fb.ImplementationText);
+            Assert.Equal(17, fb.ImplementationStartLine);
+
+            StPouSource value = sources.Single(s => s.Name == "Value");
+            Assert.Equal("Value := _x;", value.GetText);
+            Assert.Null(value.SetText);
+            Assert.Equal("_x := 1;", sources.Single(s => s.Name == "Init").ImplementationText);
+        }
+
+        [Fact]
+        public void FunctionBlock_IecOrder_LastMethodKeepsOnlyItsOwnBody()
+        {
+            string path = WriteFile("FB_Last", @"
+FUNCTION_BLOCK FB_Last
+VAR
+    _x : INT;
+END_VAR
+METHOD Reset
+    _x := 0;
+END_METHOD
+    _x := _x + 1;
+END_FUNCTION_BLOCK
+");
+            var sources = StFileParser.ParseFile(path);
+
+            Assert.Equal("_x := 0;", sources.Single(s => s.Name == "Reset").ImplementationText);
+            Assert.Equal("_x := _x + 1;", sources.Single(s => s.Name == "FB_Last").ImplementationText);
+        }
+
+        [Fact]
+        public void Program_IecOrder_BodyAfterMethodIsTheProgramImplementation()
+        {
+            string path = WriteFile("PRG_Iec", @"
+PROGRAM PRG_Iec
+VAR
+    x : INT;
+END_VAR
+METHOD PRIVATE _Init : INT
+    _Init := 42;
+END_METHOD
+    x := _Init();
+END_PROGRAM
+");
+            var sources = StFileParser.ParseFile(path);
+
+            Assert.Equal("x := _Init();", sources.Single(s => s.Name == "PRG_Iec").ImplementationText);
+            Assert.Equal("_Init := 42;", sources.Single(s => s.Name == "_Init").ImplementationText);
+        }
+
+        [Fact]
+        public void FunctionBlock_BodyBeforeAndAfterMembers_IsRejected()
+        {
+            string path = WriteFile("FB_Both", @"
+FUNCTION_BLOCK FB_Both
+VAR
+    _x : INT;
+END_VAR
+    _x := 1;
+METHOD Reset
+    _x := 0;
+END_METHOD
+    _x := 2;
+END_FUNCTION_BLOCK
+");
+            var error = Assert.Throws<FormatException>(() => StFileParser.ParseFile(path));
+            Assert.Contains("FB_Both", error.Message);
+        }
     }
 }
