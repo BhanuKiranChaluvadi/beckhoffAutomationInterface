@@ -101,6 +101,25 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void Pending_ListsOnlyBoxesThatStillNeedTheEdit_AndUnknownBoxes()
+        {
+            WriteFixture();
+            var set = new PlcDataTypeTarget("EL3174_2.1", "EL3174", "Channel");
+            var unknown = new PlcDataTypeTarget("EL3174_9.9", "EL3174", "Channel");
+
+            Assert.Equal(new[] { "EL3174_2.1", "EL3174_9.9" },
+                TsprojPlcDataTypeEditor.Pending(_tsprojPath, new[] { set, unknown }).Select(t => t.BoxName));
+
+            TsprojPlcDataTypeEditor.Apply(_tsprojPath, new[] { set }, _templatesFolder);
+
+            Assert.Equal(new[] { "EL3174_9.9" },
+                TsprojPlcDataTypeEditor.Pending(_tsprojPath, new[] { set, unknown }).Select(t => t.BoxName));
+            Assert.Equal(new[] { "EL3174_2.1" },   // Device instead of Channel: the edit is needed again
+                TsprojPlcDataTypeEditor.Pending(_tsprojPath, new[] { new PlcDataTypeTarget("EL3174_2.1", "EL3174", "Device") })
+                    .Select(t => t.BoxName));
+        }
+
+        [Fact]
         public void SecondRun_IsIdempotent_NoDuplicateDataTypesOrRewrite()
         {
             WriteFixture();

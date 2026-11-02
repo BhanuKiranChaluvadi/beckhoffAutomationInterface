@@ -621,6 +621,18 @@ namespace BeckhoffAutomationInterface
                     Console.WriteLine("{0}: Event classes: all declared classes already present.", Now());
             }
 
+            // Close Visual Studio only for a real edit: the file is saved first, so it matches
+            // the open project, and the targets already set need nothing (a kept project).
+            if (plcDataTypeTargets.Count > 0 && missingEventClasses.Count == 0)
+            {
+                if (_session.IsOpen)
+                    RetryOnBusy(() => _session.Project.Save(), "saving the project");
+                if (TsprojPlcDataTypeEditor.Pending(_options.TsprojFilePath, plcDataTypeTargets).Count == 0)
+                {
+                    Console.WriteLine("{0}: Create PLC Data Type: all {1} terminal(s) already set.", Now(), plcDataTypeTargets.Count);
+                    return;
+                }
+            }
             if (plcDataTypeTargets.Count == 0 && missingEventClasses.Count == 0)
                 return;
 

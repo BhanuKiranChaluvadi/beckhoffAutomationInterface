@@ -91,10 +91,7 @@ namespace BeckhoffAutomationInterface.Sync
                     continue;
                 }
 
-                bool alreadySet = (bool?)etherCat.Attribute("CreateDeviceDataType") == true
-                    && ((bool?)etherCat.Attribute("DeviceDataTypePerChannel") ?? false) == perChannel
-                    && etherCat.Element("PlcDataTypes") != null;
-                if (alreadySet)
+                if (IsSet(etherCat, perChannel))
                 {
                     result.Applied.Add($"{target.BoxName} (already set)");
                     continue;
@@ -128,5 +125,23 @@ namespace BeckhoffAutomationInterface.Sync
             TsprojDataTypePool.SaveIfChanged(tsprojPath, doc, changed);
             return result;
         }
+
+        /// <summary>The targets Apply would still change: a box without the setting, or one the
+        /// file does not have (yet). Read-only, so Visual Studio may keep the project open
+        /// when the list is empty.</summary>
+        public static List<PlcDataTypeTarget> Pending(string tsprojPath, IEnumerable<PlcDataTypeTarget> targets)
+        {
+            XDocument doc = XDocument.Load(tsprojPath);
+            return targets.Where(t =>
+            {
+                XElement etherCat = doc.Descendants("Box").FirstOrDefault(b => (string)b.Element("Name") == t.BoxName)?.Element("EtherCAT");
+                return etherCat == null || !IsSet(etherCat, string.Equals(t.CreatePlcType, "Channel", StringComparison.OrdinalIgnoreCase));
+            }).ToList();
+        }
+
+        static bool IsSet(XElement etherCat, bool perChannel) =>
+            (bool?)etherCat.Attribute("CreateDeviceDataType") == true
+            && ((bool?)etherCat.Attribute("DeviceDataTypePerChannel") ?? false) == perChannel
+            && etherCat.Element("PlcDataTypes") != null;
     }
 }
