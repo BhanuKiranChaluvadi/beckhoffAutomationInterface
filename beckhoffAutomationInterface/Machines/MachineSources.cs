@@ -139,28 +139,6 @@ namespace BeckhoffAutomationInterface.Machines
             Mirror(safetySource, Path.Combine(src, NativeSafetyFolder, Path.GetFileName(safetySource)));
         }
 
-        /// <summary>.st files of the kept source folder that the repository no longer has
-        /// (deleted or renamed): their objects would stay in a kept project.</summary>
-        public static List<string> GoneStFiles(string repoRoot, string src, IEnumerable<string> sources)
-        {
-            var gone = new List<string>();
-            foreach (string source in sources)
-            {
-                string kept = RepoPath(src, source);
-                if (!Directory.Exists(kept))
-                    continue;
-                string now = RepoPath(repoRoot, source);
-                foreach (string file in Directory.EnumerateFiles(kept, "*.st", SearchOption.AllDirectories))
-                {
-                    string rel = file.Substring(kept.Length).TrimStart('\\', '/');
-                    if (!File.Exists(Path.Combine(now, rel)))
-                        gone.Add(source + "/" + rel.Replace('\\', '/'));
-                }
-            }
-            gone.Sort(StringComparer.OrdinalIgnoreCase);
-            return gone;
-        }
-
         /// <summary>One hash of every manifest of the assembled source folder (I/O tree, links,
         /// variants, libraries, events, tasks, gas model, safety project). The sync stages only add,
         /// never remove, links, I/O items and tasks: when this changes, a kept project is not

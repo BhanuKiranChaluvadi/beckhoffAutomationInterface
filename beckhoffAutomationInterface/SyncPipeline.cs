@@ -46,6 +46,10 @@ namespace BeckhoffAutomationInterface
         /// project is not opened and compiled a second time).</summary>
         public Action<TwinCatSession> AfterBuild { get; set; }
 
+        /// <summary>Delete the PLC objects whose source is gone or moved (StaleObjectPlan) before
+        /// the code sync, so a kept project stays usable. False: only warn about them (bai sync).</summary>
+        public bool DeleteStaleObjects { get; set; }
+
         /// <summary>
         /// Executes the selected stages (see SyncStages; all of them when no stage flag
         /// was given) in a fixed three-phase order regardless of flag order:
@@ -352,12 +356,27 @@ namespace BeckhoffAutomationInterface
                     "{0} object(s) are defined in more than one .st file; nothing was synced. Delete or rename the stale file:\n    {1}",
                     duplicates.Count, string.Join("\n    ", duplicates)));
 
-            // Warn-only drift detection: a previously-synced name missing from the current
-            // parse means its .st source was renamed/deleted, but the PLC object still
-            // compiles. Report it, never delete it.
+            // Drift: a previously-synced name missing from the current parse means its .st
+            // source was renamed/deleted, but the PLC object still compiles. With
+            // DeleteStaleObjects it is deleted (and a moved object too); otherwise only reported.
             List<string> currentNames = KnownNamesTracker.CollectNames(desiredPous);
             List<string> previousNames = KnownNamesTracker.Read(_options.KnownNamesPath);
-            if (previousNames != null)
+            List<string> deletedObjects = new List<string>();
+            if (DeleteStaleObjects)
+            {
+                StaleObjectPlan plan = null;
+                RetryOnBusy(() => plan = StaleObjectPlan.Build(previousNames, desiredPous,
+                    StaleObjectDeleter.IndexTopLevel(_session.SysManager.LookupTreeItem(_options.ProjectRootPath)),
+                    _options.ProjectRootPath), "indexing PLC objects");
+                RetryOnBusy(() => deletedObjects = StaleObjectDeleter.Execute(_session.SysManager, plan), "deleting stale PLC objects");
+                Outcome.StaleNames = plan.Unresolved.Count;
+                if (plan.Unresolved.Count > 0)
+                {
+                    Console.WriteLine("{0}: [drift] {1} object(s) could not be deleted in the kept project:", Now(), plan.Unresolved.Count);
+                    PrintLines("! stale    ", plan.Unresolved);
+                }
+            }
+            else if (previousNames != null)
             {
                 List<string> staleNames = KnownNamesTracker.DiffFull(previousNames, currentNames);
                 Outcome.StaleNames = staleNames.Count;
@@ -378,6 +397,7 @@ namespace BeckhoffAutomationInterface
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
             SyncReport syncReport = syncEngine.Sync(desiredPous);
+            syncReport.Deleted.AddRange(deletedObjects);
 
             PrintLines("+ created  ", syncReport.Created);
             PrintLines("~ updated  ", syncReport.Updated);

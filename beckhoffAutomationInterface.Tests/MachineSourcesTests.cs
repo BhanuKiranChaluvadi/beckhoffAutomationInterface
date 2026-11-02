@@ -55,14 +55,12 @@ namespace BeckhoffAutomationInterface.Tests
             File.Delete(repo.Path_("Machines/Fam/M1/safety.xml"));
             File.Delete(repo.Path_("Safety/Fam/S/sub/a.sal"));
 
-            Assert.Equal(new[] { "App/Fam/MAIN.st" }, MachineSources.GoneStFiles(repo.Root, l.Src, l.Family.Sources));
             System.Threading.Thread.Sleep(20);
             MachineSources.Assemble(l, NoCommand);
             Assert.False(File.Exists(Path.Combine(l.Src, @"App\Fam\MAIN.st")));
             Assert.False(File.Exists(Path.Combine(l.Src, "tasks.xml")));
             Assert.False(File.Exists(Path.Combine(l.Src, "safety.xml")));
             Assert.Equal(unchanged, File.GetLastWriteTimeUtc(Path.Combine(l.Src, @"Lib\Math\F_Add.st"))); // same bytes: not written
-            Assert.Empty(MachineSources.GoneStFiles(repo.Root, l.Src, l.Family.Sources));
         }
 
         [Fact]

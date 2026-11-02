@@ -117,16 +117,6 @@ namespace BeckhoffAutomationInterface.Machines
             row.Mode = keep ? "kept" : freshReason ?? "fresh";
             if (keep)
             {
-                List<string> gone = MachineSources.GoneStFiles(l.RepoRoot, l.Src, l.Family.Sources);
-                if (gone.Count > 0)
-                {
-                    Console.WriteLine("{0}: {1} .st file(s) deleted or renamed since the last build (for example {2}): building fresh.", Now(), gone.Count, gone[0]);
-                    keep = false;
-                    row.Mode = "fresh (file gone)";
-                }
-            }
-            if (keep)
-            {
                 MachineSources.Assemble(l, RunCommand);
                 if (MachineSources.Stamp(l.Src) != state.Stamp)
                 {
@@ -135,20 +125,14 @@ namespace BeckhoffAutomationInterface.Machines
                     row.Mode = "fresh (manifest changed)";
                 }
             }
+            // A kept project loses the objects whose source is gone or moved in the sync
+            // (SyncPipeline.DeleteStaleObjects); only what it cannot delete builds fresh (drift).
             List<StPouSource> parsed = null;
             if (keep)
             {
                 parsed = Parse(l.Src, row);
                 if (parsed == null)
                     return row;
-                List<string> previous = KnownNamesTracker.Read(Path.Combine(l.Src, ".st-known-names"));
-                List<string> stale = previous == null ? new List<string>() : KnownNamesTracker.DiffFull(previous, KnownNamesTracker.CollectNames(parsed));
-                if (stale.Count > 0)
-                {
-                    Console.WriteLine("{0}: {1} object(s) are in the kept project but no longer in the source (for example {2}): building fresh.", Now(), stale.Count, stale[0]);
-                    keep = false;
-                    row.Mode = "fresh (drift)";
-                }
             }
             if (!keep)
             {
@@ -191,6 +175,7 @@ namespace BeckhoffAutomationInterface.Machines
                 {
                     var pipeline = new SyncPipeline(session, options, IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns));
                     outcome = pipeline.Outcome;
+                    pipeline.DeleteStaleObjects = keep;
                     pipeline.AfterBuild = s =>
                     {
                         // A kept project with I/O items the manifest no longer has: build fresh, activate that one.

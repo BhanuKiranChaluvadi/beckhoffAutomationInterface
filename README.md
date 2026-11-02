@@ -190,9 +190,10 @@ and events), safety, I/O links, build. A missing manifest means "nothing to do" 
 
 What `sync code` does with old objects:
 
-- It never deletes a PLC object, METHOD or PROPERTY. If the `.st` source of a synced name is
-  gone, it shows a `[drift]` warning with the name. Delete the old object in TwinCAT. The list
-  of synced names is in `.st-known-names` in the source folder.
+- `sync code` never deletes a PLC object, METHOD or PROPERTY. If the `.st` source of a synced
+  name is gone, it shows a `[drift]` warning with the name. Delete the old object in TwinCAT. The
+  list of synced names is in `.st-known-names` in the source folder. (`machine build|test`
+  deletes them; see `machine build` and `machine test`.)
 - If two `.st` files define the same object, it stops before it changes anything.
 
 ### `build`: compile
@@ -414,9 +415,13 @@ machines of the file.
 4. In ONE TwinCAT session, it makes a new project (`init`) or syncs the kept project, and builds
    the variant of the machine. Each declared link must resolve.
 
-The project is kept between runs. The tool builds a fresh project when you give `--fresh`, when
-a manifest changed, when a `.st` file or an object was deleted or renamed, when the kept project
-has I/O items that the manifest does not have, or when the last run did not end. When the shell
+The project is kept between runs. Before the sync of a kept project, the tool deletes the objects,
+METHODs and PROPERTYs whose `.st` source is gone (`- deleted  FB_X (gone)`), and the objects
+whose `.st` file moved to another folder (`- deleted  FB_X (moved from A)`; the sync makes them
+again in the new folder). A PROGRAM is updated where it is. An empty PLC folder stays. The tool
+builds a fresh project when you give `--fresh`, when a manifest changed, when it cannot delete an
+old object (two objects with the name, or TwinCAT refuses), when the kept project has I/O items
+that the manifest does not have, or when the last run did not end. When the shell
 crashes or stops (RPC error or time-out), the tool keeps the failed folder in
 `<work>\<family>\_failed\` and builds once more, fresh. A compile error is not tried again.
 
