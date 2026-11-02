@@ -279,8 +279,12 @@ bai activate <project> --target umrt|local|<AMS-Net-ID> [--variant <name>] [--pl
 - The tool works on a temporary copy. Your project files do not change.
 - On `umrt`, the tool disables the EtherCAT devices, because UmRT has no EtherCAT adapter.
 - `--define SIMULATION` starts the PLC in simulation for a test run.
-- If the PLC stays in Config, the tool checks the license of the target and tells you if it
-  is the cause.
+- A kept project whose target already is the runtime sends only the PLC on activation, also when
+  another project was activated there since. The tool sets the target to the local system and back
+  first, so the full system configuration goes to the runtime, and on a local runtime it checks
+  that the boot folder has it before the restart.
+- If the PLC stays in Config, the tool tells you the cause it finds: a system configuration this
+  activation did not write, or the license of the target.
 
 ### `verify`: check live values once
 
@@ -940,7 +944,7 @@ agree, the step fails and shows the PLC type.
 | `SAFETY FAILED — ... box(es) named ...` | Use the box names of the real project in `io-devices.xml`. |
 | `SAFETY FAILED — ... has not got its Standard In/Out channels` | The object IDs do not agree. Look at the `~ id` lines and at the box names. |
 | `SAFETY FAILED — ... not byte-equal to the source` | Get the safety folder again from git. Do not edit it. |
-| The PLC stays in Config after `activate` | Run `bai doctor` and look at the license expiry date. |
+| The PLC stays in Config after `activate` | Read the cause under the message. "wrote only the PLC": activate again with this version. Else run `bai doctor` and look at the license expiry date. |
 | `verify` shows `FAIL` | Another variant runs, or the code does not do what `expect.json` says. Look at the actual values. |
 | `test`: `send` gives `no answer` | The command id is not known, or the command receiver does not run. |
 | `TIMEOUT — Build did not finish in 15 minute(s)` | The shell locked during the build. The tool closed it. Run again. |

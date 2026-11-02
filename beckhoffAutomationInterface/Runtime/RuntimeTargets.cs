@@ -102,9 +102,9 @@ namespace BeckhoffAutomationInterface.Runtime
             }
         }
 
-        /// <summary>CurrentProjectInfo.json describes the last SYSTEM activation. When only the PLC
-        /// changed (same system configuration, for example two machines of one family with the
-        /// I/O disabled), TwinCAT rewrites just Plc/Port_851*, so the PLC boot time is added.</summary>
+        /// <summary>CurrentProjectInfo.json describes the last SYSTEM activation. When an activation
+        /// writes only Plc/Port_851* (a kept project whose target did not change; see
+        /// RuntimeCommands.ActivateOpenProject), the PLC boot time is added.</summary>
         internal static string DescribeBootFolder(string bootFolder)
         {
             string info = Path.Combine(bootFolder, "CurrentProjectInfo.json");
@@ -119,6 +119,16 @@ namespace BeckhoffAutomationInterface.Runtime
             plcBootWritten.HasValue && plcBootWritten.Value > infoWritten.AddSeconds(30)
                 ? string.Format("{0}; PLC (port 851) updated {1:yyyy-MM-ddTHH:mm:ss}", description, plcBootWritten.Value)
                 : description;
+
+        /// <summary>Why a PLC may stay off after an activation: the activation did not write the
+        /// system configuration (CurrentProjectInfo.json is older than the activation), so the
+        /// runtime still has the one named in it. Null when this activation wrote it, or there is none.</summary>
+        internal static string KeptSystemConfiguration(string projectInfoJson, DateTime infoWritten, DateTime activationStart) =>
+            projectInfoJson == null || infoWritten >= activationStart.AddSeconds(-5)
+                ? null
+                : string.Format("This activation wrote only the PLC (port 851): the runtime kept the system configuration "
+                    + "of {0}. A PLC with another project's system configuration does not start. Activate again; if it "
+                    + "stays, restart the runtime and activate again.", DescribeProjectInfo(projectInfoJson));
 
         /// <summary>Reads &lt;Value Name="AmsNetId" Type="BIN"&gt;C7042AFA0101&lt;/Value&gt; → "199.4.42.250.1.1".</summary>
         internal static string NetIdFromTcRegistry(string xml)

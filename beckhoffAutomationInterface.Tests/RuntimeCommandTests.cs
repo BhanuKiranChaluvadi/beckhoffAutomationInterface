@@ -118,6 +118,30 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void KeptSystemConfiguration_NamesTheOldConfigurationWhenThisActivationDidNotWriteIt()
+        {
+            // NFPro activated at 15:16 over Shark's system configuration of 13:53 (2026-11-02): PLC stayed off.
+            string json = "{\"project\":{\"name\":\"Shark\",\"created\":\"2026-11-02T13:53:55\"}}";
+            var written = new System.DateTime(2026, 11, 2, 13, 53, 55);
+            var activation = new System.DateTime(2026, 11, 2, 15, 16, 30);
+
+            string text = RuntimeTargets.KeptSystemConfiguration(json, written, activation);
+
+            Assert.Contains("Shark (activated 2026-11-02T13:53:55)", text);
+            Assert.Contains("only the PLC", text);
+        }
+
+        [Fact]
+        public void KeptSystemConfiguration_IsNullWhenThisActivationWroteIt_OrThereIsNone()
+        {
+            string json = "{\"project\":{\"name\":\"NFPro\",\"created\":\"2026-11-02T13:23:01\"}}";
+            var activation = new System.DateTime(2026, 11, 2, 13, 22, 58);
+
+            Assert.Null(RuntimeTargets.KeptSystemConfiguration(json, activation.AddSeconds(3), activation));
+            Assert.Null(RuntimeTargets.KeptSystemConfiguration(null, activation.AddHours(-2), activation));
+        }
+
+        [Fact]
         public void BootProject_ShowsAPlcOnlyUpdate()   // SAS after Shark: only Plc/Port_851* rewritten (2026-10-14)
         {
             var info = new System.DateTime(2026, 10, 14, 21, 29, 32);

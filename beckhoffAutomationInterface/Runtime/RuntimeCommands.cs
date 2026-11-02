@@ -412,6 +412,11 @@ namespace BeckhoffAutomationInterface.Runtime
                 Console.WriteLine("{0}: Compiler defines for this activation: {1}", Now(),
                     Sync.CompilerDefines.Add(sys, string.Format("TIPC^{0}^{0} Project", plcName), defines));
 
+            // A kept project whose target already is netId sends only the PLC on activation, also
+            // when another project was activated there since (2026-11-02). A changed target sends
+            // the full system configuration, so switch away and back first.
+            if (string.Equals(sys14.GetTargetNetId(), netId, StringComparison.OrdinalIgnoreCase))
+                sys14.SetTargetNetId(AdsClient.LocalNetId());
             sys14.SetTargetNetId(netId);
             Console.WriteLine("{0}: Target set to {1}.", Now(), sys14.GetTargetNetId());
 
@@ -457,13 +462,71 @@ namespace BeckhoffAutomationInterface.Runtime
             }
             Console.WriteLine("{0}: Build passed.", Now());
 
+            DateTime activationStart = DateTime.Now;
             sys.ActivateConfiguration();
             Console.WriteLine("{0}: Configuration activated on {1}.", Now(), netId);
+            foreach (string message in ErrorListMessages(vs.Dte))
+                Console.WriteLine("    [XAE] {0}", message);
+            WaitForSystemConfiguration(target, activationStart, 15);
             sys.StartRestartTwinCAT();
             Console.WriteLine("{0}: TwinCAT restart requested.", Now());
 
             using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
-                return WaitForPlcRun(target, netId, plc, timeoutS);
+                return WaitForPlcRun(target, netId, plc, timeoutS, activationStart: activationStart);
+        }
+
+        /// <summary>The XAE Error List after an activation: TwinCAT reports there why it did not
+        /// take a configuration. Empty when the list cannot be read.</summary>
+        static List<string> ErrorListMessages(EnvDTE80.DTE2 dte)
+        {
+            var messages = new List<string>();
+            try
+            {
+                EnvDTE80.ErrorItems items = dte.ToolWindows.ErrorList.ErrorItems;
+                for (int i = 1; i <= items.Count; i++)
+                {
+                    EnvDTE80.ErrorItem item = items.Item(i);
+                    if (!string.IsNullOrWhiteSpace(item.Description))
+                        messages.Add(item.ErrorLevel + ": " + item.Description);
+                }
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException || ex is ArgumentException)
+            {
+            }
+            return messages;
+        }
+
+        /// <summary>A local target: waits until the runtime's boot folder holds the system configuration
+        /// of this activation, so the restart does not cut the transfer off. Logs how long it took.</summary>
+        static void WaitForSystemConfiguration(string target, DateTime activationStart, int timeoutS)
+        {
+            if (RuntimeTargets.IsNetId(RuntimeTargets.Normalize(target)))
+                return;
+            var clock = Stopwatch.StartNew();
+            while (KeptConfiguration(target, activationStart) != null || !BootInfoExists(target))
+            {
+                if (clock.Elapsed.TotalSeconds >= timeoutS)
+                {
+                    Console.WriteLine("{0}: The runtime has no system configuration of this activation after {1} s.", Now(), timeoutS);
+                    return;
+                }
+                Thread.Sleep(500);
+            }
+            Console.WriteLine("{0}: System configuration written to the runtime ({1:0.0} s).", Now(), clock.Elapsed.TotalSeconds);
+        }
+
+        static bool BootInfoExists(string target) =>
+            System.IO.File.Exists(System.IO.Path.Combine(RuntimeTargets.BootFolder(target), "CurrentProjectInfo.json"));
+
+        /// <summary>KeptSystemConfiguration for a local target after an activation; null otherwise.</summary>
+        static string KeptConfiguration(string target, DateTime? activationStart)
+        {
+            if (activationStart == null || RuntimeTargets.IsNetId(RuntimeTargets.Normalize(target)))
+                return null;
+            string info = System.IO.Path.Combine(RuntimeTargets.BootFolder(target), "CurrentProjectInfo.json");
+            return System.IO.File.Exists(info)
+                ? RuntimeTargets.KeptSystemConfiguration(System.IO.File.ReadAllText(info), System.IO.File.GetLastWriteTime(info), activationStart.Value)
+                : null;
         }
 
         static int DisableIoDevices(Interop.TCatSysManager.ITcSysManager sys)
@@ -508,7 +571,8 @@ namespace BeckhoffAutomationInterface.Runtime
 
         /// <summary>Waits for the PLC (port 851) to report Run. On timeout, says why TwinCAT may
         /// have stayed in Config mode (see ConfigModeHint).</summary>
-        static bool WaitForPlcRun(string target, string netId, AdsClient plc, int timeoutS, string failure = "VERIFY FAILED")
+        static bool WaitForPlcRun(string target, string netId, AdsClient plc, int timeoutS, string failure = "VERIFY FAILED",
+            DateTime? activationStart = null)
         {
             var clock = Stopwatch.StartNew();
             ushort plcState = 0;
@@ -532,7 +596,8 @@ namespace BeckhoffAutomationInterface.Runtime
                 Console.WriteLine("{0}: {4} — PLC not in Run after {1} s. TwinCAT: {2}. PLC: {3}.", Now(), timeoutS, sysText, plcText, failure);
                 if (sysErr == 0 && sysState == AdsClient.StateConfig)
                     Console.WriteLine("    TwinCAT stays in Config mode: the runtime did not start. " +
-                                      ConfigModeHint(RuntimeTargets.LicenseExpiry(target), DateTime.Now));
+                                      (KeptConfiguration(target, activationStart)
+                                       ?? ConfigModeHint(RuntimeTargets.LicenseExpiry(target), DateTime.Now)));
             }
             return false;
         }
