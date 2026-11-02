@@ -22,7 +22,8 @@ namespace BeckhoffAutomationInterface.Machines
             "machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>]\n" +
             "                [--manifest <file>] [--work <folder>]\n" +
             "  machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]\n" +
-            "                [--manifest <file>] [--work <folder>]";
+            "                [--manifest <file>] [--work <folder>]\n" +
+            "  machine dev   <Machine> [--fresh] [--tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]";
 
         /// <summary>The exit codes of 'machine'.</summary>
         internal enum Exit
@@ -53,8 +54,8 @@ namespace BeckhoffAutomationInterface.Machines
         /// <summary>args[0] = "machine". Throws ArgumentException on a command-line problem (pure).</summary>
         internal static Request Parse(string[] args)
         {
-            if (args.Length < 2 || (args[1] != "build" && args[1] != "test"))
-                throw new ArgumentException("'machine' needs a mode: build or test.");
+            if (args.Length < 2 || (args[1] != "build" && args[1] != "test" && args[1] != "dev"))
+                throw new ArgumentException("'machine' needs a mode: build, test or dev.");
             var q = new Request { Command = args[1] };
             for (int i = 2; i < args.Length; i++)
             {
@@ -94,9 +95,12 @@ namespace BeckhoffAutomationInterface.Machines
 
             string[] buildOnly = { "--release", "--simulation", "--parallel", "--platform", "--result" };
             string[] testOnly = { "--tags", "--junit", "--timeout-seconds" };
-            string wrong = (q.Command == "build" ? testOnly : buildOnly).FirstOrDefault(o => args.Skip(2).Contains(o));
+            string[] notForDev = buildOnly.Concat(new[] { "--junit" }).ToArray();
+            string wrong = (q.Command == "build" ? testOnly : q.Command == "dev" ? notForDev : buildOnly).FirstOrDefault(o => args.Skip(2).Contains(o));
             if (wrong != null)
                 throw new ArgumentException(string.Format("'machine {0}' does not take {1}.", q.Command, wrong));
+            if (q.Command == "dev" && q.Machines.Count != 1)
+                throw new ArgumentException("'machine dev' needs exactly one machine.");
             if (q.Release && q.Simulation)
                 throw new ArgumentException("--release and --simulation: a release build never has SIMULATION.");
             if (q.Platform != null && !MachineFamily.Platforms.Contains(q.Platform))
@@ -140,13 +144,13 @@ namespace BeckhoffAutomationInterface.Machines
             {
                 if (manifest.FamilyOf(machine) == null)
                     throw new ArgumentException(string.Format("unknown machine '{0}'. {1} lists: {2}.", machine, MachineManifest.FileName, string.Join(", ", manifest.AllMachines)));
-                var layout = new MachineLayout(manifest, machine, simulation: q.Command == "test" || q.Simulation, work: q.Work);
+                var layout = new MachineLayout(manifest, machine, simulation: q.Command != "build" || q.Simulation, work: q.Work);
                 string problem = BuildLocation.Problem(manifest.Root, layout.Dir);
                 if (problem != null)
                     throw new ArgumentException(problem);
                 if (!layout.Family.IsNative && !File.Exists(Path.Combine(layout.MachineFolder, "variants.xml")))
                     throw new ArgumentException("no variants.xml in " + layout.MachineFolder);
-                if (q.Command == "test" && (layout.Family.Tests == null || !Directory.Exists(MachineSources.RepoPath(manifest.Root, layout.Family.Tests))))
+                if (q.Command != "build" && (layout.Family.Tests == null || !Directory.Exists(MachineSources.RepoPath(manifest.Root, layout.Family.Tests))))
                     throw new ArgumentException(string.Format("family '{0}' has no test folder (\"tests\" in {1}).", layout.Family.Name, MachineManifest.FileName));
                 layouts.Add(layout);
             }
@@ -359,31 +363,11 @@ namespace BeckhoffAutomationInterface.Machines
                     }
                     MachineBuildRequest request = BuildRequest(q, manifest, l, shell, activate: true, netId: netId);
                     request.AcquireUmRt = acquireUmRt;
+                    request.Develop = q.Command == "dev";
+                    request.VerifyAndTest = (r, verify) => VerifyAndTest(q, manifest, l, r, several, verify);
                     row = MachineBuilder.Build(request);
-                    if (row.Activate == "PASS")
-                    {
-                        Console.WriteLine();
-                        ConsoleReport.Heading(l.Machine + " - verification and test scenarios");
-                        string tmc = MachineChecks.CompiledTmc(l.Tsproj);
-                        List<Dictionary<string, object>> identity = MachineChecks.CompiledBuildExpectations(File.ReadAllText(tmc), l.Machine);
-                        // A native family may have no expect.json: then only the compiled build identity is checked.
-                        string expect = Path.Combine(l.MachineFolder, "expect.json");
-                        File.WriteAllText(l.StartupExpect, l.Family.IsNative && !File.Exists(expect)
-                            ? MachineChecks.IdentityExpectations(l.Machine, identity)
-                            : MachineChecks.StartupExpectations(File.ReadAllText(expect), l.Machine, identity));
-                        row.Verify = Runtime.RuntimeCommands.Verify(new[] { "verify", "--target", "umrt", "--expect", l.StartupExpect, "--variant", l.Machine }) == 0 ? "PASS" : "FAIL";
-                        if (row.Verify == "PASS")
-                        {
-                            string tests = MachineSources.RepoPath(manifest.Root, l.Family.Tests);
-                            List<NativeProject.FileEntry> scenarios = NativeProject.Inventory(tests);
-                            row.Tests = RunScenarios(q, manifest, l, several, out int executed);
-                            if (NativeProject.Difference(scenarios, NativeProject.Inventory(tests)) != null)
-                                row.Tests = "FAIL (scenarios changed during the run)";
-                            if (row.Tests.StartsWith("PASS"))
-                                Console.WriteLine("{0}: Validation record: {1}", Now(), MachineChecks.WriteValidationRecord(l.ValidationRecord,
-                                    l, q.Tags, executed, scenarios, identity, tmc, Process.GetCurrentProcess().MainModule.FileName));
-                        }
-                    }
+                    if (row.Activate == "PASS" && !request.Develop)
+                        VerifyAndTest(q, manifest, l, row, several);
                 }
                 catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
                                            || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException)
@@ -398,6 +382,34 @@ namespace BeckhoffAutomationInterface.Machines
                 Console.WriteLine("{0}: Full log: {1}", Now(), l.Log);
             }
             return row;
+        }
+
+        /// <summary>The activated PLC: verify its startup values and build identity (only right after an
+        /// activation: the scenarios change the values), then run the scenarios.</summary>
+        static void VerifyAndTest(Request q, MachineManifest manifest, MachineLayout l, MachineRow row, bool several, bool verify = true)
+        {
+            Console.WriteLine();
+            ConsoleReport.Heading(l.Machine + " - verification and test scenarios");
+            row.Tests = "-";
+            string tmc = MachineChecks.CompiledTmc(l.Tsproj);
+            List<Dictionary<string, object>> identity = MachineChecks.CompiledBuildExpectations(File.ReadAllText(tmc), l.Machine);
+            // A native family may have no expect.json: then only the compiled build identity is checked.
+            string expect = Path.Combine(l.MachineFolder, "expect.json");
+            File.WriteAllText(l.StartupExpect, l.Family.IsNative && !File.Exists(expect)
+                ? MachineChecks.IdentityExpectations(l.Machine, identity)
+                : MachineChecks.StartupExpectations(File.ReadAllText(expect), l.Machine, identity));
+            if (verify)
+                row.Verify = Runtime.RuntimeCommands.Verify(new[] { "verify", "--target", "umrt", "--expect", l.StartupExpect, "--variant", l.Machine }) == 0 ? "PASS" : "FAIL";
+            if (row.Verify != "PASS")
+                return;
+            string tests = MachineSources.RepoPath(manifest.Root, l.Family.Tests);
+            List<NativeProject.FileEntry> scenarios = NativeProject.Inventory(tests);
+            row.Tests = RunScenarios(q, manifest, l, several, out int executed);
+            if (NativeProject.Difference(scenarios, NativeProject.Inventory(tests)) != null)
+                row.Tests = "FAIL (scenarios changed during the run)";
+            if (row.Tests.StartsWith("PASS"))
+                Console.WriteLine("{0}: Validation record: {1}", Now(), MachineChecks.WriteValidationRecord(l.ValidationRecord,
+                    l, q.Tags, executed, scenarios, identity, tmc, Process.GetCurrentProcess().MainModule.FileName));
         }
 
         static string RunScenarios(Request q, MachineManifest manifest, MachineLayout l, bool several, out int executed)

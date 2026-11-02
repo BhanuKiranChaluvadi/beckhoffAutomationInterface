@@ -49,6 +49,11 @@ namespace BeckhoffAutomationInterface.Machines
         /// run tests); false = not activated, Activate is BUSY.</summary>
         public Func<bool> AcquireUmRt;
         public int TimeoutS = 60;
+        /// <summary>machine dev: after the first activation, keep the session open and run
+        /// MachineDev rounds (VerifyAndTest after each activation).</summary>
+        public bool Develop;
+        /// <summary>(row, verify): verify expect.json (true only right after an activation) and run the scenarios; sets row.Verify and row.Tests.</summary>
+        public Action<MachineRow, bool> VerifyAndTest;
     }
 
     /// <summary>The saved state of a kept project: what it was built from and how it ended.</summary>
@@ -203,6 +208,8 @@ namespace BeckhoffAutomationInterface.Machines
                         Console.WriteLine("{0}: Activate on UmRT_Default (SIMULATION, I/O disabled), same session.", Now());
                         row.Activate = Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, options.PlcProjectName, options.Variant,
                             new[] { SimulationDefine }, Runtime.RuntimeTargets.UmRt, r.ActivateNetId, r.TimeoutS, p => p) ? "PASS" : "FAIL";
+                        if (row.Activate == "PASS" && r.Develop)
+                            Develop(r, s, row);
                     };
                     pipeline.Run();
                 }
@@ -277,11 +284,55 @@ namespace BeckhoffAutomationInterface.Machines
         /// <summary>The release tag (set by the command after its release checks).</summary>
         internal static string ReleaseTag { get; set; }
 
-        static RunOptions Options(MachineBuildRequest r, bool init)
+        /// <summary>machine dev in the open session: verify and test the activated PLC, then one
+        /// round per change (MachineDev). The manifests must stay as they were at the start.</summary>
+        static void Develop(MachineBuildRequest r, TwinCatSession s, MachineRow row)
+        {
+            MachineLayout l = r.Layout;
+            string stamp = MachineSources.Stamp(l.Src);
+            string first = Test(r, row, verify: true);
+            Console.WriteLine("{0}: DEV RESULT 0: {1}", Now(), first);
+            string machines = Path.GetDirectoryName(l.MachineFolder).Substring(l.RepoRoot.Length).TrimStart('\\', '/');
+            MachineDev.Watch(l.RepoRoot, l.Family.Sources, l.Family.Tests, new[] { machines, MachineManifest.FileName, "Safety" },
+                Path.Combine(l.FamilyWork, l.Machine + ".dev-stop"),
+                step => step == DevStep.TestsOnly ? Test(r, row, verify: false) : Rebuild(r, s, row, stamp));
+        }
+
+        /// <summary>verify: the startup values hold only right after an activation, not after scenarios ran.</summary>
+        static string Test(MachineBuildRequest r, MachineRow row, bool verify)
+        {
+            r.VerifyAndTest(row, verify);
+            return row.Verify != "PASS" ? "FAIL (verify)" : row.Tests;
+        }
+
+        /// <summary>One dev round: the changed code into the open project (gone objects deleted),
+        /// then build, activate, verify and test.</summary>
+        static string Rebuild(MachineBuildRequest r, TwinCatSession s, MachineRow row, string stamp)
+        {
+            MachineLayout l = r.Layout;
+            MachineSources.Assemble(l, RunCommand);
+            if (MachineSources.Stamp(l.Src) != stamp)
+                return "STOP — a manifest changed: run 'bai machine test'.";
+            if (Parse(l.Src, row) == null)
+                return "FAIL (parse)";
+            BuildInfo.Write(MachineSources.RepoPath(l.Src, l.Family.BuildInfo),
+                BuildInfo.FromGit(l.RepoRoot, l.Machine, r.BuildInputs, BuildInfo.RunGit, DateTime.UtcNow));
+            RunOptions code = Options(r, init: false, stages: SyncStages.Code);
+            var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true };
+            pipeline.Run();
+            if (pipeline.Outcome.StaleNames > 0)
+                return "STOP — the kept project has objects it cannot delete: run 'bai machine test'.";
+            if (!Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, code.PlcProjectName, code.Variant,
+                    new[] { SimulationDefine }, Runtime.RuntimeTargets.UmRt, r.ActivateNetId, r.TimeoutS, p => p))
+                return "FAIL (build or activation)";
+            return Test(r, row, verify: true);
+        }
+
+        static RunOptions Options(MachineBuildRequest r, bool init, SyncStages stages = SyncStages.All)
         {
             MachineLayout l = r.Layout;
             return new RunOptions(
-                sourceFolder: l.Src, destinationFolder: l.Dir, projectName: l.Machine, stages: SyncStages.All,
+                sourceFolder: l.Src, destinationFolder: l.Dir, projectName: l.Machine, stages: stages,
                 init: init, checkEvents: false, parseOnly: false, ignorePatterns: new string[0], exportObjectName: null,
                 exportLinks: false, formatCheck: false, confirmDeleteIo: false, reverseExports: ReverseExports.None,
                 overwrite: false, plcProjectName: l.Family.Plc, existingTsprojPath: null, configFileLoaded: false,

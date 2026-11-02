@@ -386,6 +386,7 @@ Names: `TC3 ADS`, `TC3 IO`, `TC3 PLC`, `TC3 NC PTP`, `TC3 NC PTP Axis`, `TC3 Con
 ```
 bai machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>] [--manifest <file>] [--work <folder>]
 bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
+bai machine dev   <Machine> [--fresh] [--tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
 ```
 
 Run these commands in a PLC repository that has a `bai.machines.json` file. The tool finds the
@@ -532,6 +533,23 @@ bai esi install|verify --system-esi <folder> --required-esi <folder> --user-esi 
 | `esi verify` | Checks the catalog folders. It writes no file. |
 
 Exit code: 0 = pass, 1 = a check or file operation failed, 2 = wrong arguments.
+
+### `machine dev`: a fast loop on one machine
+
+`machine dev Google --tags ozone` does what `machine test` does (kept project), then keeps
+TwinCAT XAE open and the UmRT lock held, and watches the repository. Each time you save, it runs
+one round:
+
+| You changed | The round |
+|---|---|
+| A `.st` file of the family's sources | Sync of the changed code (old objects deleted), build, activation, startup check, the scenarios. About 45 s on Google with one scenario. |
+| Only scenario files (`.json` in the test folder) | The scenarios again on the running PLC (no startup check: the values changed). |
+| A manifest (`Machines/<family>`, `bai.machines.json`, `Safety`) | The loop stops: run `machine test`. |
+| Anything else | Nothing. |
+
+Each round prints `DEV RUN <n>` and `DEV RESULT <n>: <result> (<time>)`. Stop it with Ctrl+C or by
+creating `<work>\<family>\<Machine>.dev-stop`; then XAE closes as after `machine test`. The
+summary row is that of the last round.
 
 ### `release` and `package check|install|rollback`: make a release and update a machine
 

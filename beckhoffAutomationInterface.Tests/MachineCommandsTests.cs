@@ -32,6 +32,27 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Empty(Parse("test").Machines); // all machines
         }
 
+        [Fact]
+        public void Dev_TakesOneMachineAndTags()
+        {
+            MachineCommands.Request q = Parse("dev", "Google", "--tags", "ozone", "--fresh");
+            Assert.Equal("dev", q.Command);
+            Assert.Equal(new[] { "Google" }, q.Machines);
+            Assert.Equal("ozone", q.Tags);
+            Assert.True(q.Fresh);
+        }
+
+        [Theory]
+        [InlineData(new[] { "dev" }, "exactly one machine")]
+        [InlineData(new[] { "dev", "Google,SAS" }, "exactly one machine")]
+        [InlineData(new[] { "dev", "Google", "--release" }, "does not take --release")]
+        [InlineData(new[] { "dev", "Google", "--junit", "x" }, "does not take --junit")]
+        public void Dev_RejectsWrongArguments(string[] args, string message)
+        {
+            var ex = Assert.Throws<System.ArgumentException>(() => Parse(args));
+            Assert.Contains(message, ex.Message);
+        }
+
         [Theory]
         [InlineData(new string[0], "needs a mode")]
         [InlineData(new[] { "run" }, "needs a mode")]
