@@ -26,6 +26,7 @@ namespace BeckhoffAutomationInterface.Tests
         string Components => Path.Combine(scratch, "components");
         string ToolchainZip => Path.Combine(scratch, "toolchain.zip");
         string LockFile => Path.Combine(scratch, "libraries.lock.json");
+        string Installed => Path.Combine(scratch, "managed-libraries");
         string fault = "";
 
         public void Dispose() { try { BuildLocation.Delete(scratch); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
@@ -45,6 +46,7 @@ namespace BeckhoffAutomationInterface.Tests
             ArtifactArchives.CaptureToolchain(Components, Path.Combine(scratch, "xaeShell"), Version, ToolchainZip);
             Write(Path.Combine(Tool, "bai.exe"), "fixture bai");
             Write(Path.Combine(Tool, "dependency.dll"), "fixture dependency");
+            Write(Path.Combine(Installed, @"Vendor\Library\1.2.3.4\Library.compiled-library"), Library);
             var library = new Dictionary<string, object> { ["path"] = "Vendor/Library/1.2.3.4/Library.compiled-library", ["bytes"] = Library.Length,
                 ["sha256"] = ProjectDrift.Digest(System.Text.Encoding.UTF8.GetBytes(Library)) };
             File.WriteAllText(LockFile, Encode(new Dictionary<string, object> { ["schemaVersion"] = 1, ["machines"] = new[] {
@@ -62,7 +64,39 @@ namespace BeckhoffAutomationInterface.Tests
             Machines = { "M1" }, Tag = tag, WorkingTree = workingTree, Bundle = Path.Combine(scratch, "bundles", bundle), Bai = Path.Combine(Tool, "bai.exe"),
             BaiSha256 = Hash(Path.Combine(Tool, "bai.exe")), TwinCatVersion = Version, LibraryLock = LockFile, LibraryLockSha256 = Hash(LockFile),
             Toolchain = ToolchainZip, ToolchainSha256 = Hash(ToolchainZip), Manifest = repo.ManifestFile, EsiDirectory = Esi, UserEsiDirectory = UserEsi,
+            LibraryRepository = Installed,
         };
+
+        [Theory]
+        [InlineData("missing", "Library 1.2.3.4 is missing (installed: none). Install: tcpkg install TwinCAT.XAE.PLC.Lib.Library=1.2.3.4")]
+        [InlineData("bytes", "Library 1.2.3.4 has other bytes than the lock")]
+        [InlineData("newer", "Library 1.2.4.0 is installed, newer than the locked 1.2.3.4")]
+        public void InstalledLibrariesThatDifferFromTheLockStopBeforeTheBuild(string defect, string reason)
+        {
+            string locked = Path.Combine(Installed, @"Vendor\Library\1.2.3.4\Library.compiled-library");
+            if (defect == "missing") BuildLocation.Delete(Installed);
+            if (defect == "bytes") File.WriteAllText(locked, "other bytes\r\n");
+            if (defect == "newer") Write(Path.Combine(Installed, @"Vendor\Library\1.2.4.0\Library.compiled-library"), "newer\r\n");
+            int compiled = 0;
+            var ex = Assert.Throws<InvalidDataException>(() => ReleaseBuilder.Build(Request("libraries-" + defect), (a, b, c, d, e, f, g) => ++compiled));
+            Assert.Contains("M1: " + reason, ex.Message);
+            Assert.Contains("Nothing was built", ex.Message);
+            Assert.Equal(0, compiled);
+            Assert.False(Directory.Exists(Bundle("libraries-" + defect)));
+        }
+
+        [Fact]
+        public void NewerLibraryIsAllowedWhenLibrariesXmlFixesTheVersion()
+        {
+            Write(Path.Combine(Installed, @"Vendor\Library\1.2.4.0\Library.compiled-library"), "newer\r\n");
+            string xml = Path.Combine(scratch, "pinned.xml");
+            Write(xml, "<Libraries><Library Company=\"Vendor\" Name=\"Library\" Version=\"1.2.3.4\"/></Libraries>");
+            var baseline = LibraryBaseline.ReadLock(LockFile, Hash(LockFile));
+            Assert.Empty(LibraryBaseline.CheckInstalled(baseline, "M1", Installed, xml));
+            Assert.Single(LibraryBaseline.CheckInstalled(baseline, "M1", Installed));
+            Assert.Equal("3.3.75", LibraryBaseline.PackageVersion("3.3.75.0"));
+            Assert.Equal("1.2.3.4", LibraryBaseline.PackageVersion("1.2.3.4"));
+        }
 
         string Bundle(string name) => Path.Combine(scratch, "bundles", name);
 
@@ -274,7 +308,7 @@ namespace BeckhoffAutomationInterface.Tests
             Git("commit", "-qm", "release defaults");
             Git("tag", "v-auto");
             ReleaseRequest Minimal(string bundle) => new ReleaseRequest { Machines = { "M1" }, Tag = "v-auto", Bundle = Bundle(bundle), Bai = bai,
-                Manifest = repo.ManifestFile, EsiDirectory = Esi, UserEsiDirectory = UserEsi };
+                Manifest = repo.ManifestFile, EsiDirectory = Esi, UserEsiDirectory = UserEsi, LibraryRepository = Installed };
             var record = ReleaseBuilder.BuildAll(Minimal("auto"), FakeCompile).Single();
             Assert.Equal("BuildPassed", record["status"]);
             Assert.Equal("3.1.4026", record["expectedTwinCatVersion"]);

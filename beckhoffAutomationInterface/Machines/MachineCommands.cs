@@ -132,6 +132,7 @@ namespace BeckhoffAutomationInterface.Machines
             }
             Console.WriteLine("{0}: Machines: {1} (manifest {2})", Now(), string.Join(", ", layouts.Select(l => l.Machine)), manifest.File);
             WarnMissingEsi(layouts);
+            WarnLibraries(layouts);
             return q.Command == "build" ? RunBuild(q, manifest, layouts, shell) : RunTest(q, manifest, layouts, shell);
         }
 
@@ -553,6 +554,39 @@ namespace BeckhoffAutomationInterface.Machines
                     Console.WriteLine("WARNING: ESI file(s) of {0} not installed in {1}: {2}. Install them first (bai esi install).",
                         family.Name, system, string.Join(", ", missing));
             }
+        }
+
+        /// <summary>A build with other PLC libraries than &lt;family&gt;/libraries.lock.json compiles, but
+        /// differs from the release, and 'release build' refuses it. Warn at the start, not after the build.</summary>
+        static void WarnLibraries(IReadOnlyList<MachineLayout> layouts)
+        {
+            foreach (string line in LibraryWarnings(layouts, Release.LibraryBaseline.InstalledRepository())) Console.WriteLine(line);
+        }
+
+        internal static List<string> LibraryWarnings(IReadOnlyList<MachineLayout> layouts, string repository)
+        {
+            var lines = new List<string>();
+            if (repository == null) return lines;
+            foreach (var family in layouts.GroupBy(l => l.Family))
+            {
+                string shared = MachineSources.RepoPath(layouts[0].RepoRoot, family.Key.Shared), lockFile = Path.Combine(shared, "libraries.lock.json");
+                if (!File.Exists(lockFile)) continue;
+                List<string> problems;
+                try
+                {
+                    var baseline = Release.LibraryBaseline.ReadLock(lockFile, Release.ArtifactFiles.Hash(lockFile));
+                    problems = family.SelectMany(l => Release.LibraryBaseline.CheckInstalled(baseline, l.Machine, repository, Path.Combine(shared, "libraries.xml"))
+                        .Select(p => l.Machine + ": " + p)).Distinct().ToList();
+                }
+                catch (Exception ex) when (ex is InvalidDataException || ex is IOException || ex is UnauthorizedAccessException || ex is System.Xml.XmlException)
+                {
+                    problems = new List<string> { "cannot check " + lockFile + ": " + ex.Message };
+                }
+                lines.AddRange(problems.Select(p => "WARNING: libraries: " + p));
+                if (problems.Count > 0)
+                    lines.Add("WARNING: this build uses other PLC libraries than " + lockFile + "; 'release build' refuses them.");
+            }
+            return lines;
         }
     }
 }

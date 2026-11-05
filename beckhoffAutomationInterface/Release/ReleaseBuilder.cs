@@ -20,6 +20,8 @@ namespace BeckhoffAutomationInterface.Release
         public string Platform, Manifest, Cwd, Shell;
         public string EsiDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Beckhoff\TwinCAT\3.1\Config\Io\EtherCAT");
         public string UserEsiDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Beckhoff\TwinCAT\3.1\Config\IO\EtherCAT");
+        /// <summary>The installed managed PLC libraries, checked against the lock before the build; null: not found.</summary>
+        public string LibraryRepository = LibraryBaseline.InstalledRepository();
         public bool WorkingTree;
     }
 
@@ -312,6 +314,18 @@ namespace BeckhoffAutomationInterface.Release
                 if (entries.Count != 1 || !SameTwinCatMajor((string)entries[0]["twinCatVersion"], q.TwinCatVersion) || (string)entries[0]["targetPlatform"] != platform)
                     throw new InvalidDataException("Library baseline does not cover the requested machine/toolchain/platform.");
             }
+            // Before the long build: the installed libraries must be the locked ones (the check after the build stays the proof).
+            if (q.LibraryRepository == null)
+                Console.WriteLine("WARNING: no installed PLC library folder found; the libraries are checked after the build only.");
+            else
+            {
+                var problems = machines.SelectMany(m => LibraryBaseline.CheckInstalled(libraryLock, m, q.LibraryRepository,
+                    MachineSources.RepoPath(repo, manifest.FamilyOf(m).Shared + "/libraries.xml")).Select(p => m + ": " + p)).Distinct().ToList();
+                if (problems.Count > 0)
+                    throw new InvalidDataException("The installed PLC libraries (" + q.LibraryRepository + ") differ from the lock. Nothing was built.\n  "
+                        + string.Join("\n  ", problems) + "\nInstall the locked versions, then run the release again.");
+                Console.WriteLine("{0}: Libraries: the installed versions match the lock.", Now());
+            }
 
             Directory.CreateDirectory(bundle);
             var record = new Dictionary<string, object>
@@ -445,7 +459,7 @@ namespace BeckhoffAutomationInterface.Release
                     {
                         Machines = family.ToList(), Tag = q.Tag, WorkingTree = q.WorkingTree, Bundle = q.Bundle, Bai = q.Bai, BaiSha256 = q.BaiSha256, TwinCatVersion = q.TwinCatVersion,
                         LibraryLock = familyLock, LibraryLockSha256 = q.LibraryLockSha256 ?? Hash(familyLock), Toolchain = q.Toolchain, ToolchainSha256 = q.ToolchainSha256,
-                        Platform = q.Platform, Manifest = q.Manifest, Cwd = q.Cwd, Shell = q.Shell, EsiDirectory = q.EsiDirectory, UserEsiDirectory = q.UserEsiDirectory,
+                        Platform = q.Platform, Manifest = q.Manifest, Cwd = q.Cwd, Shell = q.Shell, EsiDirectory = q.EsiDirectory, UserEsiDirectory = q.UserEsiDirectory, LibraryRepository = q.LibraryRepository,
                     };
                     Console.WriteLine("{0}: release build {1}: {2}", Now(), family.Key.Name, string.Join(", ", family));
                     records.Add(Build(one, compile));

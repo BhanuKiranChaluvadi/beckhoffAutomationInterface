@@ -132,6 +132,29 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void LibraryWarnings_NameEachLibraryThatDiffersFromTheFamilyLock()
+        {
+            var repo = new MachineRepoFixture();
+            const string bytes = "locked library\r\n";
+            repo.Write("Machines/Fam/libraries.lock.json", "{\"schemaVersion\":1,\"machines\":[{\"machine\":\"M1\",\"twinCatVersion\":\"3.1.4026.27\",\"targetPlatform\":\"TwinCAT RT (x64)\","
+                + "\"libraries\":[{\"path\":\"Vendor/Lib/2.0.0.0/Lib.compiled-library\",\"bytes\":" + bytes.Length + ",\"sha256\":\""
+                + Release.ArtifactFiles.Hash(new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes(bytes))) + "\"}]}]}");
+            var m1 = new[] { repo.Layout("M1") };
+            string installed = System.IO.Path.Combine(repo.Work, "managed");
+            System.IO.Directory.CreateDirectory(System.IO.Path.Combine(installed, @"Vendor\Lib\1.0.0.0"));
+
+            var lines = MachineCommands.LibraryWarnings(m1, installed);
+            Assert.Equal(2, lines.Count);
+            Assert.Equal("WARNING: libraries: M1: Lib 2.0.0.0 is missing (installed: 1.0.0.0). Install: tcpkg install TwinCAT.XAE.PLC.Lib.Lib=2.0.0", lines[0]);
+            Assert.Contains("'release build' refuses them", lines[1]);
+
+            System.IO.Directory.CreateDirectory(System.IO.Path.Combine(installed, @"Vendor\Lib\2.0.0.0"));
+            System.IO.File.WriteAllText(System.IO.Path.Combine(installed, @"Vendor\Lib\2.0.0.0\Lib.compiled-library"), bytes);
+            Assert.Empty(MachineCommands.LibraryWarnings(m1, installed));
+            Assert.Empty(MachineCommands.LibraryWarnings(m1, null));
+        }
+
+        [Fact]
         public void ExitCode_IsZeroOnlyWhenEveryMachinePasses()
         {
             var pass = new MachineRow("A") { Parse = "PASS", Build = "PASS (retry)", Links = "PASS (3/3)" };

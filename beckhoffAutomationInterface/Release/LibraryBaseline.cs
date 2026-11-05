@@ -73,6 +73,61 @@ namespace BeckhoffAutomationInterface.Release
             return new Dictionary<string, object> { ["machine"] = machine, ["twinCatVersion"] = version, ["targetPlatform"] = platform,
                 ["libraries"] = files.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Value).ToArray() };
         }
+        /// <summary>The managed PLC library folders of TwinCAT: 4026 first, then 4024.</summary>
+        internal static IEnumerable<string> RepositoryCandidates() => new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), @"Beckhoff\TwinCAT\PlcEngineering\Managed Libraries"),
+            Path.Combine(Environment.GetEnvironmentVariable("TWINCAT3DIR") ?? @"C:\TwinCAT\3.1\", @"Components\Plc\Managed Libraries"),
+        };
+
+        /// <summary>The installed managed library folder, or null when there is none.</summary>
+        internal static string InstalledRepository() => RepositoryCandidates().FirstOrDefault(Directory.Exists);
+
+        /// <summary>
+        /// Before a build: the locked libraries of one machine against the installed library folder.
+        /// One line for each library that is missing, has other bytes, or has a newer installed version
+        /// (with Version="*" TwinCAT takes the newest, so the build would not use the locked one). A
+        /// library that libraries.xml gives a fixed version is not checked for newer versions. Empty: the
+        /// libraries agree. It looks at files only; the check of the resolved libraries after the
+        /// compile stays the proof.
+        /// </summary>
+        internal static List<string> CheckInstalled(Dictionary<string, object> baseline, string machine, string repository, string librariesXml = null)
+        {
+            var entries = Array(baseline, "machines").Select(Object).Where(m => Text(m, "machine") == machine).ToArray();
+            if (entries.Length != 1) return new List<string> { "The library lock has no entry for " + machine + "." };
+            var pinned = new HashSet<string>(Names);
+            if (librariesXml != null && File.Exists(librariesXml))
+                foreach (var library in Xml(librariesXml).Descendants("Library"))
+                {
+                    string requested = (string)library.Attribute("Version");
+                    if (!string.IsNullOrEmpty(requested) && requested != "*")
+                        pinned.Add((string)library.Attribute("Company") + "/" + (string)library.Attribute("Name"));
+                }
+            var problems = new List<string>();
+            foreach (var entry in Files(Array(entries[0], "libraries")))
+            {
+                string[] parts = entry.Key.Split('/');
+                string company = parts[0], name = parts[1], locked = parts[2];
+                string folder = Path.Combine(repository, company, name), file = Path.Combine(repository, entry.Key.Replace('/', '\\'));
+                var installed = Directory.Exists(folder)
+                    ? Directory.GetDirectories(folder).Select(Path.GetFileName).Where(v => System.Version.TryParse(v, out _)).OrderBy(System.Version.Parse).ToList()
+                    : new List<string>();
+                string package = "TwinCAT.XAE.PLC.Lib." + name;
+                if (!File.Exists(file))
+                    problems.Add(string.Format("{0} {1} is missing (installed: {2}). Install: tcpkg install {3}={4}",
+                        name, locked, installed.Count == 0 ? "none" : string.Join(", ", installed), package, PackageVersion(locked)));
+                else if (!Names.Equals(Hash(file), Text(entry.Value, "sha256")))
+                    problems.Add(string.Format("{0} {1} has other bytes than the lock (SHA-256). Repair: tcpkg repair {2}", name, locked, package));
+                else if (!pinned.Contains(company + "/" + name) && System.Version.Parse(installed.Last()) > System.Version.Parse(locked))
+                    problems.Add(string.Format("{0} {1} is installed, newer than the locked {2}; with Version=\"*\" TwinCAT uses it. Uninstall it (tcpkg uninstall {3}={4}), or make a new lock.",
+                        name, installed.Last(), locked, package, PackageVersion(installed.Last())));
+            }
+            return problems;
+        }
+
+        /// <summary>The TcPkg version of a library version: 3.3.75.0 -> 3.3.75.</summary>
+        internal static string PackageVersion(string library) => Regex.Replace(library, @"^(\d+\.\d+\.\d+)\.0$", "$1");
+
         internal static void Verify(Dictionary<string, object> baseline, Dictionary<string, object> actual)
         {
             var entries = Array(baseline, "machines").Select(Object).Where(m => Text(m, "machine") == Text(actual, "machine")).ToArray();
