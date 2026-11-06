@@ -33,6 +33,7 @@ namespace BeckhoffAutomationInterface.Sync
         readonly Dictionary<string, ITcSmTreeItem> _folderCache = new Dictionary<string, ITcSmTreeItem>();
         readonly Dictionary<string, ITcSmTreeItem> _ownerItems = new Dictionary<string, ITcSmTreeItem>();
         readonly HashSet<string> _interfaceOwners = new HashSet<string>();
+        SyncProgress _progress;
 
         public PouSyncEngine(ITcSysManager sysManager, string projectRootPath)
         {
@@ -48,6 +49,8 @@ namespace BeckhoffAutomationInterface.Sync
             List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod && !s.IsProperty).ToList();
             List<StPouSource> methods = desiredSources.Where(s => s.IsMethod).ToList();
             List<StPouSource> properties = desiredSources.Where(s => s.IsProperty).ToList();
+            // Work units: place each non-method object (pass 1), then write every object's text.
+            _progress = new SyncProgress(nonMethods.Count + desiredSources.Count);
 
             // Two passes so cross-type references (FB EXTENDS/IMPLEMENTS, INTERFACE EXTENDS,
             // ALIAS base type) always resolve regardless of file order:
@@ -63,6 +66,7 @@ namespace BeckhoffAutomationInterface.Sync
                 ITcSmTreeItem folder = GetOrCreateFolder(source.RelativeFolder);
                 ITcSmTreeItem item = CreateOrGet(folder, source.Name, KindToTreeItemType(source.Kind), CreationVInfo(source.Kind), out bool isNew);
                 placed.Add((source, item, isNew));
+                _progress.Step("objects (place)", placed.Count, nonMethods.Count);
 
                 // PROGRAM is a valid method/property owner too — PROGRAMs commonly carry
                 // inline private helper METHODs (e.g. "METHOD PRIVATE _Init").
@@ -81,6 +85,7 @@ namespace BeckhoffAutomationInterface.Sync
             SyncMethods(methods, report);
             SyncProperties(properties, report);
 
+            int texts = 0;
             foreach (var p in placed)
             {
                 bool changed;
@@ -100,6 +105,7 @@ namespace BeckhoffAutomationInterface.Sync
                 Record(report, p.IsNew, changed, p.Source.RelativeFolder.Length > 0
                     ? p.Source.RelativeFolder + "/" + p.Source.Name
                     : p.Source.Name);
+                _progress.Step("objects (text)", ++texts, placed.Count);
             }
 
             return report;
@@ -163,6 +169,7 @@ namespace BeckhoffAutomationInterface.Sync
                 throw new InvalidOperationException(
                     $"Method file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 
+            int done = 0;
             foreach (var kv in methodsByOwner)
             {
                 string ownerName = kv.Key;
@@ -187,6 +194,7 @@ namespace BeckhoffAutomationInterface.Sync
                     }
 
                     Record(report, isNew, changed, $"{ownerName}.{method.Name}");
+                    _progress.Step("methods", ++done, desiredMethods.Count);
                 }
 
                 // NOTE: no orphan pruning of an owner's children here — a FUNCTION_BLOCK's
@@ -212,6 +220,7 @@ namespace BeckhoffAutomationInterface.Sync
                 throw new InvalidOperationException(
                     $"Property file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 
+            int done = 0;
             foreach (var kv in propsByOwner)
             {
                 string ownerName = kv.Key;
@@ -239,6 +248,7 @@ namespace BeckhoffAutomationInterface.Sync
                     }
 
                     Record(report, isNew, changed, $"{ownerName}.{prop.Name}");
+                    _progress.Step("properties", ++done, desiredProperties.Count);
                 }
             }
         }
