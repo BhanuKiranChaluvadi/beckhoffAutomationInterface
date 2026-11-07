@@ -176,8 +176,20 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(Platform, project["targetPlatform"]);
             Assert.Equal(2, Array(record, "baiFiles").Length);
             Assert.Equal(new[] { "system/device.xml", "user/vendor.xml" }, Array(record, "installedEsiFiles").Select(f => (string)Object(f)["path"]));
-            Assert.Equal(Hash(Path.Combine(Esi, "device.xml")), Hash(Path.Combine(bundle, @"esi\system\device.xml")));
-            Assert.Equal(Hash(Path.Combine(UserEsi, "vendor.xml")), Hash(Path.Combine(bundle, @"esi\user\vendor.xml")));
+            Assert.False(Directory.Exists(Path.Combine(bundle, "esi")));
+            string esiArchive = Path.Combine(bundle, "esi.zip");
+            Assert.Equal(Hash(esiArchive).ToUpperInvariant(), record["esiArchiveSha256"]);
+            using (var catalog = ZipFile.OpenRead(esiArchive))
+            {
+                Assert.Equal(2, catalog.Entries.Count);
+                foreach (var file in Array(record, "installedEsiFiles").Select(Object))
+                {
+                    var entry = catalog.GetEntry(Text(file, "path"));
+                    Assert.NotNull(entry);
+                    Assert.Equal(Number(file, "bytes"), entry.Length);
+                    using (var content = entry.Open()) Assert.Equal(Text(file, "sha256"), Hash(content).ToUpperInvariant());
+                }
+            }
             Assert.Equal(Hash(LockFile), Hash(Path.Combine(bundle, "libraries.lock.json")));
             Assert.Equal(Hash(LockFile).ToUpperInvariant(), record["libraryLockSha256"]);
             Assert.Equal(12, Array(project, "artifacts").Length);
@@ -212,6 +224,57 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.Contains("does not satisfy manifest", Assert.Throws<InvalidDataException>(() => ReleaseBuilder.ProjectEvidence(layout, Version, Platform)).Message);
             }
             Assert.Throws<IOException>(() => Release(Request("success")));
+        }
+
+        [Fact]
+        public void EsiArchiveKeepsDifferentFilesWithTheSameNameInBothScopes()
+        {
+            Write(Path.Combine(Esi, "vendor.xml"), new string('x', 1024 * 1024));
+            var record = Release(Request("esi-scopes"));
+            using (var archive = ZipFile.OpenRead(Path.Combine(Bundle("esi-scopes"), "esi.zip")))
+            {
+                Assert.Equal(3, archive.Entries.Count);
+                using (var content = archive.GetEntry("system/vendor.xml").Open())
+                    Assert.Equal(Hash(Path.Combine(Esi, "vendor.xml")), Hash(content));
+                using (var content = archive.GetEntry("user/vendor.xml").Open())
+                    Assert.Equal(Hash(Path.Combine(UserEsi, "vendor.xml")), Hash(content));
+            }
+            Assert.True(new FileInfo(Path.Combine(Bundle("esi-scopes"), "esi.zip")).Length < 32 * 1024);
+            Assert.False(Directory.Exists(Path.Combine(Bundle("esi-scopes"), "esi")));
+        }
+
+        [Fact]
+        public void ServiceProjectKeepsCompilerAndLibraryFilesWithoutDuplicatingBootOrIdeCache()
+        {
+            var q = Request("service-project");
+            var record = ReleaseBuilder.Build(q, (a, b, c, d, e, f, g) =>
+            {
+                int code = FakeCompile(a, b, c, d, e, f, g);
+                string project = Path.Combine(c, "Fam", "M1", "M1");
+                Write(Path.Combine(project, ".vs", "workspace.cache"), "IDE cache");
+                Write(Path.Combine(project, "_CompileInfo", "application.compileinfo"), "compiler information");
+                return code;
+            });
+            string package = Path.Combine(Bundle("service-project"), "packages", "M1.zip");
+            PackageVerifier.Verify(package, Text(First(record["packages"]), "sha256"));
+            using (var outer = ZipFile.OpenRead(package))
+            using (var buffer = new MemoryStream())
+            {
+                using (var content = outer.GetEntry("project.zip").Open()) content.CopyTo(buffer);
+                buffer.Position = 0;
+                using (var service = new ZipArchive(buffer, ZipArchiveMode.Read))
+                {
+                    var names = service.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
+                    Assert.DoesNotContain(names, name => name.Split('/').Any(part => Names.Equals(part, "_Boot") || Names.Equals(part, ".vs")));
+                    Assert.Contains(names, name => name.EndsWith("application.compileinfo"));
+                    Assert.Contains(names, name => name.EndsWith("Library.compiled-library"));
+                    Assert.Contains(names, name => name.EndsWith("Fam.tmc"));
+                    Assert.Contains(names, name => name.EndsWith("TargetSystemConfig.xml"));
+                    Assert.Contains(names, name => name.EndsWith("M1.sln"));
+                }
+                Assert.NotNull(outer.GetEntry("boot/CurrentConfig.xml"));
+                Assert.NotNull(outer.GetEntry("boot/Plc/Port_851.app"));
+            }
         }
 
         [Fact]

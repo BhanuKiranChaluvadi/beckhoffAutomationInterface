@@ -36,7 +36,7 @@ namespace BeckhoffAutomationInterface.Release
     /// DevelopmentValidation package for a UmRT rehearsal, never for a machine). Without
     /// --include-uncommitted the repository must be clean. Never activates a runtime. The bundle has
     /// source.zip, a detached checkout, a private BAI copy, the generated projects and logs, the
-    /// installed ESI files, release.json and verified packages (compiled boot files and a
+    /// installed ESI catalog in esi.zip, release.json and verified packages (compiled boot files and a
     /// separate service solution archive). Resolved libraries must match the hashed lock, and
     /// the TwinCAT/XAE archive must match the installed files before and after the build.
     /// It does not prove hardware readiness or prepare a machine rollback backup.
@@ -152,11 +152,15 @@ namespace BeckhoffAutomationInterface.Release
 
         // ------------------------------------------------------------------ package
 
-        static void Zip(string folder, string destination)
+        static void ZipServiceProject(string folder, string destination)
         {
             using (var stream = new FileStream(destination, FileMode.CreateNew))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
-                foreach (var file in Inventory(folder).OrderBy(p => p.Key, StringComparer.Ordinal))
+                // Boot is already a separate payload. Keep libraries, compiler information and
+                // TMC files for service; omit only the duplicate boot tree and IDE workspace.
+                foreach (var file in Inventory(folder)
+                    .Where(p => !p.Key.Split('/').Any(part => Names.Equals(part, "_Boot") || Names.Equals(part, ".vs")))
+                    .OrderBy(p => p.Key, StringComparer.Ordinal))
                     zip.CreateEntryFromFile(Path.Combine(folder, file.Key), file.Key);
         }
 
@@ -168,6 +172,25 @@ namespace BeckhoffAutomationInterface.Release
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
                 File.Copy(Path.Combine(from, file.Key), target);
             }
+        }
+
+        static string ArchiveEsi(List<(string Key, string Path)> roots, List<Dictionary<string, object>> expected, string output)
+        {
+            using (var stream = new FileStream(output, FileMode.CreateNew))
+            using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+                foreach (var root in roots)
+                    foreach (var file in expected.Where(f => Text(f, "path").StartsWith(root.Key + "/", StringComparison.Ordinal)))
+                    {
+                        string name = Text(file, "path");
+                        ArtifactArchives.CopyEntry(zip, name, Path.Combine(root.Path, name.Substring(root.Key.Length + 1)), file);
+                    }
+            using (var zip = ZipFile.OpenRead(output))
+                SameFiles(expected, PackageVerifier.Entries(zip).Select(file =>
+                {
+                    using (var content = file.Value.Open()) return new Dictionary<string, object>
+                        { ["path"] = file.Key, ["bytes"] = file.Value.Length, ["sha256"] = Hash(content) };
+                }), "Retained ESI files");
+            return Hash(output).ToUpperInvariant();
         }
 
         /// <summary>The verified machine package (packages/&lt;M&gt;.zip and its .sha256): compiled boot
@@ -212,7 +235,7 @@ namespace BeckhoffAutomationInterface.Release
             {
                 CopyTree(boot, Path.Combine(stage, "boot"));
                 File.Copy(tmc, Path.Combine(stage, @"boot\Plc\Port_851.tmc"), true);
-                Zip(solution, Path.Combine(stage, "project.zip"));
+                ZipServiceProject(solution, Path.Combine(stage, "project.zip"));
                 File.WriteAllText(Path.Combine(stage, "evidence.json"), Encode(record), new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(stage, "identity.expect.json"),
                     Encode(new Dictionary<string, object> { ["variants"] = new Dictionary<string, object> { [machine] = identity } }), new UTF8Encoding(false));
@@ -374,9 +397,7 @@ namespace BeckhoffAutomationInterface.Release
                 record["sourceInputs"] = sourceBefore;
                 record["baiFiles"] = toolBefore;
                 record["installedEsiFiles"] = esiBefore;
-                string esiArchive = Path.Combine(bundle, "esi");
-                foreach (var r in esiRoots) CopyTree(r.Path, Path.Combine(esiArchive, r.Key));
-                SameFiles(esiBefore, Evidence(esiArchive), "Retained ESI files");
+                record["esiArchiveSha256"] = ArchiveEsi(esiRoots, esiBefore, Path.Combine(bundle, "esi.zip"));
                 Save();
 
                 string work = Path.Combine(bundle, "build"), snapshotManifest = Path.Combine(snapshot, MachineManifest.FileName);
