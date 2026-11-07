@@ -19,5 +19,8 @@ Actions and reasons:
   an executable whose reported source commit/version differs from the checkout; rebuild first.
 - Local Release unit suite: **1085 passed, 0 failed, 0 skipped**. One existing xUnit blocking-task
   analyzer warning remains. Distribution itself is additionally verified by the hosted workflow.
+- First hosted run `42363210943` passed tests/build/package but failed publication: Windows
+  PowerShell 5.1 treated the expected first-release absence on gh stderr as a terminating error.
+  Use PowerShell 7 for this orchestration step; preserve the failed run as evidence.
 - No worktree was created. Commit only the new workflow, bundle script and distribution docs;
   do not commit generated binaries or test results.

@@ -40,7 +40,8 @@ jobs:
             **/TestResults/*.trx
       - name: Publish immutable build from current main
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        shell: powershell
+        # PS 5.1 turns gh's expected "release not found" stderr into a terminating error.
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
