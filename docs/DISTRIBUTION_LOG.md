@@ -27,5 +27,8 @@ Actions and reasons:
   BeckhoffLib downloaded this release, verified all six files and started the executable with
   the matching full source commit. This log update exercises a subsequent automatic build;
   it does not change BAI runtime behavior.
+- Publish through a draft: upload all assets before making a release latest/visible. Retry
+  repairs unpublished drafts only. This closes an interrupted-upload case where a partially
+  uploaded public release would otherwise be mistaken for an immutable complete build.
 - No worktree was created. Commit only the new workflow, bundle script and distribution docs;
   do not commit generated binaries or test results.
