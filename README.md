@@ -54,6 +54,18 @@ TlbImp.exe "C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\TypeLib\
 
 ### Build and unit tests
 
+Main pushes also run [Build and distribute BAI](.github/workflows/distribute.yml) on a
+GitHub-hosted Windows runner: all unit tests, Release build and an executable startup check.
+No TwinCAT installation is needed for these unit tests. A successful current-main build
+publishes `build-<full commit>` with `bai.zip` and `bai-release.json` (source commit, version,
+archive SHA256 and every installed file's SHA256). Published builds are never overwritten.
+Pull requests run the same checks without publishing. A stale main build cannot promote itself.
+
+BeckhoffLib polls published builds every 15 minutes, commits its pin and derived release
+approval, then dispatches PLC validation. Its runner downloads the pinned bundle into an
+immutable directory in `C:\bai\bin`; no manual file copy or SHA variable update is required.
+The BAI publisher uses only its own `GITHUB_TOKEN`; there is no cross-repository secret.
+
 ```powershell
 dotnet build beckhoffAutomationInterface -c Debug -f net48
 dotnet test beckhoffAutomationInterface.Tests
