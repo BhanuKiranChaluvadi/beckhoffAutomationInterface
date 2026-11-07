@@ -9,8 +9,10 @@ $version = ([xml](Get-Content "$project/beckhoffAutomationInterface.csproj" -Raw
 $version = @($version | Where-Object { $_ })[0]
 $built = Join-Path $project 'bin/Release/net48'
 $exe = Join-Path $built 'beckhoffAutomationInterface.exe'
-& $exe --version
+$reported = & $exe --version
+$reported | Write-Host
 if ($LASTEXITCODE -ne 0) { throw 'Packaged executable cannot start.' }
+if ($reported -notmatch [regex]::Escape("$version+$commit")) { throw 'Executable was not built from the current commit. Build Release again.' }
 New-Item -ItemType Directory -Path $Output -Force | Out-Null
 $files = [ordered]@{}
 Get-ChildItem $built -File | Where-Object { $_.Extension -in '.exe','.dll','.config' } | Sort-Object Name | ForEach-Object {

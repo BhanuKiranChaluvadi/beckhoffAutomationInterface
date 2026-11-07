@@ -15,6 +15,8 @@ Actions and reasons:
 - Included the executable, runtime DLLs and config in the bundle. Record the source commit,
   archive hash and each file hash; smoke-start the executable before publication.
 - Keep existing release bytes on reruns; check current main before promotion.
+- A local packaging probe exposed a stale previously built executable. Packaging now refuses
+  an executable whose reported source commit/version differs from the checkout; rebuild first.
 - Local Release unit suite: **1085 passed, 0 failed, 0 skipped**. One existing xUnit blocking-task
   analyzer warning remains. Distribution itself is additionally verified by the hosted workflow.
 - No worktree was created. Commit only the new workflow, bundle script and distribution docs;
