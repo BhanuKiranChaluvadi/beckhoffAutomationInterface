@@ -71,6 +71,12 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public ScenarioMode Mode { get; set; }
 
+        /// <summary>Hardware: shows a prompt to the user and returns the typed line (null = no user).</summary>
+        public Func<string, string> Ask { get; set; }
+
+        /// <summary>Called before each scenario that runs (not for skipped ones): to show its intent.</summary>
+        public Action<Scenario> OnStart { get; set; }
+
         /// <summary>On a real machine the PLC interlocks stay the only authority: a scenario changes the
         /// machine only through client commands, never by writing PLC symbols.</summary>
         const string WriteNotAllowed = "is not allowed on a real machine: acceptance scenarios only send, wait and check";
@@ -81,6 +87,10 @@ namespace BeckhoffAutomationInterface.Runtime
             var problems = new List<string>();
             foreach (Scenario s in scenarios)
             {
+                if (s.Purpose == null)
+                    problems.Add(s.File + ": no \"purpose\": an acceptance scenario says what it proves");
+                if (s.EstimateS == null)
+                    problems.Add(s.File + ": no \"estimateS\": an acceptance scenario says how long it takes");
                 foreach (ScenarioStep step in s.Steps)
                     if (step.Kind == StepKind.Write)
                         problems.Add(string.Format("{0}: step {1} (write) {2}", s.File, step.Number, WriteNotAllowed));
@@ -130,6 +140,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Skipped, Message = skip };
                 else
                 {
+                    OnStart?.Invoke(s);
                     double start = _nowS();
                     string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
                     r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
@@ -420,9 +431,40 @@ namespace BeckhoffAutomationInterface.Runtime
                     return null;
                 }
 
+                case StepKind.Instruct:
+                case StepKind.Confirm:
+                    return Operator(step);
+
                 default:
                     return "unknown step";
             }
+        }
+
+        /// <summary>The one rule for a yes: "y" or "yes", any case; anything else (also no input) is no.</summary>
+        internal static bool IsYes(string line)
+        {
+            string typed = (line ?? "").Trim().ToLowerInvariant();
+            return typed == "y" || typed == "yes";
+        }
+
+        /// <summary>An instruct or confirm step. Hardware: the user answers (no user = failure).
+        /// Simulation: answered automatically, and the report says so.</summary>
+        string Operator(ScenarioStep step)
+        {
+            bool confirm = step.Kind == StepKind.Confirm;
+            string answer = "auto (simulation)";
+            if (Mode == ScenarioMode.Hardware)
+            {
+                string line = Ask?.Invoke(confirm ? step.Text + " [y/n]" : step.Text.TrimEnd('.') + ". Press Enter when done.");
+                if (line == null)
+                    return "no operator input (the run is not interactive)";
+                answer = !confirm ? "done" : IsYes(line) ? "yes" : "no";
+            }
+            _measurements?.Add(new Measurement
+            {
+                Step = step.Number, Symbol = "operator: " + step.Text, Value = answer, Expected = confirm ? "yes" : "done",
+            });
+            return answer == "no" ? "the operator answered no: " + step.Text : null;
         }
 
         /// <summary>Records the value a scenario step read (not in prepare or cleanup). Always null, so

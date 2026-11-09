@@ -31,9 +31,14 @@ namespace BeckhoffAutomationInterface.Runtime
         public double TimeoutS { get; set; } = DefaultTimeoutS;
         public List<ScenarioStep> Steps { get; set; } = new List<ScenarioStep>();
         public List<ScenarioStep> CleanupSteps { get; set; } = new List<ScenarioStep>();
+
+        // The intent for the user; required by 'acceptance' (purpose, estimateS), optional for 'test'.
+        public string Purpose { get; set; }       // what the scenario proves, and why
+        public List<string> Prepare { get; set; } = new List<string>();   // what the user does before it
+        public double? EstimateS { get; set; }    // expected duration, for the run plan
     }
 
-    enum StepKind { Send, WaitUntil, Check, Write, Wait }
+    enum StepKind { Send, WaitUntil, Check, Write, Wait, Instruct, Confirm }
 
     /// <summary>One step. Only the fields of its kind are set.</summary>
     sealed class ScenarioStep
@@ -60,6 +65,9 @@ namespace BeckhoffAutomationInterface.Runtime
         // wait
         public double Seconds { get; set; }
 
+        // instruct (the user does something, then Enter), confirm (the user answers yes or no)
+        public string Text { get; set; }
+
         public string KindName => Names[Kind];
 
         internal static readonly IReadOnlyDictionary<StepKind, string> Names = new Dictionary<StepKind, string>
@@ -69,6 +77,8 @@ namespace BeckhoffAutomationInterface.Runtime
             [StepKind.Check] = "check",
             [StepKind.Write] = "write",
             [StepKind.Wait] = "wait",
+            [StepKind.Instruct] = "instruct",
+            [StepKind.Confirm] = "confirm",
         };
     }
 

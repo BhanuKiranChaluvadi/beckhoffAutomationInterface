@@ -18,7 +18,8 @@ namespace BeckhoffAutomationInterface.Runtime
     /// Every problem gives one clear message with the file name and the step number.</summary>
     static class ScenarioFile
     {
-        static readonly string[] TopKeys = { "name", "tags", "requires", "timeoutS", "steps", "cleanup", "description", "comment" };
+        static readonly string[] TopKeys = { "name", "tags", "requires", "timeoutS", "steps", "cleanup", "description", "comment",
+            "purpose", "prepare", "estimateS" };
         static readonly string[] ComparisonKeys = { "equals", "notEquals", "lessThan", "greaterThan", "tolerance" };
 
         static readonly IReadOnlyDictionary<StepKind, string[]> StepKeys = new Dictionary<StepKind, string[]>
@@ -28,6 +29,8 @@ namespace BeckhoffAutomationInterface.Runtime
             [StepKind.Check] = new[] { "symbol", "type" }.Concat(ComparisonKeys).ToArray(),
             [StepKind.Write] = new[] { "symbol", "type", "value" },
             [StepKind.Wait] = new[] { "seconds" },
+            [StepKind.Instruct] = new[] { "text" },
+            [StepKind.Confirm] = new[] { "text" },
         };
 
         /// <summary>One file, or every *.json below a folder (sorted by path). Returns the
@@ -80,9 +83,14 @@ namespace BeckhoffAutomationInterface.Runtime
                 Name = at.RequiredString(root, "name"),
                 Tags = at.OptionalNames(root, "tags"),
                 Requires = at.OptionalNames(root, "requires"),
+                Prepare = at.OptionalNames(root, "prepare"),
             };
             if (root.ContainsKey("timeoutS"))
                 scenario.TimeoutS = at.Positive(root, "timeoutS");
+            if (root.ContainsKey("purpose"))
+                scenario.Purpose = at.RequiredString(root, "purpose");
+            if (root.ContainsKey("estimateS"))
+                scenario.EstimateS = at.Positive(root, "estimateS");
 
             if (!root.TryGetValue("steps", out object steps))
                 throw at.Error("\"steps\" is missing");
@@ -170,6 +178,11 @@ namespace BeckhoffAutomationInterface.Runtime
                     step.Seconds = at.Number(e, "seconds");
                     if (step.Seconds < 0)
                         throw at.Error("\"seconds\" must not be negative");
+                    break;
+
+                case StepKind.Instruct:
+                case StepKind.Confirm:
+                    step.Text = at.RequiredString(e, "text");
                     break;
             }
             return step;

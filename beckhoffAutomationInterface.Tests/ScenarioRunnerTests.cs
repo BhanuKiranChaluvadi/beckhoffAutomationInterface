@@ -695,10 +695,11 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void HardwareProblems_NamesEachWriteStep_IncludingCleanup()
         {
-            Scenario steps = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.a"", ""type"": ""DINT"", ""value"": 1 }");
+            const string intent = @"""purpose"": ""p"", ""estimateS"": 1,";
+            Scenario steps = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.a"", ""type"": ""DINT"", ""value"": 1 }", intent);
             Scenario cleanup = Load(@"{ ""do"": ""wait"", ""seconds"": 0 }",
-                @"""cleanup"": [{ ""do"": ""write"", ""symbol"": ""MAIN.b"", ""type"": ""DINT"", ""value"": 0 }],");
-            Scenario fine = Load(@"{ ""do"": ""send"", ""command"": 41 }");
+                intent + @"""cleanup"": [{ ""do"": ""write"", ""symbol"": ""MAIN.b"", ""type"": ""DINT"", ""value"": 0 }],");
+            Scenario fine = Load(@"{ ""do"": ""send"", ""command"": 41 }", intent);
 
             Assert.Equal(new[]
             {
@@ -724,6 +725,86 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(2, plc.Commands.Count);   // the failing scenario's command, then CancelProcess
             Assert.Contains("\"command\":54,", plc.Commands[0]);
             Assert.Contains("\"command\":1,", plc.Commands[1]);
+        }
+
+        // ------------------------------------------------------------------ operator steps (instruct, confirm)
+
+        [Fact]
+        public void Hardware_Confirm_YesPasses_AndIsRecorded()
+        {
+            var plc = FakePlc.Machine();
+            var asked = new List<string>();
+            var runner = plc.HardwareRunner();
+            runner.Ask = prompt => { asked.Add(prompt); return "y"; };
+
+            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""instruct"", ""text"": ""Place a 100 mm test wafer on the chuck"" },
+                { ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Equal(new[] { "Place a 100 mm test wafer on the chuck. Press Enter when done.", "Is the beacon green? [y/n]" }, asked);
+            Assert.Equal(new[]
+            {
+                "step 1: operator: Place a 100 mm test wafer on the chuck = done (expected done)",
+                "step 2: operator: Is the beacon green? = yes (expected yes)",
+            }, r.Measurements.Select(m => m.ToString()));
+        }
+
+        [Fact]
+        public void Hardware_Confirm_NoFailsTheStep()
+        {
+            var runner = FakePlc.Machine().HardwareRunner();
+            runner.Ask = prompt => "n";
+
+            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
+
+            Assert.Equal("step 1 (confirm) the operator answered no: Is the beacon green?", r.Message);
+        }
+
+        [Fact]
+        public void Hardware_OperatorStep_WithoutAnOperator_Fails()
+        {
+            ScenarioResult r = FakePlc.Machine().HardwareRunner().Run(Load(@"{ ""do"": ""instruct"", ""text"": ""Open the argon cylinder"" }"));
+
+            Assert.Equal("step 1 (instruct) no operator input (the run is not interactive)", r.Message);
+        }
+
+        [Fact]
+        public void Simulation_OperatorSteps_AreAnsweredAutomatically_AndSaySo()
+        {
+            var runner = new FakePlc().Runner();
+            runner.Ask = prompt => throw new InvalidOperationException("simulation must not ask");
+
+            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Equal("step 1: operator: Is the beacon green? = auto (simulation) (expected yes)", r.Measurements.Single().ToString());
+        }
+
+        [Fact]
+        public void HardwareProblems_RequiresPurposeAndEstimate()
+        {
+            Scenario bare = Load(@"{ ""do"": ""wait"", ""seconds"": 0 }");
+
+            Assert.Equal(new[]
+            {
+                "s.json: no \"purpose\": an acceptance scenario says what it proves",
+                "s.json: no \"estimateS\": an acceptance scenario says how long it takes",
+            }, ScenarioRunner.HardwareProblems(new[] { bare }));
+        }
+
+        [Fact]
+        public void RunAll_TellsWhichScenarioStarts_NotTheSkippedOnes()
+        {
+            var plc = new FakePlc();
+            var started = new List<string>();
+            var runner = plc.Runner();
+            runner.OnStart = s => started.Add(s.Name);
+            Scenario a = ScenarioFile.Parse(@"{ ""name"": ""A"", ""steps"": [ { ""do"": ""wait"", ""seconds"": 0 } ] }", "a.json");
+            Scenario b = ScenarioFile.Parse(@"{ ""name"": ""B"", ""requires"": [""X""], ""steps"": [ { ""do"": ""wait"", ""seconds"": 0 } ] }", "b.json");
+
+            runner.RunAll(new[] { a, b }, new string[0], 2, null);
+
+            Assert.Equal(new[] { "A" }, started);
         }
 
         // ------------------------------------------------------------------ size guard

@@ -91,7 +91,7 @@ namespace BeckhoffAutomationInterface.Tests
 
         [Theory]
         [InlineData(@"{ ""symbol"": ""A.b"", ""equals"": 1 }", "step 2: \"do\" is missing")]
-        [InlineData(@"{ ""do"": ""poll"" }", "step 2: unknown \"do\": 'poll' (use send, waitUntil, check, write, wait)")]
+        [InlineData(@"{ ""do"": ""poll"" }", "step 2: unknown \"do\": 'poll' (use send, waitUntil, check, write, wait, instruct, confirm)")]
         [InlineData(@"{ ""do"": ""check"", ""equals"": 1, ""type"": ""INT"" }", "step 2: \"symbol\" is missing")]
         [InlineData(@"{ ""do"": ""check"", ""symbol"": ""A.b"", ""equals"": 1 }", "step 2: \"type\" is missing")]
         [InlineData(@"{ ""do"": ""check"", ""symbol"": ""A.b"", ""type"": ""FLOAT"", ""equals"": 1 }", "step 2: \"type\": unsupported PLC type 'FLOAT'")]
@@ -315,6 +315,51 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(4, size);
             Assert.Equal("DINT", typeName);
             Assert.False(AdsClient.ParseSymbolEntry(entry.ToArray(), 20, out _, out _));
+        }
+
+        // ------------------------------------------------------------------ intent for the user (acceptance)
+
+        [Fact]
+        public void Parse_ReadsPurposePrepareEstimate_AndOperatorSteps()
+        {
+            Scenario s = ScenarioFile.Parse(@"{ ""name"": ""Chuck hold"", ""purpose"": ""Proves the chuck vacuum holds a wafer"",
+                ""prepare"": [""Test wafer 100 mm at hand""], ""estimateS"": 120, ""steps"": [
+                { ""do"": ""instruct"", ""text"": ""Place a 100 mm test wafer on the chuck"" },
+                { ""do"": ""confirm"", ""text"": ""Is the wafer centred on the chuck?"" } ] }", "chuck.json");
+
+            Assert.Equal("Proves the chuck vacuum holds a wafer", s.Purpose);
+            Assert.Equal(new[] { "Test wafer 100 mm at hand" }, s.Prepare);
+            Assert.Equal(120, s.EstimateS);
+            Assert.Equal(StepKind.Instruct, s.Steps[0].Kind);
+            Assert.Equal("Place a 100 mm test wafer on the chuck", s.Steps[0].Text);
+            Assert.Equal(StepKind.Confirm, s.Steps[1].Kind);
+            Assert.Equal("Is the wafer centred on the chuck?", s.Steps[1].Text);
+        }
+
+        [Fact]
+        public void Parse_OperatorStepNeedsText()
+        {
+            var ex = Assert.Throws<ScenarioFormatException>(() => ScenarioFile.Parse(
+                @"{ ""name"": ""n"", ""steps"": [ { ""do"": ""confirm"" } ] }", "c.json"));
+            Assert.Equal("c.json: step 1: \"text\" is missing", ex.Message);
+        }
+
+        [Fact]
+        public void AcceptancePlan_ListsIntentTimeAndPreparation_InRunOrder()
+        {
+            Scenario mfc = ScenarioFile.Parse(@"{ ""name"": ""Inert MFC"", ""purpose"": ""Proves the argon supply and the inert MFC"",
+                ""prepare"": [""Argon cylinder open"", ""Exhaust on""], ""estimateS"": 90, ""steps"": [ { ""do"": ""wait"", ""seconds"": 0 } ] }", "inert-mfc.json");
+            Scenario doors = ScenarioFile.Parse(@"{ ""name"": ""Doors"", ""purpose"": ""Proves the door sensors"", ""estimateS"": 30,
+                ""requires"": [""DOOR_SENSORS""], ""steps"": [ { ""do"": ""wait"", ""seconds"": 0 } ] }", "doors.json");
+
+            Assert.Equal(new[]
+            {
+                "Acceptance plan: 1 scenario(s) to run, about 2 min",
+                "  1. Inert MFC (about 2 min)",
+                "     Why: Proves the argon supply and the inert MFC",
+                "     Prepare: Argon cylinder open; Exhaust on",
+                "  -  Doors: skipped, requires DOOR_SENSORS (not a feature group of this machine)",
+            }, AcceptancePlan.Lines(new[] { mfc, doors }, new[] { "PCV_ETHERCAT" }));
         }
 
         // ------------------------------------------------------------------ JUnit

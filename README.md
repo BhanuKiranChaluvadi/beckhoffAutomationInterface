@@ -361,16 +361,25 @@ bai acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--
 The same options, scenario files and exit codes as `test`, with the opposite safety rules, for the
 acceptance check of a machine after a deployment:
 
-1. Every `write` step (also in `cleanup`) is refused when the files are read. It sends nothing
-   (exit code 2). A scenario changes the machine only with client commands, so the PLC interlocks
-   stay the only authority.
-2. Before each scenario it requires `GVL_Simulation.bActive = FALSE` (a simulation build is
+1. Every `write` step (also in `cleanup`) is refused when the files are read, and so is a scenario
+   without `purpose` or `estimateS`. It sends nothing (exit code 2). A scenario changes the machine
+   only with client commands, so the PLC interlocks stay the only authority.
+2. It shows the run plan (each scenario in run order: name, estimated time, `purpose` as "Why",
+   `prepare` as "Prepare"; skipped ones with the reason) and asks "Start the acceptance run?".
+   Anything but `y` stops it (exit code 1, nothing sent). Before each scenario it shows
+   `RUN <name>: <purpose>`.
+3. An `instruct` step (`{ "do": "instruct", "text": "Place a 100 mm test wafer on the chuck" }`)
+   shows the text and waits for Enter. A `confirm` step (`"text": "Is the beacon green?"`) waits
+   for `y` or `n`; `n` fails the step. Both answers are in the report. Without a user (input
+   closed) the step fails. In `test` (simulation) both are answered automatically and the report
+   says "auto (simulation)".
+4. Before each scenario it requires `GVL_Simulation.bActive = FALSE` (a simulation build is
    refused) and `eActiveSequence` = 0. It does not wait: a running sequence may be someone's
    process, and Error (99) needs a person first. It never sends ErrorAcknowledge (9999) and never
    writes `bReset`.
-3. At the first failed scenario it runs that scenario's cleanup and CancelProcess (1), then stops.
+5. At the first failed scenario it runs that scenario's cleanup and CancelProcess (1), then stops.
    The remaining scenarios show `SKIP` with "not run: an earlier scenario failed".
-4. Under each scenario it shows each value that a `check` or `waitUntil` step read, passed or
+6. Under each scenario it shows each value that a `check` or `waitUntil` step read, passed or
    failed: `step 4: MFCT_[3].Measure = 99.6 (expected > 95 and < 105)`. The JUnit file (also of
    `test`) has these lines in the `system-out` of each test case: the evidence of the run.
 

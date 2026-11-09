@@ -210,6 +210,18 @@ namespace BeckhoffAutomationInterface.Runtime
                 return 2;
             }
 
+            // Acceptance: the user sees what will run, why, for how long and what to prepare, and starts it.
+            if (hardware)
+            {
+                foreach (string line in AcceptancePlan.Lines(selected, groups))
+                    Console.WriteLine(line);
+                if (!ScenarioRunner.IsYes(AskUser("Start the acceptance run? [y/N]")))
+                {
+                    Console.Error.WriteLine("{0}: ACCEPTANCE NOT STARTED — not confirmed by the user. Nothing was sent to the PLC.", Now());
+                    return 1;
+                }
+            }
+
             try
             {
                 netId = RuntimeTargets.NetId(target);
@@ -236,6 +248,11 @@ namespace BeckhoffAutomationInterface.Runtime
                 var clock = Stopwatch.StartNew();
                 var runner = new ScenarioRunner(guard.Reader(plc.TryRead), guard.Writer(plc.TryWrite), Thread.Sleep,
                     () => clock.Elapsed.TotalSeconds, ScenarioRunner.IndexSeed(DateTime.UtcNow)) { PlcTypeNote = guard.Note, Mode = mode };
+                if (hardware)
+                {
+                    runner.Ask = AskUser;
+                    runner.OnStart = s => Console.WriteLine("  RUN   {0}: {1}", s.Name, s.Purpose);
+                }
                 string root = a.Get("--scenarios");
                 results = runner.RunAll(selected, groups, timeoutS, r => PrintResult(r, root, hardware));
             }
@@ -266,6 +283,13 @@ namespace BeckhoffAutomationInterface.Runtime
                 }
             }
             return ScenarioExitCode(results);
+        }
+
+        /// <summary>Shows a prompt and reads one line; null when there is no user (input closed).</summary>
+        static string AskUser(string prompt)
+        {
+            Console.Write("  >>    " + prompt + " ");
+            return Console.ReadLine();
         }
 
         internal static int ScenarioExitCode(IReadOnlyCollection<ScenarioResult> results) =>

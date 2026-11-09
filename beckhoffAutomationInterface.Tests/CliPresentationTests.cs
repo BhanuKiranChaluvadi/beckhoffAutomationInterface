@@ -209,14 +209,43 @@ namespace BeckhoffAutomationInterface.Tests
             finally { Directory.Delete(root, true); }
         }
 
-        static (int Exit, string Output, string Error) Run(string arguments)
+        [Fact]
+        public void Acceptance_ShowsThePlan_AndStartsOnlyWhenTheUserSaysYes()
+        {
+            string root = TestProjects.NewTempDir("bai_acceptance");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, "inert-mfc.json"), @"{ ""name"": ""Inert MFC"",
+                    ""purpose"": ""Proves the argon supply and the inert MFC"", ""prepare"": [""Argon cylinder open""], ""estimateS"": 90,
+                    ""steps"": [ { ""do"": ""wait"", ""seconds"": 0 } ] }");
+
+                var result = Run("acceptance --target umrt --scenarios \"" + root + "\"", input: "n\n");
+
+                Assert.Equal(1, result.Exit);
+                Assert.Contains("Acceptance plan: 1 scenario(s) to run, about 2 min", result.Output);
+                Assert.Contains("     Why: Proves the argon supply and the inert MFC", result.Output);
+                Assert.Contains("     Prepare: Argon cylinder open", result.Output);
+                Assert.Contains("Start the acceptance run? [y/N]", result.Output);
+                Assert.Contains("ACCEPTANCE NOT STARTED", result.Error);   // the dash is console-encoded
+                Assert.Contains("not confirmed by the user. Nothing was sent to the PLC.", result.Error);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
+        static (int Exit, string Output, string Error) Run(string arguments, string input = null)
         {
             using (var process = Process.Start(new ProcessStartInfo(typeof(Program).Assembly.Location, arguments)
             {
                 UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true,
+                RedirectStandardInput = input != null,
             }))
             {
+                if (input != null)
+                {
+                    process.StandardInput.Write(input);
+                    process.StandardInput.Close();
+                }
                 var output = process.StandardOutput.ReadToEndAsync();
                 var error = process.StandardError.ReadToEndAsync();
                 if (!process.WaitForExit(15000))
