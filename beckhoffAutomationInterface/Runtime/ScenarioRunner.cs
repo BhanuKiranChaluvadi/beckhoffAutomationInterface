@@ -142,30 +142,9 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     OnStart?.Invoke(s);
                     double start = _nowS();
-                    string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
-                    r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
-                    if (problem == null)
-                    {
-                        _originalWrites = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-                        try
-                        {
-                            r = Run(s);
-                            if (r.Status == ScenarioStatus.Failed)
-                                r.Details.AddRange(Diagnostics()); // capture before cleanup changes the state
-                        }
-                        finally
-                        {
-                            cleanupFailure = Cleanup(r.Status == ScenarioStatus.Failed, prepareTimeoutS, s.CleanupSteps);
-                            _originalWrites = null;
-                        }
-                        if (cleanupFailure != null)
-                        {
-                            r.Status = ScenarioStatus.Failed;
-                            r.Message = (r.Message == null ? "" : r.Message + "; ") + cleanupFailure;
-                        }
-                    }
-                    else
-                        r.Details.AddRange(Diagnostics());
+                    r = RunOnce(s, prepareTimeoutS, null, ref cleanupFailure);
+                    if (Mode == ScenarioMode.Simulation && s.SimulationFault != null && r.Status == ScenarioStatus.Passed)
+                        ProveFault(s, r, prepareTimeoutS, ref cleanupFailure);
                     r.Seconds = _nowS() - start;
                 }
                 stopped |= Mode == ScenarioMode.Hardware && r.Status == ScenarioStatus.Failed;
@@ -173,6 +152,70 @@ namespace BeckhoffAutomationInterface.Runtime
                 onResult?.Invoke(r);
             }
             return results;
+        }
+
+        /// <summary>Prepare, the steps, then cleanup (also after a failure). A cleanup failure blocks
+        /// every later run: cleanupFailure stays set and the next RunOnce fails before it sends.</summary>
+        ScenarioResult RunOnce(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
+        {
+            string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
+            var r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
+            if (problem != null)
+            {
+                r.Details.AddRange(Diagnostics());
+                return r;
+            }
+            _originalWrites = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                // A fault proof's writes are restored like a scenario's own writes.
+                foreach (ScenarioStep write in inject ?? new ScenarioStep[0])
+                {
+                    problem = Execute(write, _nowS() + prepareTimeoutS, prepareTimeoutS);
+                    if (problem != null)
+                    {
+                        r.Message = "cannot inject the fault: " + problem;
+                        break;
+                    }
+                }
+                if (problem == null)
+                    r = Run(s);
+                if (r.Status == ScenarioStatus.Failed)
+                    r.Details.AddRange(Diagnostics()); // capture before cleanup changes the state
+            }
+            finally
+            {
+                cleanupFailure = Cleanup(r.Status == ScenarioStatus.Failed, prepareTimeoutS, s.CleanupSteps);
+                _originalWrites = null;
+            }
+            if (cleanupFailure != null)
+            {
+                r.Status = ScenarioStatus.Failed;
+                r.Message = (r.Message == null ? "" : r.Message + "; ") + cleanupFailure;
+            }
+            return r;
+        }
+
+        /// <summary>The scenario passed healthy; with its simulationFault written it must fail at the
+        /// named step. Otherwise the scenario fails: a check that cannot fail proves nothing.</summary>
+        void ProveFault(Scenario s, ScenarioResult healthy, double prepareTimeoutS, ref string cleanupFailure)
+        {
+            int n = s.SimulationFault.FailsAtStep;
+            ScenarioResult faulted = RunOnce(s, prepareTimeoutS, s.SimulationFault.Writes, ref cleanupFailure);
+            string verdict =
+                faulted.Status == ScenarioStatus.Passed
+                    ? "fault proof: the scenario passed with the fault injected, so its checks cannot see the fault"
+                : faulted.Message.StartsWith("step " + n + " (", StringComparison.Ordinal) && cleanupFailure == null
+                    ? null
+                    : "fault proof: with the fault it failed at " + faulted.Message + "; expected step " + n;
+            if (verdict == null)
+            {
+                healthy.Details.Add(string.Format("fault proof: with the fault it fails at step {0} ({1}), as expected", n, s.Steps[n - 1].KindName));
+                return;
+            }
+            healthy.Status = ScenarioStatus.Failed;
+            healthy.Message = verdict;
+            healthy.Details.AddRange(faulted.Details);
         }
 
         /// <summary>Simulation: puts the machine in its start state: no sequence runs (None, or stopped in

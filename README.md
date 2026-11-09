@@ -959,6 +959,8 @@ project with no variants, use `"default": [ ... ]`.
 | `timeoutS` | Optional. The time limit for the scenario. Default: 600 s. |
 | `steps` | Required. The steps, in order. |
 | `cleanup` | Optional. Steps that run after the scenario, also after a failure. Use them to undo manual commands: CancelProcess does not undo all of them. |
+| `purpose`, `estimateS`, `prepare` | Optional for `test`; `purpose` and `estimateS` are required by `acceptance`. What the scenario proves, its expected duration in seconds, and a list of what the user does before it. `acceptance` shows them in its run plan. |
+| `simulationFault` | Optional. `{ "write": [ { "symbol", "type", "value" } ], "failsAtStep": n }`. In `test` the scenario runs healthy (it must pass), then again with these writes (it must fail at step n); the values are restored. A scenario that passes with the fault fails: its checks cannot see the fault. `acceptance` ignores it. |
 
 | `do` | Fields | What it does |
 |---|---|---|
@@ -967,6 +969,8 @@ project with no variants, use `"default": [ ... ]`.
 | `check` | `symbol`, `type`, a condition | Reads the symbol one time. |
 | `write` | `symbol`, `type`, `value` | Writes the value. |
 | `wait` | `seconds` | Waits. |
+| `instruct` | `text` | `acceptance`: shows the text and waits for Enter. `test`: answered automatically. |
+| `confirm` | `text` | `acceptance`: asks the question, `y` or `n`; `n` fails the step. `test`: answered automatically. |
 
 A condition is `equals` or `notEquals` (optional `tolerance`), or `lessThan` and/or
 `greaterThan` (numbers only). `type` is `BOOL`, `BYTE`, `SINT`, `INT`, `UINT`, `DINT`, `UDINT`,

@@ -807,6 +807,77 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(new[] { "A" }, started);
         }
 
+        // ------------------------------------------------------------------ simulation fault proof
+
+        const string FlowCheck = @"{ ""do"": ""send"", ""command"": 41 },
+            { ""do"": ""check"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190 }";
+
+        static string Fault(int failsAtStep) =>
+            @"""simulationFault"": { ""write"": [ { ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""value"": 100 } ], ""failsAtStep"": " + failsAtStep + " },";
+
+        [Fact]
+        public void FaultProof_HealthyPasses_FaultFailsAtTheNamedStep_Passes_AndRestores()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { Load(FlowCheck, Fault(2)) }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Equal(200, plc.Dint("MAIN.flow"));
+            Assert.Equal(2, plc.Commands.Count(c => c.Contains("\"command\":41,")));   // the healthy run and the faulted run
+            Assert.Contains("fault proof: with the fault it fails at step 2 (check), as expected", r.Details);
+        }
+
+        [Fact]
+        public void FaultProof_ScenarioPassesWithTheFault_Fails()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            Scenario s = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 50 }", Fault(1));
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { s }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Failed, r.Status);
+            Assert.Equal("fault proof: the scenario passed with the fault injected, so its checks cannot see the fault", r.Message);
+            Assert.Equal(200, plc.Dint("MAIN.flow"));
+        }
+
+        [Fact]
+        public void FaultProof_FaultFailsAtAnotherStep_Fails()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { Load(FlowCheck + @",
+                { ""do"": ""wait"", ""seconds"": 0 }", Fault(3)) }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Failed, r.Status);
+            Assert.StartsWith("fault proof: with the fault it failed at step 2 (check) MAIN.flow: expected > 190, actual 100; expected step 3", r.Message);
+        }
+
+        [Fact]
+        public void FaultProof_IsIgnoredOnHardware_AndWritesNothing()
+        {
+            var plc = FakePlc.Machine();
+            plc.SetDint("MAIN.flow", 200);
+            Scenario s = Load(FlowCheck, @"""purpose"": ""p"", ""estimateS"": 1," + Fault(2));
+
+            ScenarioResult r = plc.HardwareRunner().RunAll(new[] { s }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Single(plc.Commands);
+            Assert.DoesNotContain("MAIN.flow", plc.Writes);
+            Assert.Empty(ScenarioRunner.HardwareProblems(new[] { s }));
+        }
+
+        [Fact]
+        public void FaultProof_NamesAStepThatExists()
+        {
+            var ex = Assert.Throws<ScenarioFormatException>(() => Load(FlowCheck, Fault(3)));
+            Assert.Equal("s.json: \"simulationFault\": \"failsAtStep\" must be a step of the scenario (1 to 2)", ex.Message);
+        }
+
         // ------------------------------------------------------------------ size guard
 
         [Fact]

@@ -19,7 +19,7 @@ namespace BeckhoffAutomationInterface.Runtime
     static class ScenarioFile
     {
         static readonly string[] TopKeys = { "name", "tags", "requires", "timeoutS", "steps", "cleanup", "description", "comment",
-            "purpose", "prepare", "estimateS" };
+            "purpose", "prepare", "estimateS", "simulationFault" };
         static readonly string[] ComparisonKeys = { "equals", "notEquals", "lessThan", "greaterThan", "tolerance" };
 
         static readonly IReadOnlyDictionary<StepKind, string[]> StepKeys = new Dictionary<StepKind, string[]>
@@ -109,7 +109,35 @@ namespace BeckhoffAutomationInterface.Runtime
                 foreach (object item in cleanupList)
                     scenario.CleanupSteps.Add(ParseStep(item, new Where(file + " (cleanup)", ++cleanupNumber)));
             }
+            if (root.TryGetValue("simulationFault", out object fault))
+                scenario.SimulationFault = ParseFault(fault, at, file, scenario.Steps.Count);
             return scenario;
+        }
+
+        /// <summary>{ "write": [ write steps without "do" ], "failsAtStep": n }.</summary>
+        static SimulationFault ParseFault(object value, Where at, string file, int stepCount)
+        {
+            if (!(value is Dictionary<string, object> e))
+                throw at.Error("\"simulationFault\" must be an object");
+            at.OnlyKeys(e, new[] { "write", "failsAtStep", "comment" });
+            if (!e.TryGetValue("write", out object writes) || !(writes is IEnumerable list) || writes is string || writes is IDictionary)
+                throw at.Error("\"simulationFault\": \"write\" must be a list of { symbol, type, value }");
+            var result = new SimulationFault();
+            int n = 0;
+            foreach (object item in list)
+            {
+                if (!(item is Dictionary<string, object> w))
+                    throw at.Error("\"simulationFault\": each \"write\" entry must be an object");
+                var asStep = new Dictionary<string, object>(w) { ["do"] = "write" };
+                result.Writes.Add(ParseStep(asStep, new Where(file + " (simulationFault)", ++n)));
+            }
+            if (n == 0)
+                throw at.Error("\"simulationFault\": \"write\" is empty");
+            string range = string.Format("\"simulationFault\": \"failsAtStep\" must be a step of the scenario (1 to {0})", stepCount);
+            if (!e.TryGetValue("failsAtStep", out object step) || !(step is int number) || number < 1 || number > stepCount)
+                throw at.Error(range);
+            result.FailsAtStep = number;
+            return result;
         }
 
         static ScenarioStep ParseStep(object item, Where at)

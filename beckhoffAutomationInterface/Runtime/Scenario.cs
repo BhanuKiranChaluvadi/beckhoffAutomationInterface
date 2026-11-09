@@ -36,6 +36,17 @@ namespace BeckhoffAutomationInterface.Runtime
         public string Purpose { get; set; }       // what the scenario proves, and why
         public List<string> Prepare { get; set; } = new List<string>();   // what the user does before it
         public double? EstimateS { get; set; }    // expected duration, for the run plan
+
+        public SimulationFault SimulationFault { get; set; }   // null = none
+    }
+
+    /// <summary>Proof that a scenario can fail: in simulation the scenario runs healthy (must pass),
+    /// then with these writes (must fail at FailsAtStep); the values are restored. Ignored on hardware.
+    /// <code>"simulationFault": { "write": [ { "symbol": "GVL_Simulation.rInertFlowFraction", "type": "LREAL", "value": 0.5 } ], "failsAtStep": 4 }</code></summary>
+    sealed class SimulationFault
+    {
+        public List<ScenarioStep> Writes { get; set; } = new List<ScenarioStep>();
+        public int FailsAtStep { get; set; }
     }
 
     enum StepKind { Send, WaitUntil, Check, Write, Wait, Instruct, Confirm }
