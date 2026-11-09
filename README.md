@@ -370,6 +370,9 @@ acceptance check of a machine after a deployment:
    writes `bReset`.
 3. At the first failed scenario it runs that scenario's cleanup and CancelProcess (1), then stops.
    The remaining scenarios show `SKIP` with "not run: an earlier scenario failed".
+4. Under each scenario it shows each value that a `check` or `waitUntil` step read, passed or
+   failed: `step 4: MFCT_[3].Measure = 99.6 (expected > 95 and < 105)`. The JUnit file (also of
+   `test`) has these lines in the `system-out` of each test case: the evidence of the run.
 
 ### `runtime-state`: read or change the runtime state
 
