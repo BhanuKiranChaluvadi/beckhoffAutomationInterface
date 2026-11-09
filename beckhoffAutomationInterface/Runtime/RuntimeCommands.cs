@@ -237,7 +237,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 var runner = new ScenarioRunner(guard.Reader(plc.TryRead), guard.Writer(plc.TryWrite), Thread.Sleep,
                     () => clock.Elapsed.TotalSeconds, ScenarioRunner.IndexSeed(DateTime.UtcNow)) { PlcTypeNote = guard.Note, Mode = mode };
                 string root = a.Get("--scenarios");
-                results = runner.RunAll(selected, groups, timeoutS, r => PrintResult(r, root));
+                results = runner.RunAll(selected, groups, timeoutS, r => PrintResult(r, root, hardware));
             }
 
             int failed = results.Count(r => r.Status == ScenarioStatus.Failed);
@@ -272,12 +272,16 @@ namespace BeckhoffAutomationInterface.Runtime
             results.Any(r => r.Status == ScenarioStatus.Passed) &&
             results.All(r => r.Status != ScenarioStatus.Failed) ? 0 : 1;
 
-        static void PrintResult(ScenarioResult r, string root)
+        /// <summary>measured: also each value read (acceptance evidence); 'test' keeps its short output.</summary>
+        static void PrintResult(ScenarioResult r, string root, bool measured)
         {
             string id = JUnitReport.ClassName(root, r.Scenario.File);
             string status = r.Status == ScenarioStatus.Passed ? "PASS" : r.Status == ScenarioStatus.Failed ? "FAIL" : "SKIP";
             Console.WriteLine("  {0}  {1}  {2}  ({3})", status, id, r.Scenario.Name,
                 r.Status == ScenarioStatus.Skipped ? r.Message : ScenarioNumbers.Seconds(r.Seconds));
+            if (measured)
+                foreach (Measurement m in r.Measurements)
+                    Console.WriteLine("        {0}", m);
             if (r.Status == ScenarioStatus.Failed)
             {
                 Console.WriteLine("        {0}", r.Message);

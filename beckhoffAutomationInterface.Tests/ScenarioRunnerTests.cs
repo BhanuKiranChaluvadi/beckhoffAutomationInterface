@@ -589,6 +589,49 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(0, RuntimeCommands.ScenarioExitCode(new[] { pass, skip }));
         }
 
+        // ------------------------------------------------------------------ measured values (report)
+
+        [Fact]
+        public void Run_RecordsTheLastMeasuredValueOfEachCheckAndWaitUntil()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.n", 7);
+            plc.ByTime["MAIN.flow"] = t => BitConverter.GetBytes(t < 0.25 ? 100 : 200);
+
+            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 },
+                { ""do"": ""send"", ""command"": 41 },
+                { ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 5 }"));
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Equal(new[] { "step 1: MAIN.n = 7 (expected = 7)", "step 3: MAIN.flow = 200 (expected > 190)" },
+                r.Measurements.Select(m => m.ToString()));
+        }
+
+        [Fact]
+        public void Run_ATimedOutWaitUntil_RecordsTheLastValueRead()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 100);
+
+            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 1 }"));
+
+            Assert.Equal(ScenarioStatus.Failed, r.Status);
+            Assert.Equal(new[] { "step 1: MAIN.flow = 100 (expected > 190)" }, r.Measurements.Select(m => m.ToString()));
+        }
+
+        [Fact]
+        public void RunAll_CleanupChecksAreNotMeasurements()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.n", 7);
+            Scenario s = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }",
+                @"""cleanup"": [{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }],");
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { s }, null, 2, null)[0];
+
+            Assert.Equal(new[] { "step 1: MAIN.n = 7 (expected = 7)" }, r.Measurements.Select(m => m.ToString()));
+        }
+
         // ------------------------------------------------------------------ hardware mode (bai acceptance)
 
         [Fact]

@@ -34,6 +34,8 @@ namespace BeckhoffAutomationInterface.Runtime
                         string.Join(Environment.NewLine, new[] { r.Message }.Concat(r.Details))));
                 else if (r.Status == ScenarioStatus.Skipped)
                     testcase.Add(new XElement("skipped", new XAttribute("message", r.Message ?? "")));
+                if (r.Measurements.Count > 0)   // the evidence: each value read, passed or failed
+                    testcase.Add(new XElement("system-out", string.Join(Environment.NewLine, r.Measurements)));
                 suite.Add(testcase);
             }
 

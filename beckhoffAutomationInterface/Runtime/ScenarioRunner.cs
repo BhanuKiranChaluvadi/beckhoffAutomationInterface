@@ -16,6 +16,19 @@ namespace BeckhoffAutomationInterface.Runtime
         public string Message { get; set; }        // failure: "step 3 (waitUntil) ..."; skip: the reason
         public double Seconds { get; set; }
         public List<string> Details { get; } = new List<string>();   // failure: sStatus, stLastError, ...
+        public List<Measurement> Measurements { get; } = new List<Measurement>();   // check/waitUntil, passed or failed
+    }
+
+    /// <summary>The last value a check or waitUntil step read, with its limit: the evidence of an
+    /// acceptance report ("step 4: MFCT_[3].Measure = 99.6 (expected > 95 and < 105)").</summary>
+    sealed class Measurement
+    {
+        public int Step { get; set; }
+        public string Symbol { get; set; }
+        public string Value { get; set; }      // as shown: 99.6, TRUE, 'text'
+        public string Expected { get; set; }   // the condition: "= 7", "> 190"
+
+        public override string ToString() => string.Format("step {0}: {1} = {2} (expected {3})", Step, Symbol, Value, Expected);
     }
 
     /// <summary>
@@ -50,6 +63,7 @@ namespace BeckhoffAutomationInterface.Runtime
         readonly Func<double> _nowS;
         int _nextIndex;
         Dictionary<string, byte[]> _originalWrites;
+        List<Measurement> _measurements;   // the running scenario's steps only (not prepare or cleanup)
 
         /// <summary>Optional: a note on the PLC type of a symbol, for an ADS size error (for
         /// example " (the PLC symbol is DINT, 4 bytes)").</summary>
@@ -309,16 +323,21 @@ namespace BeckhoffAutomationInterface.Runtime
             double start = _nowS();
             double deadline = start + scenario.TimeoutS;
             var result = new ScenarioResult { Scenario = scenario, Status = ScenarioStatus.Passed };
-            foreach (ScenarioStep step in scenario.Steps)
+            _measurements = result.Measurements;
+            try
             {
-                string failure = Execute(step, deadline, scenario.TimeoutS);
-                if (failure != null)
+                foreach (ScenarioStep step in scenario.Steps)
                 {
-                    result.Status = ScenarioStatus.Failed;
-                    result.Message = string.Format("step {0} ({1}) {2}", step.Number, step.KindName, failure);
-                    break;
+                    string failure = Execute(step, deadline, scenario.TimeoutS);
+                    if (failure != null)
+                    {
+                        result.Status = ScenarioStatus.Failed;
+                        result.Message = string.Format("step {0} ({1}) {2}", step.Number, step.KindName, failure);
+                        break;
+                    }
                 }
             }
+            finally { _measurements = null; }
             result.Seconds = _nowS() - start;
             return result;
         }
@@ -351,9 +370,9 @@ namespace BeckhoffAutomationInterface.Runtime
                         if (problem != null)
                             return problem;
                         if (step.Condition.Matches(actual))
-                            return null;
+                            return Measured(step, actual);
                         if (_nowS() >= deadline)
-                            return string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.Symbol, step.Condition.Text,
+                            return Measured(step, actual) ?? string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.Symbol, step.Condition.Text,
                                 Comparison.Quote(actual), ScenarioNumbers.Seconds(deadline - now),
                                 scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(scenarioTimeoutS) : "");
                         _sleepMs(PollMs);
@@ -365,6 +384,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     string problem = ReadValue(step, out object actual);
                     if (problem != null)
                         return problem;
+                    Measured(step, actual);
                     return step.Condition.Matches(actual)
                         ? null
                         : string.Format("{0}: expected {1}, actual {2}", step.Symbol, step.Condition.Text, Comparison.Quote(actual));
@@ -403,6 +423,17 @@ namespace BeckhoffAutomationInterface.Runtime
                 default:
                     return "unknown step";
             }
+        }
+
+        /// <summary>Records the value a scenario step read (not in prepare or cleanup). Always null, so
+        /// "return Measured(...) ?? failure" keeps the step's own result.</summary>
+        string Measured(ScenarioStep step, object actual)
+        {
+            _measurements?.Add(new Measurement
+            {
+                Step = step.Number, Symbol = step.Symbol, Value = Comparison.Quote(actual), Expected = step.Condition.Text,
+            });
+            return null;
         }
 
         string ReadValue(ScenarioStep step, out object value)

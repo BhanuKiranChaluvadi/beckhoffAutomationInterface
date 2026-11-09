@@ -353,6 +353,19 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void JUnit_ShowsTheMeasuredValues_OfAPassedScenario()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "tests");
+            var passed = new ScenarioResult { Scenario = new Scenario { Name = "Inert MFC", File = Path.Combine(root, "inert-mfc.json") }, Status = ScenarioStatus.Passed };
+            passed.Measurements.Add(new Measurement { Step = 4, Symbol = "MFCT_[3].Measure", Value = "99.6", Expected = "> 95 and < 105" });
+
+            XDocument doc = XDocument.Parse(JUnitReport.Build("bai acceptance Google", new[] { passed }, root, new DateTime(2026, 11, 9, 9, 0, 0)).ToString());
+
+            XElement testcase = doc.Root.Element("testsuite").Element("testcase");
+            Assert.Equal("step 4: MFCT_[3].Measure = 99.6 (expected > 95 and < 105)", testcase.Element("system-out").Value);
+        }
+
+        [Fact]
         public void JUnit_ClassNameOfASingleFile_IsItsName()
         {
             string file = Path.Combine(Path.GetTempPath(), "heating.json");
