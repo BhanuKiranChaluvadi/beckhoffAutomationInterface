@@ -8,6 +8,7 @@ You keep the PLC code as `.st` text files and XML manifests in git. The tool doe
 - It writes `.st` files and manifests from an existing project (`export`).
 - It activates a project on a runtime and reads live PLC values over ADS (`activate`, `verify`).
 - It runs test scenarios against a PLC in simulation (`test`).
+- It runs acceptance scenarios on a real machine after a deployment (`acceptance`).
 - It makes and checks offline release artifacts (`package`, `libraries`, `toolchain`, `esi`).
 - It makes a release bundle and installs a compiled package with rollback (`release`, `package install`).
 
@@ -37,7 +38,7 @@ never shows a Yes/No dialog box and never waits for a person.
 | TwinCAT | TwinCAT 3.1 XAE, build 4024 or later (4026 recommended). Variants need 4024 or later. |
 | DTE shell | The TwinCAT XAE shell (default). Visual Studio 2022 (17.x) with TwinCAT integration also works (`--shell vs2022`). Visual Studio 2026 is not supported. |
 | .NET | .NET SDK 6.0 or later to build. The tool targets .NET Framework 4.8, x64. |
-| Runtime commands | `activate`, `verify`, `test` and `runtime-state` need a TwinCAT runtime: UmRT_Default on this PC, the local runtime, or an AMS Net ID. UmRT needs a license. |
+| Runtime commands | `activate`, `verify`, `test`, `acceptance` and `runtime-state` need a TwinCAT runtime: UmRT_Default on this PC, the local runtime, or an AMS Net ID. UmRT needs a license. |
 
 If you install Visual Studio 2022 after TwinCAT, repair the TwinCAT integration (as Administrator):
 
@@ -349,6 +350,26 @@ What the tool does:
 Exit code: 0 = at least one scenario passed and none failed (`TEST PASSED`). 1 = a scenario
 failed, no scenario ran, or the PLC is not in Run. 2 = wrong command line or scenario file.
 The tool cannot recover from a lost PLC connection. Check the runtime before you start again.
+
+### `acceptance`: run scenarios on a real machine
+
+```
+bai acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--variant <name>]
+               [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
+```
+
+The same options, scenario files and exit codes as `test`, with the opposite safety rules, for the
+acceptance check of a machine after a deployment:
+
+1. Every `write` step (also in `cleanup`) is refused when the files are read. It sends nothing
+   (exit code 2). A scenario changes the machine only with client commands, so the PLC interlocks
+   stay the only authority.
+2. Before each scenario it requires `GVL_Simulation.bActive = FALSE` (a simulation build is
+   refused) and `eActiveSequence` = 0. It does not wait: a running sequence may be someone's
+   process, and Error (99) needs a person first. It never sends ErrorAcknowledge (9999) and never
+   writes `bReset`.
+3. At the first failed scenario it runs that scenario's cleanup and CancelProcess (1), then stops.
+   The remaining scenarios show `SKIP` with "not run: an earlier scenario failed".
 
 ### `runtime-state`: read or change the runtime state
 

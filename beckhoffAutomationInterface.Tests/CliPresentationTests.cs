@@ -101,6 +101,7 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData("help missing", 1, "Unknown help topic")]
         [InlineData("package missing --help", 2, "Unknown help topic")]
         [InlineData("license trail --target umrt", 2, "Did you mean 'bai license trial'?")]
+        [InlineData("acceptance --target umrt", 2, "'acceptance' needs --target")]
         public void InvalidArgumentsUseStderrAndKeepTheirExitCode(string arguments, int exit, string expected)
         {
             var result = Run(arguments);
@@ -185,6 +186,25 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.Contains(source, parse.Output);
                 Assert.Contains("1 file(s) parsed OK", parse.Output);
                 Assert.DoesNotContain("Dest=", parse.Output);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
+        [Fact]
+        public void Acceptance_RefusesAWriteStep_BeforeConnecting()
+        {
+            string root = TestProjects.NewTempDir("bai_acceptance");
+            try
+            {
+                File.WriteAllText(Path.Combine(root, "inject.json"), @"{ ""name"": ""inject"", ""steps"": [
+                    { ""do"": ""write"", ""symbol"": ""GVL_Simulation.rInertFlowFraction"", ""type"": ""LREAL"", ""value"": 0.5 } ] }");
+
+                var result = Run("acceptance --target umrt --scenarios \"" + root + "\"");
+
+                Assert.Equal(2, result.Exit);
+                Assert.Contains("step 1 (write) is not allowed on a real machine", result.Error);
+                Assert.Contains("ACCEPTANCE NOT STARTED", result.Error);
+                Assert.Contains("Nothing was sent to the PLC.", result.Error);
             }
             finally { Directory.Delete(root, true); }
         }

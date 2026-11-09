@@ -213,6 +213,9 @@ namespace BeckhoffAutomationInterface
                 case "test":
                     Environment.Exit(Runtime.RuntimeCommands.Test(args));
                     break;
+                case "acceptance":
+                    Environment.Exit(Runtime.RuntimeCommands.Acceptance(args));
+                    break;
                 case "license":
                     Environment.Exit(Runtime.LicenseCommands.Run(args, shell));
                     break;

@@ -137,14 +137,22 @@ namespace BeckhoffAutomationInterface.Runtime
         // ------------------------------------------------------------------ test
 
         internal static string TestUsage => "Usage: beckhoffAutomationInterface " + Cli.CommandLine.TestUsage;
+        internal static string AcceptanceUsage => "Usage: beckhoffAutomationInterface " + Cli.CommandLine.AcceptanceUsage;
+
+        /// <summary>'test' on a real machine (ScenarioMode.Hardware); same options and exit codes.</summary>
+        public static int Acceptance(string[] args) => Test(args, ScenarioMode.Hardware);
 
         /// <summary>
         /// Runs scenario files (Scenario) against the running PLC over ADS. Exit code: 0 = every
         /// selected scenario passed (skipped ones do not count), 1 = a scenario failed or the PLC
         /// is not in Run, 2 = a wrong command line or an invalid scenario file (nothing runs).
         /// </summary>
-        public static int Test(string[] args)
+        public static int Test(string[] args) => Test(args, ScenarioMode.Simulation);
+
+        static int Test(string[] args, ScenarioMode mode)
         {
+            bool hardware = mode == ScenarioMode.Hardware;
+            string name = hardware ? "acceptance" : "test", word = hardware ? "ACCEPTANCE" : "TEST";
             CommandArgs a;
             string target, netId, variant;
             List<string> groups = null, tags;
@@ -155,7 +163,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 a = CommandArgs.Parse(args,
                     new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--junit", "--timeout-seconds" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--scenarios") == null)
-                    throw new ArgumentException("'test' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
+                    throw new ArgumentException("'" + name + "' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
                 if (a.Get("--groups") != null && a.Get("--variants-file") != null)
                     throw new ArgumentException("use --groups or --variants-file, not both.");
                 timeoutS = 60;
@@ -182,6 +190,8 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 List<Scenario> all = ScenarioFile.LoadAll(a.Get("--scenarios"), problems);
                 selected = ScenarioFilter.ByTags(all, tags);
+                if (hardware)
+                    problems.AddRange(ScenarioRunner.HardwareProblems(selected));
                 if (problems.Count == 0 && selected.Count == 0)
                     problems.Add(all.Count == 0
                         ? "no scenario file (*.json) in " + a.Get("--scenarios")
@@ -196,7 +206,7 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 foreach (string p in problems)
                     Console.Error.WriteLine("ERROR: " + p);
-                Console.Error.WriteLine("{0}: TEST NOT STARTED — {1} problem(s). Nothing was sent to the PLC.", Now(), problems.Count);
+                Console.Error.WriteLine("{0}: {1} NOT STARTED — {2} problem(s). Nothing was sent to the PLC.", Now(), word, problems.Count);
                 return 2;
             }
 
@@ -211,7 +221,7 @@ namespace BeckhoffAutomationInterface.Runtime
             }
 
             DateTime started = DateTime.Now;
-            Console.WriteLine("{0}: Test on {1} ({2}), boot project: {3}", Now(), target, netId,
+            Console.WriteLine("{0}: {1} on {2} ({3}), boot project: {4}", Now(), hardware ? "Acceptance" : "Test", target, netId,
                 RuntimeTargets.CurrentBootProject(target) ?? "(none)");
             Console.WriteLine("{0}: {1} scenario(s) from {2}; feature groups: {3}", Now(), selected.Count, a.Get("--scenarios"),
                 groups == null ? "not given (scenarios with \"requires\" are skipped)" : groups.Count == 0 ? "(none)" : string.Join(", ", groups));
@@ -219,13 +229,13 @@ namespace BeckhoffAutomationInterface.Runtime
             List<ScenarioResult> results;
             using (var plc = new AdsClient(netId, AdsClient.PortPlc1))
             {
-                if (!WaitForPlcRun(target, netId, plc, timeoutS, "TEST FAILED"))
+                if (!WaitForPlcRun(target, netId, plc, timeoutS, word + " FAILED"))
                     return 1;
 
                 var guard = new SymbolSizeGuard(plc.TrySymbolInfo);
                 var clock = Stopwatch.StartNew();
                 var runner = new ScenarioRunner(guard.Reader(plc.TryRead), guard.Writer(plc.TryWrite), Thread.Sleep,
-                    () => clock.Elapsed.TotalSeconds, ScenarioRunner.IndexSeed(DateTime.UtcNow)) { PlcTypeNote = guard.Note };
+                    () => clock.Elapsed.TotalSeconds, ScenarioRunner.IndexSeed(DateTime.UtcNow)) { PlcTypeNote = guard.Note, Mode = mode };
                 string root = a.Get("--scenarios");
                 results = runner.RunAll(selected, groups, timeoutS, r => PrintResult(r, root));
             }
@@ -235,18 +245,18 @@ namespace BeckhoffAutomationInterface.Runtime
             int passed = results.Count - failed - skipped;
             string label = variant ?? target;
             Console.WriteLine(ScenarioExitCode(results) == 0
-                ? string.Format("{0}: TEST PASSED — {1}: {2} passed, {3} skipped, in {4}.", Now(), label, passed, skipped, ScenarioNumbers.Seconds(results.Sum(r => r.Seconds)))
-                : string.Format("{0}: TEST FAILED — {1}: {2} of {3} failed ({4} passed, {5} skipped).", Now(), label, failed, results.Count, passed, skipped));
+                ? string.Format("{0}: {1} PASSED — {2}: {3} passed, {4} skipped, in {5}.", Now(), word, label, passed, skipped, ScenarioNumbers.Seconds(results.Sum(r => r.Seconds)))
+                : string.Format("{0}: {1} FAILED — {2}: {3} of {4} failed ({5} passed, {6} skipped).", Now(), word, label, failed, results.Count, passed, skipped));
 
             if (passed == 0 && failed == 0)
-                Console.Error.WriteLine("TEST FAILED: no applicable scenario executed (all skipped).");
+                Console.Error.WriteLine(word + " FAILED: no applicable scenario executed (all skipped).");
 
             string junit = a.Get("--junit");
             if (junit != null)
             {
                 try
                 {
-                    JUnitReport.Write(junit, JUnitReport.Build("bai test " + label, results, a.Get("--scenarios"), started));
+                    JUnitReport.Write(junit, JUnitReport.Build("bai " + name + " " + label, results, a.Get("--scenarios"), started));
                     Console.WriteLine("{0}: JUnit XML: {1}", Now(), junit);
                 }
                 catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)

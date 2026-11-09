@@ -62,6 +62,9 @@ namespace BeckhoffAutomationInterface.Cli
             Entry("test", "Run PLC scenarios over ADS and report their results.", Runtime.RuntimeCommands.TestUsage,
                 @"bai test --target umrt --scenarios Tests --tags smoke --junit results.xml",
                 notes: "Scenarios can send commands and write PLC values. Choose --variants-file or --groups, not both. At least one scenario must execute."),
+            Entry("acceptance", "Run acceptance scenarios on a real machine and report their results.", Runtime.RuntimeCommands.AcceptanceUsage,
+                @"bai acceptance --target local --scenarios Tests\Acceptance\NFLite --variants-file variants.xml --tags smoke",
+                notes: "For a real machine (GVL_Simulation.bActive FALSE), idle and with no error. Scenarios only send, wait and check: a write step is refused before anything is sent. No automatic ErrorAcknowledge or reset. The run stops at the first failed scenario; its cleanup and CancelProcess run first."),
             Entry("runtime-state", "Read, check, or change the runtime state over ADS.", Runtime.RuntimeStateCommand.Usage,
                 "bai runtime-state --target umrt --check run",
                 notes: "--check reads the state and changes nothing; --set changes it. No XAE session is needed."),
@@ -174,7 +177,7 @@ namespace BeckhoffAutomationInterface.Cli
                 ? args.Take(2).ToArray() : args.Take(1).ToArray();
         }
         internal static int UsageExitCode(string name) =>
-            new[] { "test", "machine", "native", "release", "package", "libraries", "toolchain", "esi", "license" }.Contains(name) ? 2 : 1;
+            new[] { "test", "acceptance", "machine", "native", "release", "package", "libraries", "toolchain", "esi", "license" }.Contains(name) ? 2 : 1;
 
         // One logical invocation per line, assembled from the existing wrapped usage constants.
         internal static IEnumerable<string> Invocations(Command command, string mode = null)
@@ -393,7 +396,7 @@ namespace BeckhoffAutomationInterface.Cli
             foreach (var group in new[]
             {
                 Pair("Project and source", "init sync build check export machine native"),
-                Pair("Runtime and diagnostics", "doctor license activate verify test runtime-state"),
+                Pair("Runtime and diagnostics", "doctor license activate verify test acceptance runtime-state"),
                 Pair("Release and artifacts", "release package libraries toolchain esi")
             })
             {

@@ -90,6 +90,17 @@ namespace BeckhoffAutomationInterface.Tests
             }
 
             public ScenarioRunner Runner(int firstIndex = 100) => new ScenarioRunner(Read, Write, Sleep, () => Time, firstIndex);
+
+            /// <summary>A real machine: a release build has GVL_Simulation, with bActive FALSE.</summary>
+            public static FakePlc Machine()
+            {
+                var plc = new FakePlc();
+                plc.Values[ScenarioRunner.SimulationActiveSymbol] = new byte[] { 0 };
+                return plc;
+            }
+
+            public ScenarioRunner HardwareRunner() =>
+                new ScenarioRunner(Read, Write, Sleep, () => Time, 100) { Mode = ScenarioMode.Hardware };
         }
 
         static Scenario Load(string steps, string extra = "") =>
@@ -576,6 +587,100 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(1, RuntimeCommands.ScenarioExitCode(new[] { skip }));
             Assert.Equal(1, RuntimeCommands.ScenarioExitCode(new[] { pass, fail }));
             Assert.Equal(0, RuntimeCommands.ScenarioExitCode(new[] { pass, skip }));
+        }
+
+        // ------------------------------------------------------------------ hardware mode (bai acceptance)
+
+        [Fact]
+        public void Hardware_RefusesASimulationBuild_BeforeAnyCommand()
+        {
+            var plc = new FakePlc();   // bActive TRUE
+
+            var results = plc.HardwareRunner().RunAll(new[] { Load(@"{ ""do"": ""send"", ""command"": 41 }") }, null, 2, null);
+
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal("before the scenario: acceptance needs a real machine (GVL_Simulation.bActive = FALSE); no commands sent",
+                results[0].Message);
+            Assert.Empty(plc.Commands);
+            Assert.Empty(plc.Writes);
+        }
+
+        [Fact]
+        public void Hardware_NeverAcknowledgesErrorsOrResetsTheSimulation()
+        {
+            var plc = FakePlc.Machine();
+
+            var results = plc.HardwareRunner().RunAll(new[] { Load(@"{ ""do"": ""send"", ""command"": 41 }") }, null, 2, null);
+
+            Assert.Equal(ScenarioStatus.Passed, results[0].Status);
+            Assert.Single(plc.Commands);
+            Assert.Contains("\"command\":41,", plc.Commands[0]);
+            Assert.DoesNotContain(ScenarioRunner.SimulationResetSymbol, plc.Writes);
+        }
+
+        [Theory]
+        [InlineData(7)]    // a sequence runs (for example a process started by the client)
+        [InlineData(99)]   // stopped in Error: a person must look at it first
+        public void Hardware_RefusesAtOnce_WhenASequenceRunsOrIsInError(short sequence)
+        {
+            var plc = FakePlc.Machine();
+            plc.SetInt(Seq, sequence);
+
+            var results = plc.HardwareRunner().RunAll(new[] { Load(@"{ ""do"": ""send"", ""command"": 41 }") }, null, 20, null);
+
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal(string.Format("before the scenario: {0} = {1}; the machine must be idle (0) with no error. " +
+                "Stop or acknowledge it on the machine first; no commands sent", Seq, sequence), results[0].Message);
+            Assert.Empty(plc.Commands);
+            Assert.Equal(0, plc.Time);   // no waiting: a running sequence may be someone's process
+        }
+
+        [Fact]
+        public void Hardware_WriteStep_IsRefusedAtRunTime_AndWritesNothing()
+        {
+            var plc = FakePlc.Machine();
+            plc.SetDint("MAIN.override", 7);
+
+            var results = plc.HardwareRunner().RunAll(new[] {
+                Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 99 }") }, null, 2, null);
+
+            Assert.Equal("step 1 (write) is not allowed on a real machine: acceptance scenarios only send, wait and check",
+                results[0].Message);
+            Assert.Equal(7, plc.Dint("MAIN.override"));
+        }
+
+        [Fact]
+        public void HardwareProblems_NamesEachWriteStep_IncludingCleanup()
+        {
+            Scenario steps = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.a"", ""type"": ""DINT"", ""value"": 1 }");
+            Scenario cleanup = Load(@"{ ""do"": ""wait"", ""seconds"": 0 }",
+                @"""cleanup"": [{ ""do"": ""write"", ""symbol"": ""MAIN.b"", ""type"": ""DINT"", ""value"": 0 }],");
+            Scenario fine = Load(@"{ ""do"": ""send"", ""command"": 41 }");
+
+            Assert.Equal(new[]
+            {
+                "s.json: step 1 (write) is not allowed on a real machine: acceptance scenarios only send, wait and check",
+                "s.json: cleanup step 1 (write) is not allowed on a real machine: acceptance scenarios only send, wait and check",
+            }, ScenarioRunner.HardwareProblems(new[] { steps, cleanup, fine }));
+        }
+
+        [Fact]
+        public void Hardware_StopsAtTheFirstFailure_CancelsAndRunsNothingMore()
+        {
+            var plc = FakePlc.Machine();
+            plc.Receiver = command => { if (command == 54) plc.SetInt(Seq, 3); if (command == 1) plc.SetInt(Seq, 0); return true; };
+            Scenario failing = Load(@"{ ""do"": ""send"", ""command"": 54 },
+                { ""do"": ""check"", ""symbol"": """ + Seq + @""", ""type"": ""INT"", ""equals"": 0 }");
+            Scenario next = Load(@"{ ""do"": ""send"", ""command"": 41 }");
+            var seen = new List<ScenarioStatus>();
+
+            var results = plc.HardwareRunner().RunAll(new[] { failing, next }, null, 2, r => seen.Add(r.Status));
+
+            Assert.Equal(new[] { ScenarioStatus.Failed, ScenarioStatus.Skipped }, seen);
+            Assert.Equal("not run: an earlier scenario failed (acceptance stops at the first failure)", results[1].Message);
+            Assert.Equal(2, plc.Commands.Count);   // the failing scenario's command, then CancelProcess
+            Assert.Contains("\"command\":54,", plc.Commands[0]);
+            Assert.Contains("\"command\":1,", plc.Commands[1]);
         }
 
         // ------------------------------------------------------------------ size guard

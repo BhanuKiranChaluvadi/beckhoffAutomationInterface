@@ -5,6 +5,10 @@ namespace BeckhoffAutomationInterface.Runtime
 {
     enum ScenarioStatus { Passed, Failed, Skipped }
 
+    /// <summary>Simulation: 'bai test' on a simulation build. Hardware: 'bai acceptance' on a real
+    /// machine (no writes, no automatic acknowledge or reset, stop at the first failure).</summary>
+    enum ScenarioMode { Simulation, Hardware }
+
     sealed class ScenarioResult
     {
         public Scenario Scenario { get; set; }
@@ -51,6 +55,28 @@ namespace BeckhoffAutomationInterface.Runtime
         /// example " (the PLC symbol is DINT, 4 bytes)").</summary>
         public Func<string, string> PlcTypeNote { get; set; }
 
+        public ScenarioMode Mode { get; set; }
+
+        /// <summary>On a real machine the PLC interlocks stay the only authority: a scenario changes the
+        /// machine only through client commands, never by writing PLC symbols.</summary>
+        const string WriteNotAllowed = "is not allowed on a real machine: acceptance scenarios only send, wait and check";
+
+        /// <summary>Each write step (also in cleanup) of the scenarios, checked before anything is sent.</summary>
+        public static List<string> HardwareProblems(IEnumerable<Scenario> scenarios)
+        {
+            var problems = new List<string>();
+            foreach (Scenario s in scenarios)
+            {
+                foreach (ScenarioStep step in s.Steps)
+                    if (step.Kind == StepKind.Write)
+                        problems.Add(string.Format("{0}: step {1} (write) {2}", s.File, step.Number, WriteNotAllowed));
+                foreach (ScenarioStep step in s.CleanupSteps)
+                    if (step.Kind == StepKind.Write)
+                        problems.Add(string.Format("{0}: cleanup step {1} (write) {2}", s.File, step.Number, WriteNotAllowed));
+            }
+            return problems;
+        }
+
         public ScenarioRunner(ExpectationChecker.Reader read, Writer write, Action<int> sleepMs, Func<double> nowS, int firstIndex)
         {
             _read = read;
@@ -71,17 +97,21 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // ------------------------------------------------------------------ whole run
 
-        /// <summary>Runs each scenario in turn. Before each one, Prepare; a failure does not stop the
-        /// next scenario. groups = the machine's feature groups (null = not known).</summary>
+        /// <summary>Runs each scenario in turn. Before each one, Prepare. In simulation a failure does not
+        /// stop the next scenario; on hardware the run stops at the first failure (the rest is "not run").
+        /// groups = the machine's feature groups (null = not known).</summary>
         public List<ScenarioResult> RunAll(IEnumerable<Scenario> scenarios, IReadOnlyCollection<string> groups,
             double prepareTimeoutS, Action<ScenarioResult> onResult)
         {
             var results = new List<ScenarioResult>();
             string cleanupFailure = null;
+            bool stopped = false;
             foreach (Scenario s in scenarios)
             {
                 ScenarioResult r;
-                string skip = ScenarioFilter.SkipReason(s, groups);
+                string skip = stopped
+                    ? "not run: an earlier scenario failed (acceptance stops at the first failure)"
+                    : ScenarioFilter.SkipReason(s, groups);
                 if (skip != null)
                     r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Skipped, Message = skip };
                 else
@@ -113,20 +143,24 @@ namespace BeckhoffAutomationInterface.Runtime
                         r.Details.AddRange(Diagnostics());
                     r.Seconds = _nowS() - start;
                 }
+                stopped |= Mode == ScenarioMode.Hardware && r.Status == ScenarioStatus.Failed;
                 results.Add(r);
                 onResult?.Invoke(r);
             }
             return results;
         }
 
-        /// <summary>Puts the machine in its start state: no sequence runs (None, or stopped in Error),
-        /// errors acknowledged (9999), the active simulation reset and its acknowledgement awaited,
-        /// and then no sequence at all. Returns null, or what went wrong.</summary>
+        /// <summary>Simulation: puts the machine in its start state: no sequence runs (None, or stopped in
+        /// Error), errors acknowledged (9999), the active simulation reset and its acknowledgement
+        /// awaited, and then no sequence at all. Hardware: changes nothing; the machine must already be
+        /// idle with no error (an acknowledge could hide a real fault). Returns null, or what went wrong.</summary>
         public string Prepare(double timeoutS)
         {
-            string problem = RequireSimulation();
+            string problem = RequireMode();
             if (problem != null)
                 return problem;
+            if (Mode == ScenarioMode.Hardware)
+                return RequireIdle();
             // Check the reset symbol before sending even ErrorAcknowledge.
             int resetError = _read(SimulationResetSymbol, 1, out byte[] unused);
             if (resetError != 0)
@@ -160,17 +194,33 @@ namespace BeckhoffAutomationInterface.Runtime
             return WaitForSequence(new[] { SequenceNone }, timeoutS);
         }
 
-        string RequireSimulation()
+        /// <summary>The one place that matches the build to the mode: simulation needs bActive TRUE,
+        /// a real machine needs it FALSE.</summary>
+        string RequireMode()
         {
             int err = _read(SimulationActiveSymbol, 1, out byte[] active);
             if (err != 0)
                 return "cannot read " + SimulationActiveSymbol + ": " + AdsError(err, SimulationActiveSymbol);
-            return active[0] == 1 ? null : "tests require " + SimulationActiveSymbol + " = TRUE; no commands sent";
+            bool simulation = active[0] == 1;
+            if (Mode == ScenarioMode.Hardware)
+                return simulation ? "acceptance needs a real machine (" + SimulationActiveSymbol + " = FALSE); no commands sent" : null;
+            return simulation ? null : "tests require " + SimulationActiveSymbol + " = TRUE; no commands sent";
+        }
+
+        /// <summary>Hardware: no waiting, because a running sequence may be someone's process.</summary>
+        string RequireIdle()
+        {
+            int err = _read(ActiveSequenceSymbol, 2, out byte[] data);
+            if (err != 0)
+                return "cannot read " + ActiveSequenceSymbol + ": " + AdsError(err, ActiveSequenceSymbol);
+            int value = BitConverter.ToInt16(data, 0);
+            return value == SequenceNone ? null : string.Format("{0} = {1}; the machine must be idle (0) with no error. " +
+                "Stop or acknowledge it on the machine first; no commands sent", ActiveSequenceSymbol, value);
         }
 
         string Cleanup(bool failed, double timeoutS, IReadOnlyList<ScenarioStep> steps)
         {
-            string guard = RequireSimulation();
+            string guard = RequireMode();
             if (guard != null)
                 return "cleanup stopped: " + guard;
             var problems = new List<string>();
@@ -322,6 +372,8 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 case StepKind.Write:
                 {
+                    if (Mode == ScenarioMode.Hardware)
+                        return WriteNotAllowed;
                     if (string.Equals(step.Symbol, SimulationActiveSymbol, StringComparison.OrdinalIgnoreCase))
                         return "scenario cannot change " + SimulationActiveSymbol;
                     if (_originalWrites != null && !_originalWrites.ContainsKey(step.Symbol))

@@ -37,6 +37,10 @@ namespace BeckhoffAutomationInterface.Cli
         public const string TestUsage =
             "test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>] [--variants-file <variants.xml> | --groups <G1,G2>]\n" +
             "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]";
+        // Same options as 'test'; parsed in Runtime/RuntimeCommands.Test in hardware mode.
+        public const string AcceptanceUsage =
+            "acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--variant <name>] [--variants-file <variants.xml> | --groups <G1,G2>]\n" +
+            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]";
 
         // Every command: where .stconfig is read from, and whether at all.
         static readonly string[] ConfigOptions = { "--config" };
@@ -96,6 +100,7 @@ namespace BeckhoffAutomationInterface.Cli
                 case "export": return ExportUsage;
                 case "init": return InitUsage;
                 case "test": return TestUsage;
+                case "acceptance": return AcceptanceUsage;
                 default: return null;
             }
         }
