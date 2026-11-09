@@ -303,6 +303,9 @@ namespace BeckhoffAutomationInterface.Runtime
             string status = r.Status == ScenarioStatus.Passed ? "PASS" : r.Status == ScenarioStatus.Failed ? "FAIL" : "SKIP";
             Console.WriteLine("  {0}  {1}  {2}  ({3})", status, id, r.Scenario.Name,
                 r.Status == ScenarioStatus.Skipped ? r.Message : ScenarioNumbers.Seconds(r.Seconds));
+            if (r.Status == ScenarioStatus.Passed)   // for example its fault proof
+                foreach (string line in r.Details)
+                    Console.WriteLine("        {0}", line);
             if (measured)
                 foreach (Measurement m in r.Measurements)
                     Console.WriteLine("        {0}", m);

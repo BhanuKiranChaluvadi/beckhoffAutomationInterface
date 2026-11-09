@@ -398,6 +398,21 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void JUnit_ShowsTheFaultProof_OfAPassedScenario()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "tests");
+            var passed = new ScenarioResult { Scenario = new Scenario { Name = "Inert MFC", File = Path.Combine(root, "inert-mfc.json") }, Status = ScenarioStatus.Passed };
+            passed.Details.Add("fault proof: with the fault it fails at step 2 (waitUntil), as expected");
+            passed.Measurements.Add(new Measurement { Step = 2, Symbol = "MFCT_[3].Measure", Value = "98", Expected = "> 95 and < 105" });
+
+            XDocument doc = XDocument.Parse(JUnitReport.Build("bai test Google", new[] { passed }, root, new DateTime(2026, 11, 9, 9, 0, 0)).ToString());
+
+            Assert.Equal("fault proof: with the fault it fails at step 2 (waitUntil), as expected\n" +   // XML reads a line end as \n
+                "step 2: MFCT_[3].Measure = 98 (expected > 95 and < 105)",
+                doc.Root.Element("testsuite").Element("testcase").Element("system-out").Value);
+        }
+
+        [Fact]
         public void JUnit_ShowsTheMeasuredValues_OfAPassedScenario()
         {
             string root = Path.Combine(Path.GetTempPath(), "tests");
