@@ -573,7 +573,7 @@ namespace BeckhoffAutomationInterface.Sync
         /// only for classification/boundary sniffing; the original text (with comments) is
         /// what gets stored as the POU's declaration/implementation.
         /// </summary>
-        static string StripComments(string source)
+        internal static string StripComments(string source)
         {
             var sb = new System.Text.StringBuilder(source.Length);
             int depth = 0;

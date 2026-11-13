@@ -246,6 +246,11 @@ namespace BeckhoffAutomationInterface.Machines
         public NativeSettings Native { get; private set; }
         public bool IsNative => Kind == "native";
 
+        /// <summary>The enums of the family's source folders below the repository root: the
+        /// numbers the PLC of this family uses (see StEnums).</summary>
+        public Sync.StEnums ReadEnums(string root) =>
+            Sync.StEnums.Read(Sources.Select(s => MachineSources.RepoPath(root, s)));
+
         public static readonly string[] Platforms = { "TwinCAT RT (x86)", "TwinCAT RT (x64)", "TwinCAT OS (x64)" };
 
         internal static MachineFamily Parse(string name, object value, string root, string path)
