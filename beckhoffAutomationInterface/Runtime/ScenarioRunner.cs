@@ -105,12 +105,50 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public ScenarioRunner(ExpectationChecker.Reader read, Writer write, Action<int> sleepMs, Func<double> nowS, int firstIndex)
         {
-            _read = read;
-            _write = write;
+            // Each ADS call is timed: a starved runtime or PC makes calls take seconds (TcAdsDll
+            // waits about 5 s per call), which stretches a scenario far beyond its timeoutS.
+            _read = (string symbol, int size, out byte[] data) =>
+            {
+                double t = nowS();
+                int err = read(symbol, size, out data);
+                CountCall(nowS() - t);
+                return err;
+            };
+            _write = (symbol, data) =>
+            {
+                double t = nowS();
+                int err = write(symbol, data);
+                CountCall(nowS() - t);
+                return err;
+            };
             _sleepMs = sleepMs;
             _nowS = nowS;
             _nextIndex = Math.Max(1, firstIndex);
         }
+
+        /// <summary>An ADS call longer than this is slow (counted and reported with the result).</summary>
+        public const double SlowCallS = 1.0;
+        /// <summary>A scenario (prepare, steps, cleanup) may take timeoutS + 2 x the prepare timeout + this.</summary>
+        public const double LimitMarginS = 30;
+
+        int _slowCalls;
+        double _slowMaxS;
+        double _limitAt = double.PositiveInfinity;   // RunOnce: the steps stop when the scenario limit has passed
+        double _limitS;                              // RunOnce: the limit (LimitS)
+
+        void CountCall(double seconds)
+        {
+            if (seconds <= SlowCallS)
+                return;
+            _slowCalls++;
+            _slowMaxS = Math.Max(_slowMaxS, seconds);
+        }
+
+        string SlowAds() => string.Format("slow ADS: {0} call{1} > {2} (max {3})", _slowCalls, _slowCalls == 1 ? "" : "s",
+            SlowCallS.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " s", ScenarioNumbers.Seconds(_slowMaxS));
+
+        /// <summary>The longest a scenario may take: its timeoutS, prepare and cleanup, and a margin.</summary>
+        internal static double LimitS(Scenario s, double prepareTimeoutS) => s.TimeoutS + 2 * prepareTimeoutS + LimitMarginS;
 
         /// <summary>First command index of a run: from the clock, so that a new run does not use the
         /// index of an earlier run (the PLC keeps the last one). 1000 indexes per second; the cycle
@@ -144,10 +182,14 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     OnStart?.Invoke(s);
                     double start = _nowS();
+                    _slowCalls = 0;
+                    _slowMaxS = 0;
                     r = RunOnce(s, prepareTimeoutS, null, ref cleanupFailure);
                     if (Mode == ScenarioMode.Simulation && s.SimulationFault != null && r.Status == ScenarioStatus.Passed)
                         ProveFault(s, r, prepareTimeoutS, ref cleanupFailure);
                     r.Seconds = _nowS() - start;
+                    if (_slowCalls > 0)
+                        r.Details.Add(SlowAds() + "; the runtime or the PC was overloaded");
                 }
                 stopped |= Mode == ScenarioMode.Hardware && r.Status == ScenarioStatus.Failed;
                 results.Add(r);
@@ -159,6 +201,33 @@ namespace BeckhoffAutomationInterface.Runtime
         /// <summary>Prepare, the steps, then cleanup (also after a failure). A cleanup failure blocks
         /// every later run: cleanupFailure stays set and the next RunOnce fails before it sends.</summary>
         ScenarioResult RunOnce(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
+        {
+            double start = _nowS();
+            double limitS = LimitS(s, prepareTimeoutS);
+            _limitS = limitS;
+            _limitAt = start + limitS;
+            try
+            {
+                ScenarioResult r = RunOnceUnbounded(s, prepareTimeoutS, inject, ref cleanupFailure);
+                double took = _nowS() - start;
+                if (took > limitS && !(r.Message ?? "").StartsWith(TookPrefix, StringComparison.Ordinal))
+                {
+                    string prior = r.Status == ScenarioStatus.Failed ? r.Message : null;
+                    r.Status = ScenarioStatus.Failed;
+                    r.Message = LimitMessage(took, limitS) + (prior != null ? "; " + prior : "");
+                }
+                return r;
+            }
+            finally { _limitAt = double.PositiveInfinity; }
+        }
+
+        const string TookPrefix = "scenario took ";
+
+        string LimitMessage(double tookS, double limitS) =>
+            string.Format("{0}{1}, more than its limit {2} ({3})", TookPrefix, ScenarioNumbers.Seconds(tookS), ScenarioNumbers.Seconds(limitS),
+                _slowCalls > 0 ? SlowAds() : "no slow ADS call");
+
+        ScenarioResult RunOnceUnbounded(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
         {
             string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
             var r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
@@ -384,6 +453,14 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 foreach (ScenarioStep step in scenario.Steps)
                 {
+                    // Slow ADS calls can stretch the steps past every deadline: stop at the scenario
+                    // limit (RunOnce); the cleanup still runs.
+                    if (_nowS() > _limitAt)
+                    {
+                        result.Status = ScenarioStatus.Failed;
+                        result.Message = LimitMessage(_nowS() - (_limitAt - _limitS), _limitS) + string.Format("; step {0} not run", step.Number);
+                        break;
+                    }
                     string failure = Execute(step, deadline, scenario.TimeoutS);
                     if (failure != null)
                     {

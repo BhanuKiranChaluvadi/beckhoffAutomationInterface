@@ -17,6 +17,8 @@ namespace BeckhoffAutomationInterface.Tests
         sealed class FakePlc
         {
             public double Time;
+            /// <summary>How long one ADS read or write of a symbol takes (a starved runtime: seconds).</summary>
+            public Func<string, double> CallSeconds = symbol => 0;
             public bool CompleteReset = true;
             public Func<string, int> WriteError = symbol => 0;
             public readonly Dictionary<string, byte[]> Values = new Dictionary<string, byte[]>();
@@ -47,6 +49,7 @@ namespace BeckhoffAutomationInterface.Tests
 
             public int Read(string symbol, int size, out byte[] data)
             {
+                Time += CallSeconds(symbol);
                 data = null;
                 byte[] v;
                 if (ByTime.TryGetValue(symbol, out Func<double, byte[]> f))
@@ -60,6 +63,7 @@ namespace BeckhoffAutomationInterface.Tests
 
             public int Write(string symbol, byte[] data)
             {
+                Time += CallSeconds(symbol);
                 if (!Values.ContainsKey(symbol))
                     return AdsClient.ErrorSymbolNotFound;
                 int error = WriteError(symbol);
@@ -472,6 +476,57 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(fail ? ScenarioStatus.Failed : ScenarioStatus.Passed, results[0].Status);
             Assert.Equal(ScenarioStatus.Passed, results[1].Status);
             Assert.Equal(7, plc.Dint("MAIN.override"));
+        }
+
+        // ------------------------------------------------------------------ slow ADS and the scenario limit
+
+        [Fact]
+        public void RunAll_CountsSlowAdsCalls_AndShowsThemWithTheResult()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.n", 7);
+            plc.CallSeconds = symbol => symbol != "MAIN.n" ? 0 : plc.Time < 10 ? 1.5 : 4.9;
+            Scenario s = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 },
+                { ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 },
+                { ""do"": ""wait"", ""seconds"": 10 },
+                { ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }");
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { s }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.Contains("slow ADS: 3 calls > 1 s (max 4.9 s); the runtime or the PC was overloaded", r.Details);
+        }
+
+        [Fact]
+        public void RunAll_NoSlowAdsLine_WhenEveryCallIsFast()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.n", 7);
+            plc.CallSeconds = symbol => 0.9;
+            ScenarioResult r = plc.Runner().RunAll(new[] { Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }") }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.DoesNotContain(r.Details, d => d.StartsWith("slow ADS"));
+        }
+
+        /// <summary>timeoutS 5, prepare 2 s: limit 5 + 2 x 2 + 30 = 39 s. Each read of MAIN.n takes
+        /// 10 s: the steps stop at the limit, and the cleanup still restores the write.</summary>
+        [Fact]
+        public void RunAll_FailsAScenarioThatRunsLongerThanItsLimit_AndStillCleansUp()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.n", 7);
+            plc.SetDint("MAIN.w", 0);
+            plc.CallSeconds = symbol => symbol == "MAIN.n" ? 10 : 0;
+            string check = @"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }";
+            Scenario s = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.w"", ""type"": ""DINT"", ""value"": 5 }, "
+                + string.Join(", ", Enumerable.Repeat(check, 8)), @"""timeoutS"": 5,");
+
+            ScenarioResult r = plc.Runner().RunAll(new[] { s }, null, 2, null)[0];
+
+            Assert.Equal(ScenarioStatus.Failed, r.Status);
+            Assert.StartsWith("scenario took 40.0 s, more than its limit 39.0 s (slow ADS: 4 calls > 1 s (max 10.0 s))", r.Message);
+            Assert.Equal(0, plc.Dint("MAIN.w"));
+            Assert.True(plc.Time < 60, "the remaining steps did not run");
         }
 
         [Fact]
