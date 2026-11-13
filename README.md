@@ -314,6 +314,7 @@ expected value. Exit code 0 = `VERIFY PASSED`. It needs no TwinCAT window.
 ```
 bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>]
          [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
+         [--family <name>] [--manifest <file>]
 ```
 
 **CAUTION: A scenario sends real commands to the PLC. Use `test` only on a PLC in simulation.**
@@ -326,6 +327,7 @@ bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--varian
 | `--tags` | Run only the scenarios that have one of these tags. |
 | `--junit` | Write the results as JUnit XML (one test case for each scenario). |
 | `--timeout-seconds` | The time for the PLC to go to Run, and for the machine to become idle before each scenario. Default: 60. |
+| `--family`, `--manifest` | The family whose enums give the numbers of the names in the scenarios (see "Scenario files"), and its `bai.machines.json`. Default: the family whose name is a folder of the `--scenarios` path (`Tests\Acceptance\NFPro`), and the first `bai.machines.json` above that path. Files with numbers only need no family. |
 
 What the tool does:
 
@@ -356,6 +358,7 @@ The tool cannot recover from a lost PLC connection. Check the runtime before you
 ```
 bai acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--variant <name>]
                [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
+               [--family <name>] [--manifest <file>]
 ```
 
 The same options, scenario files and exit codes as `test`, with the opposite safety rules, for the
@@ -977,6 +980,22 @@ A condition is `equals` or `notEquals` (optional `tolerance`), or `lessThan` and
 `LINT`, `ULINT`, `REAL`, `LREAL` or `STRING(n)`. For an enum, use `INT`. You can omit `type` only
 for `true` or `false`. The tool reads the size of each symbol from the PLC. If `type` does not
 agree, the step fails and shows the PLC type.
+
+**Enum names instead of numbers.** The tool reads the ST enums of the family under test (its
+`sources` in `bai.machines.json`) and sends the numbers; the PLC sees no difference. The same name
+can have a different number in each family.
+
+| Where | Write | Instead of |
+|---|---|---|
+| `command` | a member of `E_Command`: `"command": "SetValve"` | `50` |
+| a `parameters` value | `"valveId": "E_ValveIdentifier.VALV_EX_PUMP"` | `27` |
+| an index in `symbol` (`check`, `waitUntil`, `write`, `simulationFault`) | `stTelemetry.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State` | `SAFE_[10]` |
+| `equals`, `notEquals`, `lessThan`, `greaterThan` (number types) | `"equals": "E_Sequence.None"` | `0` |
+
+Only a text of the form `E_<Enum>.<Member>` is a name (case is ignored, as in ST); other texts stay
+texts. Numbers still work. An unknown name, or a name that only another family has, stops the load
+before anything is sent: `file: step n: "field": 'name': enum '...' has no member '...' (family F)`.
+The results and the JUnit report show the text as written, for example `command SetValve (50)`.
 
 ## 8. Limits
 

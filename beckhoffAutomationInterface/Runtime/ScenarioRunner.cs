@@ -406,7 +406,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     double deadline = Math.Min(now + (step.TimeoutS ?? ScenarioStep.DefaultSendTimeoutS), scenarioDeadline);
                     string problem = Send(step.Command, step.Parameters, deadline, out bool accepted, out int index);
-                    string what = string.Format("command {0} (index {1}): ", step.Command, index);
+                    string what = string.Format("command {0} (index {1}): ", step.CommandText, index);
                     if (problem != null)
                         return what + problem;
                     if (accepted != step.ExpectAccepted)
@@ -426,7 +426,7 @@ namespace BeckhoffAutomationInterface.Runtime
                         if (step.Condition.Matches(actual))
                             return Measured(step, actual);
                         if (_nowS() >= deadline)
-                            return Measured(step, actual) ?? string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.Symbol, step.Condition.Text,
+                            return Measured(step, actual) ?? string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.SymbolText, step.Condition.Text,
                                 Comparison.Quote(actual), ScenarioNumbers.Seconds(deadline - now),
                                 scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(scenarioTimeoutS) : "");
                         _sleepMs(PollMs);
@@ -441,7 +441,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     Measured(step, actual);
                     return step.Condition.Matches(actual)
                         ? null
-                        : string.Format("{0}: expected {1}, actual {2}", step.Symbol, step.Condition.Text, Comparison.Quote(actual));
+                        : string.Format("{0}: expected {1}, actual {2}", step.SymbolText, step.Condition.Text, Comparison.Quote(actual));
                 }
 
                 case StepKind.Write:
@@ -454,12 +454,12 @@ namespace BeckhoffAutomationInterface.Runtime
                     {
                         int readError = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] original);
                         if (readError != 0)
-                            return "cannot save " + step.Symbol + " before write: " + AdsError(readError, step.Symbol);
+                            return "cannot save " + step.SymbolText + " before write: " + AdsError(readError, step.Symbol);
                         _originalWrites.Add(step.Symbol, (byte[])original.Clone());
                     }
                     int err = _write(step.Symbol, PlcValue.Encode(step.Type, step.Value));
                     return err == 0 ? null
-                        : string.Format("{0} := {1}: {2}", step.Symbol, Comparison.Quote(step.Value), AdsError(err, step.Symbol));
+                        : string.Format("{0} := {1}: {2}", step.SymbolText, Comparison.Quote(step.Value), AdsError(err, step.Symbol));
                 }
 
                 case StepKind.Wait:
@@ -516,7 +516,7 @@ namespace BeckhoffAutomationInterface.Runtime
         {
             _measurements?.Add(new Measurement
             {
-                Step = step.Number, Symbol = step.Symbol, Value = Comparison.Quote(actual), Expected = step.Condition.Text,
+                Step = step.Number, Symbol = step.SymbolText, Value = Comparison.Quote(actual), Expected = step.Condition.Text,
             });
             return null;
         }
@@ -526,7 +526,7 @@ namespace BeckhoffAutomationInterface.Runtime
             value = null;
             int err = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] data);
             if (err != 0)
-                return string.Format("{0}: expected {1}, actual {2}", step.Symbol, step.Condition.Text, AdsError(err, step.Symbol));
+                return string.Format("{0}: expected {1}, actual {2}", step.SymbolText, step.Condition.Text, AdsError(err, step.Symbol));
             value = PlcValue.Decode(step.Type, data);
             return null;
         }

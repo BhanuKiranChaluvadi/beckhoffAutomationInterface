@@ -61,11 +61,17 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // send
         public int Command { get; set; }
+        public string CommandName { get; set; }  // the E_Command member as written; null = a number
+        /// <summary>For messages: "SetValve (50)", or "50".</summary>
+        public string CommandText => CommandName == null ? Command.ToString(CultureInfo.InvariantCulture) : string.Format("{0} ({1})", CommandName, Command);
         public Dictionary<string, object> Parameters { get; set; }   // null = none
         public bool ExpectAccepted { get; set; } = true;
 
         // waitUntil, check, write
-        public string Symbol { get; set; }
+        public string Symbol { get; set; }        // as the PLC knows it: every enum name replaced by its number
+        string _symbolText;
+        /// <summary>The symbol as written in the file (with names), for messages.</summary>
+        public string SymbolText { get => _symbolText ?? Symbol; set => _symbolText = value; }
         public string Type { get; set; }
         public Comparison Condition { get; set; } // waitUntil, check
         public object Value { get; set; }          // write: bool, double or string
@@ -103,6 +109,11 @@ namespace BeckhoffAutomationInterface.Runtime
         public double? LessThan { get; set; }
         public double? GreaterThan { get; set; }
         public double? Tolerance { get; set; }
+        // The enum member names as written (e.g. "E_Sequence.None"); null = a value
+        public string EqualsName { get; set; }
+        public string NotEqualsName { get; set; }
+        public string LessThanName { get; set; }
+        public string GreaterThanName { get; set; }
 
         const double DefaultTolerance = 1e-6;
 
@@ -130,17 +141,20 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 string tol = Tolerance != null ? " ± " + PlcValue.Format(Tolerance.Value) : "";
                 if (EqualsValue != null)
-                    return "= " + Quote(EqualsValue) + tol;
+                    return "= " + Show(EqualsValue, EqualsName) + tol;
                 if (NotEqualsValue != null)
-                    return "<> " + Quote(NotEqualsValue) + tol;
+                    return "<> " + Show(NotEqualsValue, NotEqualsName) + tol;
                 var parts = new List<string>();
                 if (GreaterThan != null)
-                    parts.Add("> " + PlcValue.Format(GreaterThan.Value));
+                    parts.Add("> " + Show(GreaterThan.Value, GreaterThanName));
                 if (LessThan != null)
-                    parts.Add("< " + PlcValue.Format(LessThan.Value));
+                    parts.Add("< " + Show(LessThan.Value, LessThanName));
                 return string.Join(" and ", parts);
             }
         }
+
+        /// <summary>"E_Sequence.None (0)" for a name, else the value.</summary>
+        static string Show(object value, string name) => name == null ? Quote(value) : string.Format("{0} ({1})", name, Quote(value));
 
         internal static string Quote(object value) =>
             value is string s ? "'" + s + "'" : PlcValue.Format(value);

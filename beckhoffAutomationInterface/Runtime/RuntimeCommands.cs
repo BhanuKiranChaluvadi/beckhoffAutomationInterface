@@ -157,11 +157,13 @@ namespace BeckhoffAutomationInterface.Runtime
             string target, netId, variant;
             List<string> groups = null, tags;
             List<Scenario> selected;
+            ScenarioNames names;
             int timeoutS;
             try
             {
                 a = CommandArgs.Parse(args,
-                    new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--junit", "--timeout-seconds" }, new string[0]);
+                    new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--junit", "--timeout-seconds",
+                        "--family", "--manifest" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--scenarios") == null)
                     throw new ArgumentException("'" + name + "' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
                 if (a.Get("--groups") != null && a.Get("--variants-file") != null)
@@ -177,6 +179,8 @@ namespace BeckhoffAutomationInterface.Runtime
                     groups = SplitList(a.Get("--groups"));
                 else if (a.Get("--variants-file") != null)
                     groups = GroupsOfVariant(Sync.VariantManifestParser.Parse(a.Get("--variants-file")), a.Get("--variants-file"), ref variant);
+                // The enums of the family under test turn the names in the scenarios into numbers.
+                names = ScenarioNames.ForScenarios(a.Get("--scenarios"), a.Get("--family"), a.Get("--manifest"));
             }
             catch (Exception ex) when (ex is ArgumentException || ex is Sync.VariantManifestException
                                        || ex is System.IO.IOException || ex is System.Xml.XmlException)
@@ -188,7 +192,7 @@ namespace BeckhoffAutomationInterface.Runtime
             var problems = new List<string>();
             try
             {
-                List<Scenario> all = ScenarioFile.LoadAll(a.Get("--scenarios"), problems);
+                List<Scenario> all = ScenarioFile.LoadAll(a.Get("--scenarios"), problems, names);
                 selected = ScenarioFilter.ByTags(all, tags);
                 if (hardware)
                     problems.AddRange(ScenarioRunner.HardwareProblems(selected));

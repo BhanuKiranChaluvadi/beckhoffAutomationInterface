@@ -36,11 +36,11 @@ namespace BeckhoffAutomationInterface.Cli
         // Parsed in Runtime/RuntimeCommands.Test (runtime command style); the text is here with the others.
         public const string TestUsage =
             "test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>] [--variants-file <variants.xml> | --groups <G1,G2>]\n" +
-            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]";
+            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--family <name>] [--manifest <file>]";
         // Same options as 'test'; parsed in Runtime/RuntimeCommands.Test in hardware mode.
         public const string AcceptanceUsage =
             "acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--variant <name>] [--variants-file <variants.xml> | --groups <G1,G2>]\n" +
-            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]";
+            "       [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--family <name>] [--manifest <file>]";
 
         // Every command: where .stconfig is read from, and whether at all.
         static readonly string[] ConfigOptions = { "--config" };

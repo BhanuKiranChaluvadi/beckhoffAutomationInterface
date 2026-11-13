@@ -607,6 +607,29 @@ namespace BeckhoffAutomationInterface.Tests
                 r.Measurements.Select(m => m.ToString()));
         }
 
+        /// <summary>A step loaded from names (ScenarioFile with the family's enums): the PLC gets the
+        /// numbers, the results show the text as written.</summary>
+        [Fact]
+        public void Run_StepsWithNames_UseTheNumbers_AndReportTheNames()
+        {
+            var plc = new FakePlc { Receiver = command => command != 50 };
+            plc.Values["T.SAFE_[10].State"] = new byte[] { 1 };
+            plc.SetInt("T.Seq", 0);
+            var s = new Scenario { Name = "s", File = "s.json" };
+            s.Steps.Add(new ScenarioStep { Number = 1, Kind = StepKind.Check, Symbol = "T.SAFE_[10].State", SymbolText = "T.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State",
+                Type = "BOOL", Condition = new Comparison { EqualsValue = true } });
+            s.Steps.Add(new ScenarioStep { Number = 2, Kind = StepKind.Check, Symbol = "T.Seq", Type = "INT",
+                Condition = new Comparison { EqualsValue = 0.0, EqualsName = "E_Sequence.None" } });
+            s.Steps.Add(new ScenarioStep { Number = 3, Kind = StepKind.Send, Command = 50, CommandName = "SetValve" });
+
+            ScenarioResult r = plc.Runner().Run(s);
+
+            Assert.Equal(new[] { "step 1: T.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State = TRUE (expected = TRUE)",
+                "step 2: T.Seq = 0 (expected = E_Sequence.None (0))" }, r.Measurements.Select(m => m.ToString()));
+            Assert.Equal("step 3 (send) command SetValve (50) (index 100): expected accepted, actual rejected", r.Message);
+            Assert.Contains(plc.Commands, c => c.StartsWith(@"{""command"":50,"));
+        }
+
         [Fact]
         public void Run_ATimedOutWaitUntil_RecordsTheLastValueRead()
         {

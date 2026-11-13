@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
 namespace BeckhoffAutomationInterface.Runtime
@@ -35,7 +36,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
         /// <summary>One file, or every *.json below a folder (sorted by path). Returns the
         /// scenarios and the problems of the files that could not be read.</summary>
-        public static List<Scenario> LoadAll(string path, List<string> problems)
+        public static List<Scenario> LoadAll(string path, List<string> problems, ScenarioNames names = null)
         {
             List<string> files;
             if (File.Exists(path))
@@ -51,7 +52,7 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 try
                 {
-                    scenarios.Add(Parse(File.ReadAllText(file), file));
+                    scenarios.Add(Parse(File.ReadAllText(file), file, names));
                 }
                 catch (ScenarioFormatException ex)
                 {
@@ -61,8 +62,10 @@ namespace BeckhoffAutomationInterface.Runtime
             return scenarios;
         }
 
-        internal static Scenario Parse(string json, string file)
+        /// <summary>names: the enums of the family under test; null = none (numbers only).</summary>
+        internal static Scenario Parse(string json, string file, ScenarioNames names = null)
         {
+            names = names ?? ScenarioNames.None;
             Dictionary<string, object> root;
             try
             {
@@ -72,7 +75,7 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 throw new ScenarioFormatException(string.Format("{0}: not valid JSON: {1}", file, ex.Message));
             }
-            var at = new Where(file, 0);
+            var at = new Where(file, 0, names);
             if (root == null)
                 throw at.Error("the root must be an object");
             at.OnlyKeys(root, TopKeys);
@@ -98,7 +101,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 throw at.Error("\"steps\" must be a list");
             int n = 0;
             foreach (object item in list)
-                scenario.Steps.Add(ParseStep(item, new Where(file, ++n)));
+                scenario.Steps.Add(ParseStep(item, new Where(file, ++n, names)));
             if (n == 0)
                 throw at.Error("\"steps\" is empty");
             if (root.TryGetValue("cleanup", out object cleanup))
@@ -107,15 +110,15 @@ namespace BeckhoffAutomationInterface.Runtime
                     throw at.Error("\"cleanup\" must be a list");
                 int cleanupNumber = 0;
                 foreach (object item in cleanupList)
-                    scenario.CleanupSteps.Add(ParseStep(item, new Where(file + " (cleanup)", ++cleanupNumber)));
+                    scenario.CleanupSteps.Add(ParseStep(item, new Where(file + " (cleanup)", ++cleanupNumber, names)));
             }
             if (root.TryGetValue("simulationFault", out object fault))
-                scenario.SimulationFault = ParseFault(fault, at, file, scenario.Steps.Count);
+                scenario.SimulationFault = ParseFault(fault, at, file, scenario.Steps.Count, names);
             return scenario;
         }
 
         /// <summary>{ "write": [ write steps without "do" ], "failsAtStep": n }.</summary>
-        static SimulationFault ParseFault(object value, Where at, string file, int stepCount)
+        static SimulationFault ParseFault(object value, Where at, string file, int stepCount, ScenarioNames names)
         {
             if (!(value is Dictionary<string, object> e))
                 throw at.Error("\"simulationFault\" must be an object");
@@ -129,7 +132,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 if (!(item is Dictionary<string, object> w))
                     throw at.Error("\"simulationFault\": each \"write\" entry must be an object");
                 var asStep = new Dictionary<string, object>(w) { ["do"] = "write" };
-                result.Writes.Add(ParseStep(asStep, new Where(file + " (simulationFault)", ++n)));
+                result.Writes.Add(ParseStep(asStep, new Where(file + " (simulationFault)", ++n, names)));
             }
             if (n == 0)
                 throw at.Error("\"simulationFault\": \"write\" is empty");
@@ -154,12 +157,14 @@ namespace BeckhoffAutomationInterface.Runtime
             switch (kind.Key)
             {
                 case StepKind.Send:
-                    step.Command = at.Integer(e, "command", short.MinValue, short.MaxValue);
+                    step.Command = at.Command(e, out string commandName);
+                    step.CommandName = commandName;
                     if (e.ContainsKey("parameters"))
                     {
                         step.Parameters = e["parameters"] as Dictionary<string, object>;
                         if (step.Parameters == null)
                             throw at.Error("\"parameters\" must be an object");
+                        at.ResolveNames(step.Parameters, "\"parameters\"");
                     }
                     if (e.ContainsKey("expect"))
                     {
@@ -177,7 +182,8 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 case StepKind.WaitUntil:
                 case StepKind.Check:
-                    step.Symbol = at.RequiredString(e, "symbol");
+                    step.SymbolText = at.RequiredString(e, "symbol");
+                    step.Symbol = at.Symbol(step.SymbolText);
                     step.Type = at.Type(e, e.ContainsKey("equals") ? e["equals"] : e.ContainsKey("notEquals") ? e["notEquals"] : null);
                     step.Condition = at.Comparison(e, step.Type);
                     if (e.ContainsKey("timeoutS"))
@@ -185,7 +191,8 @@ namespace BeckhoffAutomationInterface.Runtime
                     break;
 
                 case StepKind.Write:
-                    step.Symbol = at.RequiredString(e, "symbol");
+                    step.SymbolText = at.RequiredString(e, "symbol");
+                    step.Symbol = at.Symbol(step.SymbolText);
                     if (!e.ContainsKey("value"))
                         throw at.Error("\"value\" is missing");
                     step.Type = at.Type(e, e["value"]);
@@ -220,12 +227,63 @@ namespace BeckhoffAutomationInterface.Runtime
         sealed class Where
         {
             readonly string _file;
+            readonly ScenarioNames _names;
             public int Step { get; }
 
-            public Where(string file, int step)
+            public Where(string file, int step, ScenarioNames names)
             {
                 _file = file;
                 Step = step;
+                _names = names;
+            }
+
+            /// <summary>An index of a symbol: [E_Enum.Member] or [..., E_Enum.Member].</summary>
+            static readonly Regex Index = new Regex(@"\[([^\[\]]*)\]");
+
+            /// <summary>The number of an "E_Enum.Member"; an unknown name stops the load (label: the field).</summary>
+            long Resolve(string name, string label)
+            {
+                if (!_names.TryResolve(name, out long value, out string problem))
+                    throw Error(label + ": " + problem);
+                return value;
+            }
+
+            /// <summary>The symbol with each name in an index replaced by its number.</summary>
+            public string Symbol(string written) =>
+                Index.Replace(written, m => "[" + string.Join(",", m.Groups[1].Value.Split(',').Select(part => ScenarioNames.IsName(part)
+                    ? Resolve(part, "\"symbol\"").ToString(CultureInfo.InvariantCulture) : part)) + "]");
+
+            /// <summary>Replaces each "E_Enum.Member" value (also in a nested object or list) by its number.</summary>
+            public void ResolveNames(Dictionary<string, object> values, string label)
+            {
+                foreach (string key in values.Keys.ToList())
+                    values[key] = ResolveValue(values[key], string.Format("{0}: \"{1}\"", label, key));
+            }
+
+            object ResolveValue(object value, string label)
+            {
+                if (ScenarioNames.IsName(value))
+                    return Resolve((string)value, label);
+                if (value is Dictionary<string, object> nested)
+                    ResolveNames(nested, label);
+                else if (value is IList list)
+                    for (int i = 0; i < list.Count; i++)
+                        list[i] = ResolveValue(list[i], label);
+                return value;
+            }
+
+            /// <summary>"command": a number, or a bare E_Command member (name = that text, else null).</summary>
+            public int Command(Dictionary<string, object> e, out string name)
+            {
+                name = null;
+                if (!(e.TryGetValue("command", out object v) && v is string text))
+                    return Integer(e, "command", short.MinValue, short.MaxValue);
+                if (!_names.TryResolveCommand(text, out long value, out string problem))
+                    throw Error("\"command\": " + problem);
+                if (value < short.MinValue || value > short.MaxValue)
+                    throw Error(string.Format("\"command\": '{0}' is {1}, not from {2} to {3}", text.Trim(), value, short.MinValue, short.MaxValue));
+                name = text.Trim();
+                return (int)value;
             }
 
             public ScenarioFormatException Error(string message) =>
@@ -346,6 +404,18 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 bool numeric = !PlcValue.IsBool(type) && !PlcValue.IsString(type);
                 var c = new Comparison();
+                // A compared value of a number type may be "E_Enum.Member": the number, with the name for messages.
+                string Name(string key)
+                {
+                    if (!numeric || !e.TryGetValue(key, out object v) || !ScenarioNames.IsName(v))
+                        return null;
+                    e[key] = (double)Resolve((string)v, "\"" + key + "\"");
+                    return ((string)v).Trim();
+                }
+                c.EqualsName = Name("equals");
+                c.NotEqualsName = Name("notEquals");
+                c.LessThanName = Name("lessThan");
+                c.GreaterThanName = Name("greaterThan");
                 if (hasEquals)
                     c.EqualsValue = Value(e, "equals", type);
                 if (hasNot)

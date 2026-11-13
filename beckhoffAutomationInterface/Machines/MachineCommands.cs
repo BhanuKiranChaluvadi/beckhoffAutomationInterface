@@ -420,7 +420,8 @@ namespace BeckhoffAutomationInterface.Machines
             // Never accept the result of an earlier run when the tool writes no report.
             if (File.Exists(junit))
                 File.Delete(junit);
-            var argv = new List<string> { "test", "--target", "umrt", "--scenarios", MachineSources.RepoPath(manifest.Root, l.Family.Tests) };
+            var argv = new List<string> { "test", "--target", "umrt", "--scenarios", MachineSources.RepoPath(manifest.Root, l.Family.Tests),
+                "--family", l.Family.Name, "--manifest", manifest.File };
             // A native family has no variants: every scenario applies.
             if (!l.Family.IsNative)
                 argv.AddRange(new[] { "--variants-file", Path.Combine(l.MachineFolder, "variants.xml"), "--variant", l.Machine });
