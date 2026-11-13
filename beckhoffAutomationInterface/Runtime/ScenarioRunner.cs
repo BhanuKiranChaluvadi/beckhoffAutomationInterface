@@ -55,7 +55,9 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public const int ErrorAcknowledgeCommand = 9999;
         const int SequenceNone = 0, SequenceError = 99;   // E_Sequence.None, E_Sequence.Error
-        public const int PollMs = 100;
+        /// <summary>Wait between two reads of the same symbol (send, waitUntil, reset). 20 ms: a
+        /// step ends at most 20 ms after the PLC value changes (100 ms cost about 25 s per machine).</summary>
+        public const int PollMs = 20;
 
         readonly ExpectationChecker.Reader _read;
         readonly Writer _write;

@@ -607,6 +607,26 @@ namespace BeckhoffAutomationInterface.Tests
                 r.Measurements.Select(m => m.ToString()));
         }
 
+        /// <summary>A value that comes 30 ms after the step starts is seen 20 ms later at most
+        /// (the poll interval), not up to 100 ms later.</summary>
+        [Fact]
+        public void WaitUntil_SeesAChangeWithinOnePollOf20Ms()
+        {
+            var plc = new FakePlc();
+            double? first = null;
+            plc.ByTime["MAIN.flow"] = t =>
+            {
+                first = first ?? t;
+                return BitConverter.GetBytes(t - first.Value < 0.03 ? 100 : 200);
+            };
+
+            ScenarioResult r = plc.Runner().Run(Load(
+                @"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 5 }"));
+
+            Assert.Equal(ScenarioStatus.Passed, r.Status);
+            Assert.InRange(plc.Time - first.Value, 0.03, 0.05 + 1e-9);
+        }
+
         /// <summary>A step loaded from names (ScenarioFile with the family's enums): the PLC gets the
         /// numbers, the results show the text as written.</summary>
         [Fact]
