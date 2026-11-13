@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Web.Script.Serialization;
 
 namespace BeckhoffAutomationInterface.Runtime
 {
@@ -65,6 +66,14 @@ namespace BeckhoffAutomationInterface.Runtime
         /// <summary>For messages: "SetValve (50)", or "50".</summary>
         public string CommandText => CommandName == null ? Command.ToString(CultureInfo.InvariantCulture) : string.Format("{0} ({1})", CommandName, Command);
         public Dictionary<string, object> Parameters { get; set; }   // null = none
+        /// <summary>The parameters as written in the file (with names), for the run plan:
+        /// "valveId E_ValveIdentifier.VALV_EX_PUMP, enabled true"; null = none.</summary>
+        public string ParametersAsWritten { get; set; }
+
+        /// <summary>"key value, ..." in the order of the file: a name as written, any other value as JSON.</summary>
+        public static string ParametersText(Dictionary<string, object> parameters) =>
+            string.Join(", ", parameters.Select(p => p.Key + " " + (ScenarioNames.IsName(p.Value) ? (string)p.Value : new JavaScriptSerializer().Serialize(p.Value))));
+
         public bool ExpectAccepted { get; set; } = true;
 
         // waitUntil, check, write

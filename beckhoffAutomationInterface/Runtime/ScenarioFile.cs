@@ -164,6 +164,7 @@ namespace BeckhoffAutomationInterface.Runtime
                         step.Parameters = e["parameters"] as Dictionary<string, object>;
                         if (step.Parameters == null)
                             throw at.Error("\"parameters\" must be an object");
+                        step.ParametersAsWritten = ScenarioStep.ParametersText(step.Parameters);
                         at.ResolveNames(step.Parameters, "\"parameters\"");
                     }
                     if (e.ContainsKey("expect"))

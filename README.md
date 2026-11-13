@@ -368,7 +368,9 @@ acceptance check of a machine after a deployment:
    without `purpose` or `estimateS`. It sends nothing (exit code 2). A scenario changes the machine
    only with client commands, so the PLC interlocks stay the only authority.
 2. It shows the run plan (each scenario in run order: name, estimated time, `purpose` as "Why",
-   `prepare` as "Prepare"; skipped ones with the reason) and asks "Start the acceptance run?".
+   `prepare` as "Prepare", then one line per `send`, `waitUntil` and `check` step with its file
+   step number and the names as written, e.g. `Step 4: send SetValve (50) valveId
+   E_ValveIdentifier.VALV_EX_PUMP, enabled true`; skipped ones with the reason) and asks "Start the acceptance run?".
    Anything but `y` stops it (exit code 1, nothing sent). Before each scenario it shows
    `RUN <name>: <purpose>`.
 3. An `instruct` step (`{ "do": "instruct", "text": "Place a 100 mm test wafer on the chuck" }`)

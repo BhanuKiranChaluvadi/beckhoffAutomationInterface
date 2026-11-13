@@ -199,6 +199,29 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains("E_Bad.st", ex.Message);
         }
 
+        [Fact]
+        public void AcceptancePlan_ListsTheMachineSteps_WithTheNamesAsWritten()
+        {
+            Scenario s = ScenarioFile.Parse(@"{ ""name"": ""Exhaust"", ""purpose"": ""Proves the exhaust"", ""estimateS"": 45, ""steps"": [
+                { ""do"": ""check"", ""symbol"": ""T.DO_[E_DigitalOutputIdentifier.PUMP_AB_EXH].State"", ""type"": ""BOOL"", ""equals"": true },
+                { ""do"": ""instruct"", ""text"": ""Look at the pump"" },
+                { ""do"": ""send"", ""command"": ""SetValve"", ""parameters"": { ""valveId"": ""E_ValveIdentifier.VALV_EX_PUMP"", ""enabled"": true, ""recipe"": ""Al2O3.v2"" } },
+                { ""do"": ""wait"", ""seconds"": 1 },
+                { ""do"": ""waitUntil"", ""symbol"": ""T.PSNS_[E_PressureSensorIdentifier.PSNS_AB_EXH].Pressure"", ""type"": ""REAL"", ""lessThan"": 0.5, ""timeoutS"": 30 },
+                { ""do"": ""send"", ""command"": 1, ""expect"": ""rejected"" } ] }", "f.json", Family("NFPro"));
+
+            Assert.Equal(new[]
+            {
+                "Acceptance plan: 1 scenario(s) to run, about 1 min",
+                "  1. Exhaust (about 1 min)",
+                "     Why: Proves the exhaust",
+                "     Step 1: check T.DO_[E_DigitalOutputIdentifier.PUMP_AB_EXH].State = TRUE",
+                "     Step 3: send SetValve (50) valveId E_ValveIdentifier.VALV_EX_PUMP, enabled true, recipe \"Al2O3.v2\"",
+                "     Step 5: waitUntil T.PSNS_[E_PressureSensorIdentifier.PSNS_AB_EXH].Pressure < 0.5 (30 s)",
+                "     Step 6: send 1, expect rejected",
+            }, AcceptancePlan.Lines(new[] { s }, null));
+        }
+
         // ------------------------------------------------------------------ the family under test
 
         string Manifest() => _repo.WriteNFProAndNFLiteManifest();
