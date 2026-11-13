@@ -399,9 +399,16 @@ namespace BeckhoffAutomationInterface
                 PrintLines("! ", lintIssues);
             }
 
+            // The sync manifest: objects whose source and project file are as recorded are not
+            // read over COM. Not for an adopted project (a temporary copy, never saved).
+            bool useManifest = _options.ExistingTsprojPath == null && _session.Shadow == null;
+            List<string> skip = useManifest
+                ? SyncManifest.Skippable(SyncManifest.Load(_options.SyncManifestPath, SyncManifest.CurrentBai), desiredPous, _options.PlcprojFilePath)
+                : new List<string>();
+
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
-            SyncReport syncReport = syncEngine.Sync(desiredPous);
+            SyncReport syncReport = syncEngine.Sync(desiredPous, skip);
             syncReport.Deleted.AddRange(deletedObjects);
 
             PrintLines("+ created  ", syncReport.Created);
@@ -409,15 +416,36 @@ namespace BeckhoffAutomationInterface
             PrintLines("- deleted  ", syncReport.Deleted);
 
             _session.Project.Save();
-            Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted, {4} unchanged).",
-                Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count, syncReport.Unchanged.Count);
+            Console.WriteLine("{0}: Sync complete ({1} created, {2} updated, {3} deleted, {4} unchanged{5}).",
+                Now(), syncReport.Created.Count, syncReport.Updated.Count, syncReport.Deleted.Count, syncReport.Unchanged.Count,
+                useManifest ? string.Format(", of which {0} not read: unchanged in the sync manifest", syncReport.Skipped) : "");
+            if (useManifest)
+                RecordSyncManifest(desiredPous);
 
             // Record the known-names drift baseline (see the [drift] warning block above).
             KnownNamesTracker.Write(_options.KnownNamesPath, currentNames);
         }
 
-        /// <summary>Libraries stage: libraries.xml -> PLC library references (config
-        /// data, not .st source).</summary>
+        /// <summary>After the code sync saved the project: records each object whose file the
+        /// .plcproj names and which holds the texts bai sent (see SyncManifest). A manifest that
+        /// cannot be written is removed, so the next sync compares every object.</summary>
+        void RecordSyncManifest(List<StPouSource> desiredPous)
+        {
+            string path = _options.SyncManifestPath;
+            try
+            {
+                SyncManifest manifest = SyncManifest.Record(SyncManifest.CurrentBai, desiredPous, _options.PlcprojFilePath);
+                manifest.Save(path);
+                Console.WriteLine("{0}: Sync manifest: {1} of {2} object(s) recorded.", Now(), manifest.Entries.Count, SyncManifest.Groups(desiredPous).Count);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Console.WriteLine("{0}: WARNING: sync manifest not written ({1}); the next sync compares every object.", Now(), ex.Message);
+                try { File.Delete(path); }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException) { /* it is from another bai or older: Load then compares */ }
+            }
+        }
+
         /// <summary>Variants stage: apply variants.xml (see VariantSyncEngine). No manifest =
         /// nothing to do, so projects without variants are untouched.</summary>
         void SyncVariants()

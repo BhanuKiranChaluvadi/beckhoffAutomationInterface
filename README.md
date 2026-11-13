@@ -485,6 +485,15 @@ or `machine dev`) also keeps it. `bai-machine.json` in the project folder record
 open, the tool keeps the failed folder in `<work>\<family>\_failed\` and builds once more, fresh.
 A compile error is not tried again.
 
+The code sync of a kept project reads an object over COM only when it may have changed.
+`bai-sync-manifest.json` next to the `.tsproj` records, per object (with its METHODs and
+PROPERTYs), the SHA-256 of the texts bai sends and of its object file (`.TcPOU`, `.TcDUT`,
+`.TcGVL`, `.TcIO`, as the `.plcproj` names it) after the save; an object is recorded only when
+its file holds every text. The next sync skips an object when both hashes are the same
+(`Sync complete (..., of which N not read: unchanged in the sync manifest)`). A changed source,
+a file saved again (an edit in XAE), or a missing manifest or one of another bai build: the
+object is compared as before. Deleting gone objects does not change.
+
 | Option | Meaning |
 |---|---|
 | `--simulation` | Build with the compiler define `SIMULATION`, in `<work>\<family>\<Machine>-sim`. |

@@ -42,9 +42,22 @@ namespace BeckhoffAutomationInterface.Sync
             _folderCache[projectRootPath] = sysManager.LookupTreeItem(projectRootPath);
         }
 
-        public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources)
+        /// <param name="skip">Top-level objects (by name, with their METHODs and PROPERTYs) that the
+        /// sync manifest found unchanged: no COM call at all; reported as unchanged and counted in
+        /// SyncReport.Skipped.</param>
+        public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources, ICollection<string> skip = null)
         {
             var report = new SyncReport();
+            if (skip != null && skip.Count > 0)
+            {
+                var skipped = new HashSet<string>(skip, StringComparer.Ordinal);
+                bool Skipped(StPouSource s) => skipped.Contains(s.OwnerName ?? s.Name);
+                foreach (StPouSource s in desiredSources.Where(Skipped))
+                    report.Unchanged.Add(s.OwnerName != null ? s.OwnerName + "." + s.Name
+                        : s.RelativeFolder.Length > 0 ? s.RelativeFolder + "/" + s.Name : s.Name);
+                report.Skipped = desiredSources.Count(Skipped);
+                desiredSources = desiredSources.Where(s => !Skipped(s)).ToList();
+            }
 
             List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod && !s.IsProperty).ToList();
             List<StPouSource> methods = desiredSources.Where(s => s.IsMethod).ToList();
