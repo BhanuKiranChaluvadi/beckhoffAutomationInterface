@@ -30,6 +30,11 @@ namespace BeckhoffAutomationInterface
         public bool IsOpen => Vs != null;
         public EnvDTE80.DTE2 Dte => Vs.Dte;
 
+        /// <summary>The shell started at least once in this session (bai machine: a failure before is no project fault).</summary>
+        public bool ShellStarted { get; private set; }
+        /// <summary>The solution opened at least once in this session.</summary>
+        public bool Opened { get; private set; }
+
         public TwinCatSession(RunOptions options)
         {
             _options = options;
@@ -53,6 +58,7 @@ namespace BeckhoffAutomationInterface
                 return;
 
             Vs = VisualStudioSession.Start(_options.Shell);
+            ShellStarted = true;
 
             if (_options.IsReverseExport || _options.ExistingTsprojPath != null)
             {
@@ -67,6 +73,7 @@ namespace BeckhoffAutomationInterface
                 Shadow = shadow;
                 SelectTargetPlatform();
                 _solutionSavedAs = true; // never save — this project is read-only, adopted as-is
+                Opened = true;
                 return;
             }
 
@@ -74,6 +81,7 @@ namespace BeckhoffAutomationInterface
             Project = project;
             SysManager = sysManager;
             SelectTargetPlatform();
+            Opened = true;
 
             if (!_solutionSavedAs)
             {

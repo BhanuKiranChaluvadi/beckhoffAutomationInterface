@@ -231,27 +231,54 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Theory]
-        [InlineData(null, false, false)]
-        [InlineData("passed", false, true)]
-        [InlineData("failed", false, true)]
-        [InlineData("passed", true, false)]   // other build mode
-        [InlineData("crashed", false, false)]
-        [InlineData("running", false, false)] // the process ended during the build
-        public void KeptProject_IsUsedOnlyAfterACompleteRunOfTheSameMode(string result, bool otherMode, bool usable)
+        [InlineData(null, null, false, false)]
+        [InlineData("passed", null, false, true)]
+        [InlineData("failed", null, false, true)]       // older bai: no failure kind, kept as before
+        [InlineData("passed", null, true, false)]       // other build mode
+        [InlineData("crashed", null, false, false)]     // older bai: no failure kind
+        [InlineData("running", null, false, false)]     // the process ended before the sync completed
+        [InlineData("synced", null, false, true)]       // the process ended after the sync (compile, activation, dev)
+        [InlineData("failed", "compile", false, true)]  // compile error: a source error, the project is fine
+        [InlineData("failed", "shell", false, true)]    // the shell did not start: the project was not touched
+        [InlineData("failed", "open", false, false)]    // the solution could not be opened
+        [InlineData("failed", "sync", false, false)]    // an exception in the middle of the sync
+        [InlineData("crashed", "compile", false, true)]
+        [InlineData("crashed", "sync", false, false)]
+        [InlineData("crashed", "open", false, false)]
+        public void KeptProject_IsUsedUnlessItCouldNotOpenOrItsSyncDidNotComplete(string result, string failure, bool otherMode, bool usable)
         {
-            MachineState state = result == null ? null : new MachineState { Stamp = "s", Simulation = otherMode, Result = result };
+            MachineState state = result == null ? null : new MachineState { Stamp = "s", Simulation = otherMode, Result = result, Failure = failure };
             Assert.Equal(usable, MachineState.Usable(state, simulation: false));
+            Assert.Equal(usable, MachineState.FreshReason(state, simulation: false) == null);
+        }
+
+        [Theory]
+        [InlineData(true, true, true, true, "compile")]   // the sync completed
+        [InlineData(false, true, true, true, "compile")]
+        [InlineData(false, true, true, false, "sync")]    // a new project is incomplete until its sync completed
+        [InlineData(false, false, false, false, "sync")]
+        [InlineData(true, false, false, false, "shell")]  // kept: the shell did not start
+        [InlineData(true, true, false, false, "open")]    // kept: the solution did not open
+        [InlineData(true, true, true, false, "sync")]     // kept: opened, the sync stopped in the middle
+        public void FailureKind_SaysWhereTheRunStopped(bool kept, bool shellStarted, bool opened, bool synced, string kind)
+        {
+            Assert.Equal(kind, MachineState.FailureKind(kept, shellStarted, opened, synced));
         }
 
         [Fact]
         public void State_RoundTrips()
         {
             string file = Path.Combine(TestProjects.NewTempDir("bai_state"), "bai-machine.json");
-            new MachineState { Stamp = "abc", Simulation = true, Result = "passed" }.Write(file);
+            new MachineState { Stamp = "abc", Simulation = true, Result = "failed", Failure = "compile" }.Write(file);
             MachineState back = MachineState.Read(file);
             Assert.Equal("abc", back.Stamp);
             Assert.True(back.Simulation);
+            Assert.Equal("failed", back.Result);
+            Assert.Equal("compile", back.Failure);
+            new MachineState { Stamp = "abc", Simulation = true, Result = "passed" }.Write(file);
+            back = MachineState.Read(file);
             Assert.Equal("passed", back.Result);
+            Assert.Null(back.Failure);
             File.WriteAllText(file, "not json");
             Assert.Null(MachineState.Read(file));
         }

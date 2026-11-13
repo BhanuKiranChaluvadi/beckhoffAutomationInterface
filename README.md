@@ -476,9 +476,14 @@ whose `.st` file moved to another folder (`- deleted  FB_X (moved from A)`; the 
 again in the new folder). A PROGRAM is updated where it is. An empty PLC folder stays. The tool
 builds a fresh project when you give `--fresh`, when a manifest changed, when it cannot delete an
 old object (two objects with the name, or TwinCAT refuses), when the kept project has I/O items
-that the manifest does not have, or when the last run did not end. When the shell
-crashes or stops (RPC error or time-out), the tool keeps the failed folder in
-`<work>\<family>\_failed\` and builds once more, fresh. A compile error is not tried again.
+that the manifest does not have, when the last run could not open the solution, or when the last
+run ended (or failed) before its sync completed. A compile error is a source error: the project
+is kept and the next run syncs it. A run that ends after its sync (in the compile, the activation
+or `machine dev`) also keeps it. `bai-machine.json` in the project folder records this (`result`:
+`running`, `synced`, `passed`, `failed`, `crashed`; `failure`: `open`, `sync`, `compile`,
+`shell`). When the shell crashes or stops (RPC error or time-out), or the kept solution does not
+open, the tool keeps the failed folder in `<work>\<family>\_failed\` and builds once more, fresh.
+A compile error is not tried again.
 
 | Option | Meaning |
 |---|---|

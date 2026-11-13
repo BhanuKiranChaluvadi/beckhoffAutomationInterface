@@ -46,6 +46,10 @@ namespace BeckhoffAutomationInterface
         /// project is not opened and compiled a second time).</summary>
         public Action<TwinCatSession> AfterBuild { get; set; }
 
+        /// <summary>Optional: runs when every sync stage has completed, just before the build stage
+        /// (bai machine: records that the project is complete, so a compile error keeps it).</summary>
+        public Action BeforeBuild { get; set; }
+
         /// <summary>Delete the PLC objects whose source is gone or moved (StaleObjectPlan) before
         /// the code sync, so a kept project stays usable. False: only warn about them (bai sync).</summary>
         public bool DeleteStaleObjects { get; set; }
@@ -154,6 +158,7 @@ namespace BeckhoffAutomationInterface
             if (stages.HasFlag(SyncStages.Build))
             {
                 _session.EnsureOpen();
+                BeforeBuild?.Invoke();
                 RunBuild();
                 if (AfterBuild != null && Outcome.BuildPassed)
                     AfterBuild(_session);
