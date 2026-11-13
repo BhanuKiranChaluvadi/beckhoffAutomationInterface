@@ -19,7 +19,7 @@ namespace BeckhoffAutomationInterface.Runtime
     sealed class ScenarioNames
     {
         /// <summary>A string of this form is a name; any other string stays a string.</summary>
-        static readonly Regex Name = new Regex(@"^E_\w+\.\w+$");
+        static readonly Regex Name = new Regex(@"^E_\w+\.\w+$", RegexOptions.IgnoreCase); // as ST: case ignored
 
         readonly string _family;
         readonly Func<StEnums> _read;

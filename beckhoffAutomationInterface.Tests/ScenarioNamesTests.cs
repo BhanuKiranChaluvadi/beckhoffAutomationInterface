@@ -128,6 +128,13 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void Names_IgnoreCase_AsInST()
+        {
+            ScenarioStep step = Second(@"{ ""do"": ""send"", ""command"": ""setvalve"", ""parameters"": { ""valveId"": ""e_valveidentifier.valv_ex_pump"" } }", Family("NFLite"));
+            Assert.Equal("{\"command\":50,\"index\":1,\"parameters\":{\"valveId\":29}}", CommandJson.Build(step.Command, 1, step.Parameters));
+        }
+
+        [Fact]
         public void TextOfAnotherForm_StaysAText()
         {
             ScenarioStep step = Second(@"{ ""do"": ""check"", ""symbol"": ""X.s"", ""type"": ""STRING(80)"", ""equals"": ""Ready.Done"" }", Family("NFPro"));
