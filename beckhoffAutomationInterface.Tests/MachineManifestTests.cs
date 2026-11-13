@@ -44,7 +44,7 @@ namespace BeckhoffAutomationInterface.Tests
             if (!File.Exists(file))
                 return;
             MachineManifest m = MachineManifest.Load(file);
-            Assert.Equal(new[] { "python", "Tools/check_interlock_sources.py" }, m.PreCheck);
+            Assert.Equal(new[] { "python", "Tools/checks/check_sources.py" }, m.PreCheck);
             MachineFamily f = m.FamilyOf("Google");
             Assert.Equal("NFLite", f.Plc);
             Assert.Equal(100000, f.SimulationGas.CycleTimeUs);
