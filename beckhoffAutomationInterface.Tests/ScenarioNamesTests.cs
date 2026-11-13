@@ -91,7 +91,7 @@ namespace BeckhoffAutomationInterface.Tests
             ScenarioStep step = Second(@"{ ""do"": ""check"", ""symbol"": """ + written + @""", ""equals"": true }", Family("NFPro"));
 
             Assert.Equal("PRG_Telemetry.fbTelemetryPublisher.stTelemetry.SAFE_[10].State", step.Symbol);
-            Assert.Equal(written, step.SymbolText);
+            Assert.Equal(written, step.SymbolAsWritten);
         }
 
         [Fact]
@@ -104,7 +104,7 @@ namespace BeckhoffAutomationInterface.Tests
 
             Assert.Equal("T.PSNS_[8].Pressure", s.Steps[0].Symbol);
             Assert.Equal("GVL_Simulation.aPressureOffset[8]", s.SimulationFault.Writes[0].Symbol);
-            Assert.Equal("GVL_Simulation.aPressureOffset[ E_PressureSensorIdentifier.PSNS_AB_EXH ]", s.SimulationFault.Writes[0].SymbolText);
+            Assert.Equal("GVL_Simulation.aPressureOffset[ E_PressureSensorIdentifier.PSNS_AB_EXH ]", s.SimulationFault.Writes[0].SymbolAsWritten);
         }
 
         [Fact]

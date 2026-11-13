@@ -616,7 +616,7 @@ namespace BeckhoffAutomationInterface.Tests
             plc.Values["T.SAFE_[10].State"] = new byte[] { 1 };
             plc.SetInt("T.Seq", 0);
             var s = new Scenario { Name = "s", File = "s.json" };
-            s.Steps.Add(new ScenarioStep { Number = 1, Kind = StepKind.Check, Symbol = "T.SAFE_[10].State", SymbolText = "T.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State",
+            s.Steps.Add(new ScenarioStep { Number = 1, Kind = StepKind.Check, Symbol = "T.SAFE_[10].State", SymbolAsWritten = "T.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State",
                 Type = "BOOL", Condition = new Comparison { EqualsValue = true } });
             s.Steps.Add(new ScenarioStep { Number = 2, Kind = StepKind.Check, Symbol = "T.Seq", Type = "INT",
                 Condition = new Comparison { EqualsValue = 0.0, EqualsName = "E_Sequence.None" } });

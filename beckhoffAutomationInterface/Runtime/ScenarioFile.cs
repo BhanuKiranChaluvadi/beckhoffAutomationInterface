@@ -182,8 +182,8 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 case StepKind.WaitUntil:
                 case StepKind.Check:
-                    step.SymbolText = at.RequiredString(e, "symbol");
-                    step.Symbol = at.Symbol(step.SymbolText);
+                    step.SymbolAsWritten = at.RequiredString(e, "symbol");
+                    step.Symbol = at.Symbol(step.SymbolAsWritten);
                     step.Type = at.Type(e, e.ContainsKey("equals") ? e["equals"] : e.ContainsKey("notEquals") ? e["notEquals"] : null);
                     step.Condition = at.Comparison(e, step.Type);
                     if (e.ContainsKey("timeoutS"))
@@ -191,8 +191,8 @@ namespace BeckhoffAutomationInterface.Runtime
                     break;
 
                 case StepKind.Write:
-                    step.SymbolText = at.RequiredString(e, "symbol");
-                    step.Symbol = at.Symbol(step.SymbolText);
+                    step.SymbolAsWritten = at.RequiredString(e, "symbol");
+                    step.Symbol = at.Symbol(step.SymbolAsWritten);
                     if (!e.ContainsKey("value"))
                         throw at.Error("\"value\" is missing");
                     step.Type = at.Type(e, e["value"]);

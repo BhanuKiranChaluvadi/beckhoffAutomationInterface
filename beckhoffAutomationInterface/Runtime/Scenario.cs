@@ -69,9 +69,9 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // waitUntil, check, write
         public string Symbol { get; set; }        // as the PLC knows it: every enum name replaced by its number
-        string _symbolText;
+        string _symbolAsWritten;
         /// <summary>The symbol as written in the file (with names), for messages.</summary>
-        public string SymbolText { get => _symbolText ?? Symbol; set => _symbolText = value; }
+        public string SymbolAsWritten { get => _symbolAsWritten ?? Symbol; set => _symbolAsWritten = value; }
         public string Type { get; set; }
         public Comparison Condition { get; set; } // waitUntil, check
         public object Value { get; set; }          // write: bool, double or string

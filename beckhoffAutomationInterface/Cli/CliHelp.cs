@@ -338,6 +338,7 @@ namespace BeckhoffAutomationInterface.Cli
                     : command == "test" ? "Wait for PLC Run, in seconds (default: 60). Scenario timeouts come from the scenario files."
                     : Descriptions[name];
             if (name == "--manifest" && (command == "machine" || command == "release" || command == "toolchain")) return "bai.machines.json path; discovered from the current directory when omitted.";
+            if (name == "--manifest" && (command == "test" || command == "acceptance")) return "bai.machines.json with the families and their sources (default: the first one above the --scenarios path).";
             if (command == "license" && name == "--target") return "Runtime on this PC: local or umrt (default local).";
             if (command == "license" && name == "--work") return @"Folder for the license-only project (default C:\bai\work\license).";
                         return Descriptions.TryGetValue(name, out string description) ? description : "See the command reference in README.md.";

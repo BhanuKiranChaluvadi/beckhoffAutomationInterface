@@ -993,7 +993,8 @@ can have a different number in each family.
 | `equals`, `notEquals`, `lessThan`, `greaterThan` (number types) | `"equals": "E_Sequence.None"` | `0` |
 
 Only a text of the form `E_<Enum>.<Member>` is a name (case is ignored, as in ST); other texts stay
-texts. Numbers still work. An unknown name, or a name that only another family has, stops the load
+texts. The exception is `command`: there a text is always a bare `E_Command` member (`"SetValve"`),
+and `"E_Command.SetValve"` is refused. Numbers still work. An unknown name, or a name that only another family has, stops the load
 before anything is sent: `file: step n: "field": 'name': enum '...' has no member '...' (family F)`.
 The results and the JUnit report show the text as written, for example `command SetValve (50)`.
 
