@@ -5,7 +5,7 @@ namespace BeckhoffAutomationInterface.Tests
     /// <summary>A small PLC repository on disk, shaped like BeckhoffLib: Lib, App/Fam, Machines/Fam
     /// (shared manifests, Platform base I/O tree, machines M1 and M2), Safety, Tests, and a
     /// bai.machines.json. No TwinCAT is needed.</summary>
-    sealed class MachineRepoFixture
+    sealed class MachineRepoFixture : IDisposable
     {
         public const string GvlBuildInfo =
             "(* Build identity *)\r\n{attribute 'qualified_only'}\r\nVAR_GLOBAL CONSTANT\r\n" +
@@ -52,6 +52,26 @@ namespace BeckhoffAutomationInterface.Tests
             "    \"buildInfo\": \"App/Fam/Version/GVL_BuildInfo.st\", \"tests\": \"Tests/Integration/Fam\", \"machines\": [\"M1\", \"M2\"]," +
             "    \"simulationGas\": { \"provenance\": \"Machines/provenance.json\", \"program\": \"PRG_GAS_SIMULATION\", \"cycleTimeUs\": 100000," +
             "                         \"generator\": [\"python\", \"Tools/gen.py\", \"{model}\", \"App/Fam\", \"{src}/App/Fam/GVL_Gas.st\"] } } } }";
+
+        /// <summary>Replaces bai.machines.json by BeckhoffLib's two families: NFPro (Lib, App/NFPro)
+        /// and NFLite (Lib, App/NFLite; machines Shark and Google). Returns its path.</summary>
+        public string WriteNFProAndNFLiteManifest()
+        {
+            string work = Work.Replace("\\", "/");
+            File.WriteAllText(ManifestFile,
+                "{ \"work\": \"" + work + "\", \"lock\": \"" + work + "/lock/umrt.lock\", \"families\": {" +
+                "  \"NFPro\": { \"plc\": \"NFPro\", \"sources\": [\"Lib\", \"App/NFPro\"], \"shared\": \"Machines/NFPro\"," +
+                "    \"buildInfo\": \"App/NFPro/Version/GVL_BuildInfo.st\", \"machines\": [\"NFPro\"] }," +
+                "  \"NFLite\": { \"plc\": \"NFLite\", \"sources\": [\"Lib\", \"App/NFLite\"], \"shared\": \"Machines/NFLite\"," +
+                "    \"buildInfo\": \"App/NFLite/Version/GVL_BuildInfo.st\", \"machines\": [\"Shark\", \"Google\"] } } }");
+            return ManifestFile;
+        }
+
+        /// <summary>Deletes the repository and the work folder.</summary>
+        public void Dispose()
+        {
+            try { Directory.Delete(Path.GetDirectoryName(Root), recursive: true); } catch (IOException) { }
+        }
 
         public MachineManifest Load() => MachineManifest.Load(ManifestFile);
 

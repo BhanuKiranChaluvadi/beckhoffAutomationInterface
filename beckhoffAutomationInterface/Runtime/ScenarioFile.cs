@@ -281,7 +281,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 if (!_names.TryResolveCommand(text, out long value, out string problem))
                     throw Error("\"command\": " + problem);
                 if (value < short.MinValue || value > short.MaxValue)
-                    throw Error(string.Format("\"command\": '{0}' is {1}, not from {2} to {3}", text.Trim(), value, short.MinValue, short.MaxValue));
+                    throw Error(string.Format("\"command\" must be a whole number from {0} to {1} ('{2}' is {3})", short.MinValue, short.MaxValue, text.Trim(), value));
                 name = text.Trim();
                 return (int)value;
             }
@@ -404,30 +404,25 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 bool numeric = !PlcValue.IsBool(type) && !PlcValue.IsString(type);
                 var c = new Comparison();
-                // A compared value of a number type may be "E_Enum.Member": the number, with the name for messages.
-                string Name(string key)
-                {
-                    if (!numeric || !e.TryGetValue(key, out object v) || !ScenarioNames.IsName(v))
-                        return null;
-                    e[key] = (double)Resolve((string)v, "\"" + key + "\"");
-                    return ((string)v).Trim();
-                }
-                c.EqualsName = Name("equals");
-                c.NotEqualsName = Name("notEquals");
-                c.LessThanName = Name("lessThan");
-                c.GreaterThanName = Name("greaterThan");
+                // A compared value of a number type may be "E_Enum.Member": its number, with the name for messages.
+                string NameOf(string key) => numeric && e.TryGetValue(key, out object v) && ScenarioNames.IsName(v) ? ((string)v).Trim() : null;
+                double? Named(string name, string key) => name == null ? (double?)null : Resolve(name, "\"" + key + "\"");
+                c.EqualsName = NameOf("equals");
+                c.NotEqualsName = NameOf("notEquals");
+                c.LessThanName = NameOf("lessThan");
+                c.GreaterThanName = NameOf("greaterThan");
                 if (hasEquals)
-                    c.EqualsValue = Value(e, "equals", type);
+                    c.EqualsValue = (object)Named(c.EqualsName, "equals") ?? Value(e, "equals", type);
                 if (hasNot)
-                    c.NotEqualsValue = Value(e, "notEquals", type);
+                    c.NotEqualsValue = (object)Named(c.NotEqualsName, "notEquals") ?? Value(e, "notEquals", type);
                 if (hasLess || hasGreater)
                 {
                     if (!numeric)
                         throw Error(string.Format("\"lessThan\" and \"greaterThan\" need a number type, not {0}", type));
                     if (hasLess)
-                        c.LessThan = Number(e, "lessThan");
+                        c.LessThan = Named(c.LessThanName, "lessThan") ?? Number(e, "lessThan");
                     if (hasGreater)
-                        c.GreaterThan = Number(e, "greaterThan");
+                        c.GreaterThan = Named(c.GreaterThanName, "greaterThan") ?? Number(e, "greaterThan");
                 }
                 if (e.ContainsKey("tolerance"))
                 {

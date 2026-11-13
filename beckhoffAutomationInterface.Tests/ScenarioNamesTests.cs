@@ -13,14 +13,13 @@ namespace BeckhoffAutomationInterface.Tests
     /// test go in; steps with the numbers, or a load error with file, step and name, come out.</summary>
     public class ScenarioNamesTests : IDisposable
     {
-        readonly string _root;
+        readonly MachineRepoFixture _repo = new MachineRepoFixture();
 
         public ScenarioNamesTests()
         {
-            _root = TestProjects.NewTempDir("bai_names");
             Write("Lib/Telemetry/Commands/E_Command.st",
                 "{attribute 'qualified_only'}\r\nTYPE E_Command :\r\n(\r\n    None := 0,\r\n    CancelProcess := 1,\r\n" +
-                "    SetValve := 50,    // ST_CmdSetValve\r\n    ErrorAcknowledge := 9999\r\n) INT;\r\nEND_TYPE\r\n");
+                "    SetValve := 50,    // ST_CmdSetValve\r\n    ErrorAcknowledge := 9999,\r\n    TooBig := 40000\r\n) DINT;\r\nEND_TYPE\r\n");
             Write("Lib/Sequences/Types/E_Sequence.st",
                 "{attribute 'qualified_only'}\r\nTYPE E_Sequence :\r\n(\r\n    None := 0,\r\n    Purge := 7\r\n) INT;\r\nEND_TYPE\r\n");
             Write("App/NFPro/Valve/E_ValveIdentifier.st",
@@ -35,20 +34,12 @@ namespace BeckhoffAutomationInterface.Tests
                 "{attribute 'qualified_only'}\r\nTYPE E_ValveIdentifier :\r\n(\r\n    VALV_EX_ISO := 28,\r\n    VALV_EX_PUMP := 29\r\n) INT;\r\nEND_TYPE\r\n");
         }
 
-        public void Dispose()
-        {
-            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
-        }
+        public void Dispose() => _repo.Dispose();
 
-        void Write(string relative, string text)
-        {
-            string path = Path.Combine(_root, relative.Replace('/', '\\'));
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllText(path, text);
-        }
+        void Write(string relative, string text) => _repo.Write(relative, text);
 
         ScenarioNames Family(string family) =>
-            ScenarioNames.Of(family, () => StEnums.Read(new[] { Path.Combine(_root, "Lib"), Path.Combine(_root, "App", family) }));
+            ScenarioNames.Of(family, () => StEnums.Read(new[] { Path.Combine(_repo.Root, "Lib"), Path.Combine(_repo.Root, "App", family) }));
 
         static string OneStep(string step) => @"{ ""name"": ""n"", ""steps"": [ { ""do"": ""wait"", ""seconds"": 1 }, " + step + " ] }";
 
@@ -61,6 +52,13 @@ namespace BeckhoffAutomationInterface.Tests
 
             Assert.Equal(50, step.Command);
             Assert.Equal("SetValve (50)", step.CommandText);
+        }
+
+        [Fact]
+        public void Name_WithoutAnyNames_SaysTheFamilyIsNotKnown()
+        {
+            var ex = Assert.Throws<ScenarioFormatException>(() => Second(@"{ ""do"": ""send"", ""command"": ""SetValve"" }", null));
+            Assert.Equal("f.json: step 2: \"command\": 'SetValve': the family under test is not known (none given); give --family <name>", ex.Message);
         }
 
         [Fact]
@@ -167,6 +165,23 @@ namespace BeckhoffAutomationInterface.Tests
                 "enum 'E_ValveIdentifier' has no member 'VALV_CHK_LZ1' (family NFLite)", ex.Message);
         }
 
+        [Theory]
+        [InlineData("NFPro")]
+        [InlineData(null)]
+        public void Command_QualifiedName_IsRefused_WithTheBareMember(string family)
+        {
+            var ex = Assert.Throws<ScenarioFormatException>(() => Second(@"{ ""do"": ""send"", ""command"": ""E_Command.SetValve"" }",
+                family == null ? null : Family(family)));
+            Assert.Equal("f.json: step 2: \"command\": 'E_Command.SetValve': \"command\" takes the bare E_Command member: use \"SetValve\"", ex.Message);
+        }
+
+        [Fact]
+        public void Command_MemberOutsideTheCommandRange_IsRefused_AsANumberWouldBe()
+        {
+            var ex = Assert.Throws<ScenarioFormatException>(() => Second(@"{ ""do"": ""send"", ""command"": ""TooBig"" }", Family("NFPro")));
+            Assert.Equal("f.json: step 2: \"command\" must be a whole number from -32768 to 32767 ('TooBig' is 40000)", ex.Message);
+        }
+
         [Fact]
         public void Name_WithoutAFamily_AsksForIt()
         {
@@ -186,17 +201,7 @@ namespace BeckhoffAutomationInterface.Tests
 
         // ------------------------------------------------------------------ the family under test
 
-        string Manifest()
-        {
-            string path = Path.Combine(_root, MachineManifest.FileName);
-            File.WriteAllText(path,
-                "{ \"work\": \"C:/bai/work\", \"lock\": \"C:/bai/lock/umrt.lock\", \"families\": {" +
-                "  \"NFPro\": { \"plc\": \"NFPro\", \"sources\": [\"Lib\", \"App/NFPro\"], \"shared\": \"Machines/NFPro\"," +
-                "    \"buildInfo\": \"App/NFPro/Version/GVL_BuildInfo.st\", \"machines\": [\"NFPro\"] }," +
-                "  \"NFLite\": { \"plc\": \"NFLite\", \"sources\": [\"Lib\", \"App/NFLite\"], \"shared\": \"Machines/NFLite\"," +
-                "    \"buildInfo\": \"App/NFLite/Version/GVL_BuildInfo.st\", \"machines\": [\"Shark\", \"Google\"] } } }");
-            return path;
-        }
+        string Manifest() => _repo.WriteNFProAndNFLiteManifest();
 
         static long Valve(ScenarioNames names)
         {
@@ -216,18 +221,18 @@ namespace BeckhoffAutomationInterface.Tests
             Manifest();
             Write("Tests/Acceptance/NFPro/smoke/03-exhaust.json", "{}");
 
-            Assert.Equal(27, Valve(ScenarioNames.ForScenarios(Path.Combine(_root, "Tests", "Acceptance", "NFPro"), null, null)));
-            Assert.Equal(27, Valve(ScenarioNames.ForScenarios(Path.Combine(_root, "Tests", "Acceptance", "nfpro", "smoke", "03-exhaust.json"), null, null)));
-            Directory.CreateDirectory(Path.Combine(_root, "Tests", "Integration", "NFLite"));
-            Assert.Equal(29, Valve(ScenarioNames.ForScenarios(Path.Combine(_root, "Tests", "Integration", "NFLite"), null, null)));
+            Assert.Equal(27, Valve(ScenarioNames.ForScenarios(Path.Combine(_repo.Root, "Tests", "Acceptance", "NFPro"), null, null)));
+            Assert.Equal(27, Valve(ScenarioNames.ForScenarios(Path.Combine(_repo.Root, "Tests", "Acceptance", "nfpro", "smoke", "03-exhaust.json"), null, null)));
+            Directory.CreateDirectory(Path.Combine(_repo.Root, "Tests", "Integration", "NFLite"));
+            Assert.Equal(29, Valve(ScenarioNames.ForScenarios(Path.Combine(_repo.Root, "Tests", "Integration", "NFLite"), null, null)));
         }
 
         [Fact]
         public void Family_Option_WinsOverThePath_AndMustBeAFamily()
         {
             string manifest = Manifest();
-            Directory.CreateDirectory(Path.Combine(_root, "Tests", "Integration", "NFLite"));
-            string scenarios = Path.Combine(_root, "Tests", "Integration", "NFLite");
+            Directory.CreateDirectory(Path.Combine(_repo.Root, "Tests", "Integration", "NFLite"));
+            string scenarios = Path.Combine(_repo.Root, "Tests", "Integration", "NFLite");
 
             Assert.Equal(27, Valve(ScenarioNames.ForScenarios(scenarios, "nfpro", null)));
             Assert.Equal(27, Valve(ScenarioNames.ForScenarios(Path.GetTempPath(), "NFPro", manifest)));
@@ -239,14 +244,14 @@ namespace BeckhoffAutomationInterface.Tests
         public void Family_NoneOrTwoInThePath_NamesAreRefused_NumbersStillLoad()
         {
             Manifest();
-            Directory.CreateDirectory(Path.Combine(_root, "Tests", "Shared"));
-            Directory.CreateDirectory(Path.Combine(_root, "NFPro", "NFLite"));
+            Directory.CreateDirectory(Path.Combine(_repo.Root, "Tests", "Shared"));
+            Directory.CreateDirectory(Path.Combine(_repo.Root, "NFPro", "NFLite"));
 
-            ScenarioNames none = ScenarioNames.ForScenarios(Path.Combine(_root, "Tests", "Shared"), null, null);
-            ScenarioNames two = ScenarioNames.ForScenarios(Path.Combine(_root, "NFPro", "NFLite"), null, null);
+            ScenarioNames none = ScenarioNames.ForScenarios(Path.Combine(_repo.Root, "Tests", "Shared"), null, null);
+            ScenarioNames two = ScenarioNames.ForScenarios(Path.Combine(_repo.Root, "NFPro", "NFLite"), null, null);
 
-            Assert.Equal("'E_ValveIdentifier.VALV_EX_PUMP': the scenario path names no family (NFPro, NFLite); give --family <name>", Refusal(none));
-            Assert.Equal("'E_ValveIdentifier.VALV_EX_PUMP': the scenario path names more than one family (NFPro, NFLite); give --family <name>", Refusal(two));
+            Assert.Equal("'E_ValveIdentifier.VALV_EX_PUMP': the family under test is not known (the scenario path names no family of NFPro, NFLite); give --family <name>", Refusal(none));
+            Assert.Equal("'E_ValveIdentifier.VALV_EX_PUMP': the family under test is not known (the scenario path names more than one family of NFPro, NFLite); give --family <name>", Refusal(two));
             Assert.Equal(50, ScenarioFile.Parse(OneStep(@"{ ""do"": ""send"", ""command"": 50 }"), "f.json", none).Steps[1].Command);
         }
 
@@ -258,7 +263,8 @@ namespace BeckhoffAutomationInterface.Tests
             {
                 ScenarioNames names = ScenarioNames.ForScenarios(folder, null, null);
                 Assert.Equal(1, ScenarioFile.Parse(OneStep(@"{ ""do"": ""send"", ""command"": 1 }"), "f.json", names).Steps[1].Command);
-                Assert.Contains("--family <name>", Refusal(names));
+                Assert.StartsWith("'E_ValveIdentifier.VALV_EX_PUMP': the family under test is not known (", Refusal(names));
+                Assert.EndsWith("); give --manifest <file> and --family <name>", Refusal(names));
                 Assert.Throws<ArgumentException>(() => ScenarioNames.ForScenarios(folder, "NFPro", null));
             }
             finally

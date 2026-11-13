@@ -38,30 +38,21 @@ namespace BeckhoffAutomationInterface.Tests
             "        VALV_EX_PUMP           := 29     // Exhaust Pump Valve\r\n" +
             "    )INT;\r\nEND_TYPE\r\n";
 
-        readonly string _root;
+        readonly MachineRepoFixture _repo = new MachineRepoFixture();
 
         public StEnumsTests()
         {
-            _root = TestProjects.NewTempDir("bai_enums");
             Write("Lib/Telemetry/Commands/E_Command.st", ECommand);
             Write("App/NFPro/Valve/E_ValveIdentifier.st", NFProValves);
             Write("App/NFLite/Valve/E_ValveIdentifier.st", NFLiteValves);
         }
 
-        public void Dispose()
-        {
-            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
-        }
+        public void Dispose() => _repo.Dispose();
 
-        void Write(string relative, string text)
-        {
-            string path = Path.Combine(_root, relative.Replace('/', '\\'));
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllText(path, text);
-        }
+        void Write(string relative, string text) => _repo.Write(relative, text);
 
         StEnums Family(string family) =>
-            StEnums.Read(new[] { Path.Combine(_root, "Lib"), Path.Combine(_root, "App", family) });
+            StEnums.Read(new[] { _repo.Path_("Lib"), _repo.Path_("App/" + family) });
 
         static long Resolved(StEnums enums, string name)
         {
@@ -79,13 +70,7 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void FamilyOfTheMachineManifest_ReadsItsSources()
         {
-            File.WriteAllText(Path.Combine(_root, MachineManifest.FileName),
-                "{ \"work\": \"C:/bai/work\", \"lock\": \"C:/bai/lock/umrt.lock\", \"families\": {" +
-                "  \"NFPro\": { \"plc\": \"NFPro\", \"sources\": [\"Lib\", \"App/NFPro\"], \"shared\": \"Machines/NFPro\"," +
-                "    \"buildInfo\": \"App/NFPro/Version/GVL_BuildInfo.st\", \"machines\": [\"NFPro\"] }," +
-                "  \"NFLite\": { \"plc\": \"NFLite\", \"sources\": [\"Lib\", \"App/NFLite\"], \"shared\": \"Machines/NFLite\"," +
-                "    \"buildInfo\": \"App/NFLite/Version/GVL_BuildInfo.st\", \"machines\": [\"Shark\", \"Google\"] } } }");
-            MachineManifest manifest = MachineManifest.Load(Path.Combine(_root, MachineManifest.FileName));
+            MachineManifest manifest = MachineManifest.Load(_repo.WriteNFProAndNFLiteManifest());
 
             Assert.Equal(27, Resolved(manifest.FamilyOf("NFPro").ReadEnums(manifest.Root), "E_ValveIdentifier.VALV_EX_PUMP"));
             Assert.Equal(29, Resolved(manifest.FamilyOf("Google").ReadEnums(manifest.Root), "E_ValveIdentifier.VALV_EX_PUMP"));
@@ -94,12 +79,9 @@ namespace BeckhoffAutomationInterface.Tests
         [Theory]
         [InlineData("NFPro")]
         [InlineData("NFLite")]
-        public void Command_IsABareMemberOfTheLibCommandEnum(string family)
+        public void LibEnums_AreInEachFamily(string family)
         {
-            StEnums enums = Family(family);
-            Assert.True(enums.TryResolveCommand("SetValve", out long value, out string problem), problem);
-            Assert.Equal(50, value);
-            Assert.Equal(50, Resolved(enums, "E_Command.SetValve"));
+            Assert.Equal(50, Resolved(Family(family), "E_Command.SetValve"));
         }
 
         [Fact]
@@ -149,13 +131,6 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void UnknownCommand_IsRefusedWithTheName()
-        {
-            Assert.False(Family("NFPro").TryResolveCommand("SetValv", out _, out string problem));
-            Assert.Equal("enum 'E_Command' has no member 'SetValv'", problem);
-        }
-
-        [Fact]
         public void Names_IgnoreCase_AsInST()
         {
             Assert.Equal(29, Resolved(Family("NFLite"), "e_valveidentifier.valv_ex_pump"));
@@ -169,6 +144,28 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains("enum 'E_ValveIdentifier' is declared twice", ex.Message);
             Assert.Contains(Path.Combine("Lib", "Valve", "E_ValveIdentifier.st"), ex.Message);
             Assert.Contains(Path.Combine("NFLite", "Valve", "E_ValveIdentifier.st"), ex.Message);
+        }
+
+        [Fact]
+        public void SameEnumTwice_NamesTheFilesInPathOrder_NotInTheOrderTheDiskGivesThem()
+        {
+            // The disk lists Lib\E_Twice.st before the files of Lib\A; in path order Lib\A\.. comes first.
+            Write("Lib/E_Twice.st", "TYPE E_Twice :\r\n(\r\n    A := 1\r\n) INT;\r\nEND_TYPE\r\n");
+            Write("Lib/A/E_Twice.st", "TYPE E_Twice :\r\n(\r\n    A := 1\r\n) INT;\r\nEND_TYPE\r\n");
+
+            var ex = Assert.Throws<FormatException>(() => Family("NFPro"));
+            Assert.Equal(string.Format("enum 'E_Twice' is declared twice: {0} and {1}",
+                _repo.Path_("Lib/A/E_Twice.st"), _repo.Path_("Lib/E_Twice.st")), ex.Message);
+        }
+
+        [Fact]
+        public void TwoEnumsInOneFile_AreRefused_WithTheFile()
+        {
+            Write("Lib/E_Two.st", "TYPE E_One :\r\n(\r\n    A := 1\r\n) INT;\r\nEND_TYPE\r\n" +
+                "TYPE E_Two :\r\n(\r\n    B := 2\r\n) INT;\r\nEND_TYPE\r\n");
+
+            var ex = Assert.Throws<FormatException>(() => Family("NFPro"));
+            Assert.Equal(_repo.Path_("Lib/E_Two.st") + ": more than one enum TYPE (E_One, E_Two); one enum per file", ex.Message);
         }
 
         [Theory]
@@ -188,7 +185,7 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void MissingSourceFolder_IsRefused()
         {
-            var ex = Assert.Throws<DirectoryNotFoundException>(() => StEnums.Read(new[] { Path.Combine(_root, "App", "Nope") }));
+            var ex = Assert.Throws<DirectoryNotFoundException>(() => StEnums.Read(new[] { _repo.Path_("App/Nope") }));
             Assert.Contains(Path.Combine("App", "Nope"), ex.Message);
         }
 

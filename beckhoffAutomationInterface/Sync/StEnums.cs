@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace BeckhoffAutomationInterface.Sync
@@ -14,10 +15,9 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     sealed class StEnums
     {
-        /// <summary>The enum of a scenario's "command" (a bare member name there).</summary>
-        public const string CommandEnum = "E_Command";
         static readonly Regex EnumHeader = new Regex(@"\bTYPE\s+(\w+)\s*:\s*\(", RegexOptions.IgnoreCase);
-        static readonly Regex QualifiedName = new Regex(@"^(\w+)\.(\w+)$");
+        /// <summary>The one form of an enum member name: E_Enum.Member (as ST: case ignored).</summary>
+        static readonly Regex QualifiedName = new Regex(@"^(E_\w+)\.(\w+)$", RegexOptions.IgnoreCase);
         static readonly Regex Member = new Regex(@"^(\w+)(?:\s*:=\s*(-?\d+))?$");
 
         readonly Dictionary<string, Dictionary<string, long>> _enums =
@@ -26,23 +26,31 @@ namespace BeckhoffAutomationInterface.Sync
         readonly Dictionary<string, string> _files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Reads every .st file below the folders (absolute paths; a missing folder is an
-        /// error). Throws FormatException, naming the file, for an enum declared twice or a member
-        /// that cannot be read: a guessed number would move the wrong valve.</summary>
+        /// error), the folders in the order given and the files of a folder sorted by path. Throws
+        /// FormatException, naming the file, for an enum declared twice, two enums in one file or a
+        /// member that cannot be read: a guessed number would move the wrong valve.</summary>
         public static StEnums Read(IEnumerable<string> sourceFolders)
         {
             var enums = new StEnums();
             foreach (string folder in sourceFolders)
-                foreach (string file in StFileParser.GetStFiles(folder, null))
+                foreach (string file in StFileParser.GetStFiles(folder, null).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
                     enums.ReadFile(file);
             return enums;
         }
 
+        /// <summary>True for a text of the form E_Enum.Member (spaces around it are ignored).</summary>
+        public static bool IsQualifiedName(string text) => text != null && QualifiedName.IsMatch(text.Trim());
+
         void ReadFile(string file)
         {
             string text = StFileParser.StripComments(File.ReadAllText(file));
-            Match header = EnumHeader.Match(text);
-            if (!header.Success)
+            MatchCollection headers = EnumHeader.Matches(text);
+            if (headers.Count == 0)
                 return; // not an enum (STRUCT, alias, POU, GVL)
+            if (headers.Count > 1)
+                throw new FormatException(string.Format("{0}: more than one enum TYPE ({1}); one enum per file",
+                    file, string.Join(", ", headers.Cast<Match>().Select(h => h.Groups[1].Value))));
+            Match header = headers[0];
             string name = header.Groups[1].Value;
             string where = string.Format("{0}: enum '{1}'", file, name);
             if (_files.TryGetValue(name, out string first))
@@ -74,7 +82,7 @@ namespace BeckhoffAutomationInterface.Sync
         {
             value = 0;
             problem = null;
-            Match name = QualifiedName.Match(qualifiedName ?? "");
+            Match name = QualifiedName.Match(qualifiedName?.Trim() ?? "");
             if (!name.Success)
                 problem = string.Format("'{0}' is not an enum member name (E_Enum.Member)", qualifiedName);
             else if (!_enums.TryGetValue(name.Groups[1].Value, out Dictionary<string, long> members))
@@ -83,9 +91,5 @@ namespace BeckhoffAutomationInterface.Sync
                 problem = string.Format("enum '{0}' has no member '{1}'", name.Groups[1].Value, name.Groups[2].Value);
             return problem == null;
         }
-
-        /// <summary>A bare member of E_Command ("SetValve") to its number.</summary>
-        public bool TryResolveCommand(string member, out long value, out string problem) =>
-            TryResolve(CommandEnum + "." + member, out value, out problem);
     }
 }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using BeckhoffAutomationInterface.Machines;
 using BeckhoffAutomationInterface.Sync;
 
@@ -18,8 +17,8 @@ namespace BeckhoffAutomationInterface.Runtime
     /// </summary>
     sealed class ScenarioNames
     {
-        /// <summary>A string of this form is a name; any other string stays a string.</summary>
-        static readonly Regex Name = new Regex(@"^E_\w+\.\w+$", RegexOptions.IgnoreCase); // as ST: case ignored
+        /// <summary>The enum of a scenario's "command" (a bare member name there).</summary>
+        public const string CommandEnum = "E_Command";
 
         readonly string _family;
         readonly Func<StEnums> _read;
@@ -40,7 +39,11 @@ namespace BeckhoffAutomationInterface.Runtime
         /// <summary>No family: numbers only; a name is refused with this reason.</summary>
         public static ScenarioNames Without(string reason) => new ScenarioNames(null, null, reason);
 
-        public static readonly ScenarioNames None = Without("the family under test is not known (give --family <name>)");
+        public static readonly ScenarioNames None = Unknown("none given");
+
+        /// <summary>No family, with the one wording of every such reason.</summary>
+        static ScenarioNames Unknown(string why, string give = "--family <name>") =>
+            Without(string.Format("the family under test is not known ({0}); give {1}", why, give));
 
         /// <summary>
         /// The family under test of 'test' and 'acceptance': --family, else the one family whose name
@@ -60,7 +63,7 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 if (family != null || manifestPath != null)
                     throw new ArgumentException((family != null ? "--family " + family + ": " : "") + ex.Message, ex);
-                return Without(string.Format("the family is not known ({0}); give --manifest <file> and --family <name>", ex.Message.TrimEnd('.')));
+                return Unknown(ex.Message.TrimEnd('.'), "--manifest <file> and --family <name>");
             }
 
             string families = string.Join(", ", manifest.Families.Select(f => f.Name));
@@ -78,19 +81,29 @@ namespace BeckhoffAutomationInterface.Runtime
                 var folders = new HashSet<string>(below.Split('\\', '/'), StringComparer.OrdinalIgnoreCase);
                 found = manifest.Families.Where(f => folders.Contains(f.Name)).ToList();
                 if (found.Count != 1)
-                    return Without(string.Format("the scenario path names {0} family ({1}); give --family <name>",
-                        found.Count == 0 ? "no" : "more than one", families));
+                    return Unknown(string.Format("the scenario path names {0} family of {1}", found.Count == 0 ? "no" : "more than one", families));
             }
             MachineFamily chosen = found[0];
             return Of(chosen.Name, () => chosen.ReadEnums(manifest.Root));
         }
 
-        /// <summary>True for a text of the form E_Enum.Member.</summary>
-        public static bool IsName(object value) => value is string s && Name.IsMatch(s.Trim());
+        /// <summary>True for a text of the form E_Enum.Member: a name; any other text stays a text.</summary>
+        public static bool IsName(object value) => value is string s && StEnums.IsQualifiedName(s);
 
-        /// <summary>A bare E_Command member to its number.</summary>
-        public bool TryResolveCommand(string member, out long value, out string problem) =>
-            TryResolve(StEnums.CommandEnum + "." + member.Trim(), member.Trim(), out value, out problem);
+        /// <summary>A bare E_Command member ("SetValve") to its number. "E_Command.SetValve" is
+        /// refused: "command" takes the bare member only.</summary>
+        public bool TryResolveCommand(string member, out long value, out string problem)
+        {
+            string written = member.Trim();
+            if (IsName(written))
+            {
+                value = 0;
+                problem = string.Format("'{0}': \"command\" takes the bare {1} member: use \"{2}\"",
+                    written, CommandEnum, written.Substring(written.IndexOf('.') + 1));
+                return false;
+            }
+            return TryResolve(CommandEnum + "." + written, written, out value, out problem);
+        }
 
         /// <summary>"E_Enum.Member" to its number; false with the reason (it names the name).</summary>
         public bool TryResolve(string name, out long value, out string problem) =>
