@@ -61,3 +61,11 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
 - Kept accessor declarations and IDs project-local while updating supplied accessor bodies. Preserved project XML attributes and unowned metadata; declaration/body text remains source-owned for roots, methods and properties.
 - Compiled tool and test project successfully (zero errors, the existing xUnit1031 warning). Regression cases are written but unrun.
 - Retained the existing isolated feature branch and left the PLC tool pin and repository work untouched.
+
+## Second review implementation: trustworthy scenario evidence
+
+- Added production RunAll regressions before changing execution: communication errors and slow checks cannot prove injected faults; observed command-answer mismatches can; successful late reads and acknowledgments cannot pass shorter step deadlines.
+- Added typed ScenarioFailure evidence for expectation, command answer, deadline, transport and lifecycle failures. Fault proof now consumes evidence and step numbers instead of parsing rendered message prefixes.
+- Kept polled, in-time expectation mismatches eligible for fault proof. A communication failure or a blocking read returning after its deadline is not condition evidence.
+- Split step execution into focused operations and used ScenarioBudget values for both shorter step and shared-phase deadlines. Removed the raw StepDeadline calculation surface.
+- Compiled the tool and regression project successfully with the existing xUnit1031 warning only. Tests and gates remain unrun.

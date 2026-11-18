@@ -13,6 +13,7 @@ namespace BeckhoffAutomationInterface.Runtime
         public double Elapsed => _now() - StartedAt;
         public bool Expired => _now() >= Deadline;
         public bool Overrun => _now() > Deadline;
+        public double RemainingS => Math.Max(0, Deadline - _now());
 
         public ScenarioBudget(Func<double> now, double durationS = double.PositiveInfinity,
             double ceiling = double.PositiveInfinity)
@@ -28,6 +29,5 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public ScenarioBudget Phase(double timeoutS) => new ScenarioBudget(_now, timeoutS, Deadline);
         public ScenarioBudget Recovery(double timeoutS) => new ScenarioBudget(_now, timeoutS);
-        public double StepDeadline(double timeoutS) => Math.Min(_now() + timeoutS, Deadline);
     }
 }

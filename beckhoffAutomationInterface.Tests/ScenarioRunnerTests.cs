@@ -21,6 +21,7 @@ namespace BeckhoffAutomationInterface.Tests
             public Func<string, double> CallSeconds = symbol => 0;
             public bool CompleteReset = true;
             public Func<string, int> WriteError = symbol => 0;
+            public Func<string, int> ReadError = symbol => 0;
             public readonly Dictionary<string, byte[]> Values = new Dictionary<string, byte[]>();
             public readonly Dictionary<string, Func<double, byte[]>> ByTime = new Dictionary<string, Func<double, byte[]>>();
             public readonly List<string> Commands = new List<string>();
@@ -51,6 +52,8 @@ namespace BeckhoffAutomationInterface.Tests
             {
                 Time += CallSeconds(symbol);
                 data = null;
+                int error = ReadError(symbol);
+                if (error != 0) return error;
                 byte[] v;
                 if (ByTime.TryGetValue(symbol, out Func<double, byte[]> f))
                     v = f(Time);
@@ -554,6 +557,48 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.DoesNotContain(r.Details, d => d.StartsWith("slow ADS"));
         }
 
+        [Fact]
+        public void RunAll_LateMatchingReadCannotPassTheShorterStepDeadline()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            plc.CallSeconds = symbol => symbol == "MAIN.flow" ? 3 : 0;
+            var scenario = Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"",
+                ""greaterThan"": 190, ""timeoutS"": 1 }", @"""timeoutS"": 60,");
+            ScenarioResult result = plc.Runner().RunAll(new[] { scenario }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Equal(ScenarioFailureKind.Deadline, result.Failure.Kind);
+            Assert.Contains("1.0 s", result.Message);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void RunAll_LateCommandAnswerCannotPassTheShorterStepDeadline(bool accepted)
+        {
+            var plc = new FakePlc();
+            bool commandSent = false;
+            plc.Receiver = command => { if (command == 41) commandSent = true; return command == 41 ? accepted : true; };
+            plc.CallSeconds = symbol => commandSent && symbol == ScenarioRunner.AcceptedSymbol ? 3 : 0;
+            var scenario = Load(@"{ ""do"": ""send"", ""command"": 41, ""expect"": """ +
+                (accepted ? "accepted" : "rejected") + @""", ""timeoutS"": 1 }", @"""timeoutS"": 60,");
+            ScenarioResult result = plc.Runner().RunAll(new[] { scenario }, null, 10, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Equal(ScenarioFailureKind.Deadline, result.Failure.Kind);
+        }
+
+        [Fact]
+        public void FaultProof_PolledMismatchWithinDeadlineCanProveWaitUntilFault()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            var scenario = Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"",
+                ""greaterThan"": 190, ""timeoutS"": 0.1 }", Fault(1));
+            ScenarioResult result = plc.Runner().RunAll(new[] { scenario }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Passed, result.Status);
+            Assert.Equal(200, plc.Dint("MAIN.flow"));
+        }
+
         /// <summary>A blocking ADS read exceeds the 39 s overall limit. It cannot be interrupted,
         /// but later steps stop and cleanup still restores the write.</summary>
         [Fact]
@@ -971,6 +1016,38 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(200, plc.Dint("MAIN.flow"));
             Assert.Equal(2, plc.Commands.Count(c => c.Contains("\"command\":41,")));   // the healthy run and the faulted run
             Assert.Contains("fault proof: with the fault it fails at step 2 (check), as expected", r.Details);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void FaultProof_CommunicationFailureOrSlowReadAtExpectedStepCannotProveFault(bool slow)
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            plc.ReadError = symbol =>
+            {
+                if (symbol != "MAIN.flow" || plc.Dint(symbol) != 100) return 0;
+                if (slow) { plc.Time += 3; return 0; }
+                return 1793;
+            };
+            ScenarioResult result = plc.Runner().RunAll(new[] { Load(FlowCheck,
+                @"""timeoutS"": 1," + Fault(2)) }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Contains("fault proof", result.Message);
+            Assert.Equal(slow ? ScenarioFailureKind.Deadline : ScenarioFailureKind.Transport, result.Failure.Kind);
+            Assert.Equal(200, plc.Dint("MAIN.flow"));
+        }
+
+        [Fact]
+        public void FaultProof_ObservedCommandAnswerMismatchCanProveFault()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            plc.Receiver = command => command != 41 || plc.Dint("MAIN.flow") != 100;
+            ScenarioResult result = plc.Runner().RunAll(new[] { Load(FlowCheck, Fault(1)) }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Passed, result.Status);
+            Assert.Contains(result.Details, d => d.Contains("fails at step 1"));
         }
 
         [Fact]
