@@ -26,3 +26,12 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
 - Added atomic per-file publication and rollback of attempted writes/deletions on synchronous failure. This is rollback for reported I/O failures, not a durable transaction across power loss; source and disk hashes still force incomplete objects to be revisited.
 - Shared COM-busy retry policy through ComInterop rather than depending on the pipeline from the source-update module.
 - Compiled the tool and regression project successfully (one existing xUnit1031 warning). No tests, gates, XAE builds or runtime actions ran.
+
+## Architecture follow-up: machine outcomes
+
+- Wrote completion regressions first: I/O/variant/link errors still allow diagnostic compilation but cannot record successful sync or continue to activation; final safety validation can veto continuation; compilation failures retain completed sync; validation exceptions cannot pass.
+- Added a single PipelineCompletion sequence used by SyncPipeline. PipelineOutcome distinguishes completed sync, compilation, final validation, and overall success. Forward stages report failures there; process exit status is set at the CLI boundary.
+- Moved final safety-file checks before successful continuation. Native safety/axis checks now run before activation as part of final validation.
+- Made MachineBuilder, native bootstrap, and machine-dev consult the outcome instead of process-global exit status or a successful compiler count. Expected link counts are part of machine-run success, and link decisions use values instead of parsing display strings.
+- Machine state retains completed sync after compiler failures and marks sync/validation failures for a fresh rebuild. Existing activation and crash handling remains separate from compiler reporting.
+- Compiled tool and test project successfully, with only the existing xUnit1031 warning. Tests and gates remain unrun.

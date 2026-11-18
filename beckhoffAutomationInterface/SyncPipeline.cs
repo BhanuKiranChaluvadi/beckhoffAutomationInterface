@@ -39,10 +39,11 @@ namespace BeckhoffAutomationInterface
         /// <summary>What this run found (drift, I/O warnings, links, build), as values.</summary>
         public PipelineOutcome Outcome { get; } = new PipelineOutcome();
 
-        /// <summary>Optional: runs in the same open session right after a passed build stage,
-        /// before the safety files are checked again (bai machine: the activation, so the
-        /// project is not opened and compiled a second time).</summary>
+        /// <summary>Runs only after sync, compilation and final validation have succeeded.</summary>
         public Action<TwinCatSession> AfterBuild { get; set; }
+
+        /// <summary>Additional file checks after the project closes, before successful continuation.</summary>
+        public Action ValidateBuild { get; set; }
 
         /// <summary>Optional: runs when every sync stage has completed, just before the build stage
         /// (bai machine: records that the project is complete, so a compile error keeps it).</summary>
@@ -156,22 +157,28 @@ namespace BeckhoffAutomationInterface
                 }
                 SyncLinks();
             }
-            if (stages.HasFlag(SyncStages.Build))
-            {
-                _session.EnsureOpen();
-                BeforeBuild?.Invoke();
-                RunBuild();
-                if (AfterBuild != null && Outcome.BuildPassed)
+            bool build = stages.HasFlag(SyncStages.Build);
+            new PipelineCompletion(Outcome).Finish(
+                build ? (Action)(() => { _session.EnsureOpen(); RunBuild(); }) : null,
+                () =>
+                {
+                    if (safety != null) CheckSafetyFilesAfterClose(safety);
+                    if (ValidateBuild != null)
+                    {
+                        _session.EnsureClosed();
+                        ValidateBuild();
+                    }
+                }, build ? BeforeBuild : null,
+                () =>
+                {
+                    if (AfterBuild == null) return;
+                    _session.EnsureOpen();
                     AfterBuild(_session);
-            }
-
-            if (safety != null)
-                CheckSafetyFilesAfterClose(safety);
+                });
         }
 
         /// <summary>--export: write the named live PLC object's text back to its mirrored
-        /// .st file. Uses Environment.ExitCode (not Environment.Exit) on error paths so
-        /// Main's `using` still disposes/closes Visual Studio properly.</summary>
+        /// .st file. Reports errors through the pipeline outcome.</summary>
         void ExportObject()
         {
             // Only code objects count: a task's call of a PROGRAM (e.g. PlcTask^MAIN) has the same name.
@@ -180,13 +187,13 @@ namespace BeckhoffAutomationInterface
             if (matches.Count == 0)
             {
                 Console.Error.WriteLine("ERROR: no PLC object named '{0}' found.", _options.ExportObjectName);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "Export failed; see diagnostics above.");
                 return;
             }
             if (matches.Count > 1)
             {
                 Console.Error.WriteLine("ERROR: {0} object(s) named '{1}' found — ambiguous.", matches.Count, _options.ExportObjectName);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "Export failed; see diagnostics above.");
                 return;
             }
 
@@ -194,7 +201,7 @@ namespace BeckhoffAutomationInterface
             if (!PlcObjectExporter.IsSupported(item))
             {
                 Console.Error.WriteLine("ERROR: export of '{0}' ({1}) is not yet supported.", item.Name, item.ItemSubTypeName);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "Export failed; see diagnostics above.");
                 return;
             }
 
@@ -362,7 +369,7 @@ namespace BeckhoffAutomationInterface
             catch (VariantManifestException ex)
             {
                 Console.WriteLine("{0}: VARIANTS FAILED — {1}", Now(), ex.Message);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "SyncVariants failed; see diagnostics above.");
                 return;
             }
             if (desired == null)
@@ -481,7 +488,7 @@ namespace BeckhoffAutomationInterface
             if (ioReport.Errors.Count > 0)
             {
                 Console.WriteLine("{0}: IO SYNC FAILED — {1} item(s) have the wrong kind (see above).", Now(), ioReport.Errors.Count);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "SyncIoTree failed; see diagnostics above.");
             }
 
             SyncIoVariants(desiredIoDevices);
@@ -509,7 +516,7 @@ namespace BeckhoffAutomationInterface
             catch (VariantManifestException ex)
             {
                 Console.WriteLine("{0}: IO VARIANTS FAILED — {1}", Now(), ex.Message);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "SyncIoVariants failed; see diagnostics above.");
                 return;
             }
             List<string> problems = IoVariantRules.Validate(desiredIoDevices, variants);
@@ -522,7 +529,7 @@ namespace BeckhoffAutomationInterface
                 Console.WriteLine("{0}: IO VARIANTS FAILED — io-devices.xml:", Now());
                 foreach (string problem in problems)
                     Console.WriteLine("    ! {0}", problem);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Sync, "SyncIoVariants failed; see diagnostics above.");
                 return;
             }
 
@@ -692,7 +699,7 @@ namespace BeckhoffAutomationInterface
             {
                 Console.WriteLine("{0}: SAFETY FAILED — TwinCAT changed copied safety file(s); they are not byte-equal to the source:", Now());
                 PrintLines("! changed  ", different);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Validation, "CheckSafetyFilesAfterClose failed; see diagnostics above.");
                 return;
             }
             Console.WriteLine("{0}: Safety files after close: {1} file(s) byte-equal to the source.", Now(), plan.Files.Count);
@@ -774,7 +781,7 @@ namespace BeckhoffAutomationInterface
             catch (ArgumentException ex)
             {
                 Console.WriteLine("{0}: BUILD FAILED — {1}", Now(), ex.Message);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Build, "RunBuild failed; see diagnostics above.");
                 return;
             }
 
@@ -788,7 +795,7 @@ namespace BeckhoffAutomationInterface
             {
                 Console.WriteLine("{0}: BUILD FAILED — variant defines are off for '{1}', so the PLC would get no variant defines. Run 'sync variants' first.",
                     Now(), _options.PlcItemPath);
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Build, "RunBuild failed; see diagnostics above.");
                 return;
             }
 
@@ -817,7 +824,7 @@ namespace BeckhoffAutomationInterface
 
             Console.WriteLine("{0}: Variant build summary:{1}{2}", Now(), Environment.NewLine, VariantBuildPlan.Summary(results));
             if (results.Any(r => !r.Passed))
-                Environment.ExitCode = 1;
+                Outcome.Fail(PipelinePhase.Build, "RunBuild failed; see diagnostics above.");
         }
 
         /// <summary>One clean/build of the current variant (or of a project without variants),
@@ -852,7 +859,7 @@ namespace BeckhoffAutomationInterface
             catch (BuildTimeoutException ex)
             {
                 Console.WriteLine("{0}: BUILD TIMED OUT — {1}", Now(), ex.Message);
-                Environment.ExitCode = 1; // CI contract: anything but BUILD PASSED is non-zero
+                Outcome.Fail(PipelinePhase.Build, "BuildOnceCore failed; see diagnostics above.");
                 result.TimedOut = true;
                 return result; // Main's using will force-close VS (dialog is still up)
             }
@@ -871,7 +878,7 @@ namespace BeckhoffAutomationInterface
             }
             else
             {
-                Environment.ExitCode = 1; // CI contract: build failure = exit code 1
+                Outcome.Fail(PipelinePhase.Build, "BuildOnceCore failed; see diagnostics above.");
                 Dictionary<string, StPouSource> provenance = TryBuildProvenanceIndex();
                 Console.WriteLine("{0}: BUILD FAILED — {1} error(s):", Now(), buildReport.Errors.Count);
                 foreach (BuildError error in buildReport.Errors)

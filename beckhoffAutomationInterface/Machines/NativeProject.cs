@@ -48,7 +48,6 @@ namespace BeckhoffAutomationInterface.Machines
                 overwrite: false, plcProjectName: l.Family.Plc, existingTsprojPath: null, configFileLoaded: false,
                 shell: shell, clean: false, sourceFolderExplicit: true, variant: null, allVariants: false,
                 defines: new string[0], targetPlatform: platform);
-            Environment.ExitCode = 0;
             PipelineOutcome outcome;
             using (var session = new TwinCatSession(options))
             {
@@ -56,7 +55,7 @@ namespace BeckhoffAutomationInterface.Machines
                 outcome = pipeline.Outcome;
                 pipeline.Run();
             }
-            if (Environment.ExitCode != 0 || !outcome.BuildPassed)
+            if (!outcome.Succeeded)
                 throw new InvalidOperationException("Bootstrap of the native project failed (see above).");
 
             CopySafety(l);

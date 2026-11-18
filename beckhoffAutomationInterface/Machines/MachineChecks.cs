@@ -70,6 +70,8 @@ namespace BeckhoffAutomationInterface.Machines
             return string.Format("PASS ({0}/{1})", linked, declared);
         }
 
+        public static bool LinksPassed(int declared, PipelineOutcome o) => o.LinksComplete(declared);
+
         /// <summary>The expected GVL_BuildInfo values, read from the compiled TMC of the build
         /// (never from the checkout or the live PLC: either could let a wrong build supply its own
         /// identity). Each entry: { symbol, type, equals }.</summary>

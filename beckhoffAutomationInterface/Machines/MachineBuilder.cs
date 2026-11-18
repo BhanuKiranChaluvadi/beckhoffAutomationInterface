@@ -220,7 +220,8 @@ namespace BeckhoffAutomationInterface.Machines
             int declaredLinks = MachineChecks.DeclaredLinks(options.IoManifestPath) + MachineChecks.DeclaredFileLinks(options.VarLinksManifestPath);
             string phase = "build";
             PipelineOutcome outcome = null;
-            Environment.ExitCode = 0;
+            bool executionFailed = false;
+            string safetyProblem = null, axesProblem = null;
             try
             {
                 if (nativeConfig && !keep)
@@ -236,8 +237,20 @@ namespace BeckhoffAutomationInterface.Machines
                     current = session;
                     var pipeline = new SyncPipeline(session, options, IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns));
                     outcome = pipeline.Outcome;
+                    outcome.ExpectedLinks = declaredLinks;
                     pipeline.DeleteStaleObjects = keep;
                     pipeline.BeforeBuild = progress.Synced;
+                    if (nativeConfig)
+                        pipeline.ValidateBuild = () =>
+                        {
+                            safetyProblem = NativeProject.SafetyProblem(l, safetyBefore);
+                            axesProblem = NativeProject.AxesProblem(l.Tsproj, r.Simulation);
+                            foreach (string problem in new[] { safetyProblem, axesProblem }.Where(p => p != null))
+                            {
+                                Console.WriteLine("{0}: VALIDATION FAILED — {1}", Now(), problem);
+                                outcome.Fail(PipelinePhase.Validation, problem);
+                            }
+                        };
                     pipeline.AfterBuild = s =>
                     {
                         // A kept project with I/O items the manifest no longer has: build fresh, activate that one.
@@ -245,13 +258,13 @@ namespace BeckhoffAutomationInterface.Machines
                             return;
                         if (!r.Simulation && !CheckNoSimulationDefine(s, options))
                         {
-                            Environment.ExitCode = 1;
+                            outcome.Fail(PipelinePhase.Validation, "Release project contains SIMULATION.");
                             return;
                         }
                         if (!r.Activate)
                             return;
                         string links = MachineChecks.LinkResult(declaredLinks, outcome);
-                        if (links.StartsWith("FAIL"))
+                        if (!MachineChecks.LinksPassed(declaredLinks, outcome))
                         {
                             Console.WriteLine("{0}: Not activated: links {1}.", Now(), links);
                             return;
@@ -275,6 +288,7 @@ namespace BeckhoffAutomationInterface.Machines
             {
                 Console.WriteLine("{0}: ERROR: the TwinCAT shell crashed or stopped answering ({1}): {2}", Now(), phase, ex.Message);
                 row.Crashed = true;
+                executionFailed = true;
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
                                        || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException || ex is COMException)
@@ -283,31 +297,18 @@ namespace BeckhoffAutomationInterface.Machines
                 if (phase == "activate")
                     row.Activate = "FAIL";
                 else
-                    Environment.ExitCode = 1;
+                    executionFailed = true;
             }
             if (outcome != null && outcome.BuildTimedOut)
                 row.Crashed = true;
-            bool failed = Environment.ExitCode != 0 || outcome == null || !outcome.BuildPassed;
-            Environment.ExitCode = 0;
-            string safetyProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.SafetyProblem(l, safetyBefore) : null;
-            if (safetyProblem != null)
-            {
-                Console.WriteLine("{0}: SAFETY FAILED — {1}", Now(), safetyProblem);
-                failed = true;
-            }
-            // Simulated NC axes only in the -sim project, never in a normal (release) project.
-            string axesProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.AxesProblem(l.Tsproj, r.Simulation) : null;
-            if (axesProblem != null)
-            {
-                Console.WriteLine("{0}: NC AXES FAILED — {1}", Now(), axesProblem);
-                failed = true;
-            }
+            bool failed = executionFailed || outcome == null || !outcome.Succeeded;
 
             // The state for the next run: a sync that did not complete (also a machine dev round
             // stopped by an exception) is a failure, whatever the first build did.
             bool stateFailed = failed || !progress.IsSynced;
+            bool completeSync = progress.IsSynced && outcome != null && outcome.SyncCompleted && !outcome.ValidationFailed;
             string failure = row.Crashed || stateFailed
-                ? MachineState.FailureKind(keep, current != null && current.ShellStarted, current != null && current.Opened, progress.IsSynced) : null;
+                ? MachineState.FailureKind(keep, current != null && current.ShellStarted, current != null && current.Opened, completeSync) : null;
             progress.Write(row.Crashed ? "crashed" : stateFailed ? "failed" : "passed", failure);
 
             if (!row.Crashed && keep && failure == "open" && !retried)
@@ -421,6 +422,8 @@ namespace BeckhoffAutomationInterface.Machines
             var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true, KeepSessionOpen = true };
             progress.Running(); // a process that ends in this sync leaves a project to build fresh
             pipeline.Run();
+            if (!pipeline.Outcome.SyncCompleted || pipeline.Outcome.HasErrors)
+                return "FAIL (sync)";
             progress.Synced();
             if (pipeline.Outcome.StaleNames > 0)
                 return "STOP — the kept project has objects it cannot delete: run 'bai machine test'.";

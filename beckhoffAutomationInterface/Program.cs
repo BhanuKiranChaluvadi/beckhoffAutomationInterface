@@ -382,7 +382,9 @@ namespace BeckhoffAutomationInterface
             {
                 using (var session = new TwinCatSession(options))
                 {
-                    new SyncPipeline(session, options, ignore).Run();
+                    var pipeline = new SyncPipeline(session, options, ignore);
+                    pipeline.Run();
+                    if (pipeline.Outcome.HasErrors) Environment.ExitCode = 1;
                 }
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
