@@ -445,6 +445,50 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal("PRG_Sequence.fbOrchestrator.stLastError = (none)", results[0].Details[2]);
         }
 
+        [Fact]
+        public void RunAll_ResetTimeoutRecoversPreparationSideEffectsBeforeTheNextScenario()
+        {
+            var plc = new FakePlc { CompleteReset = false };
+            plc.Receiver = command => { if (command == 1) plc.CompleteReset = true; return true; };
+            var scenario = Load(@"{ ""do"": ""wait"", ""seconds"": 0.01 }");
+            var results = plc.Runner().RunAll(new[] { scenario, scenario }, null, 1, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal(ScenarioFailureKind.Preparation, results[0].Failure.Kind);
+            Assert.Equal(ScenarioStatus.Passed, results[1].Status);
+            Assert.Contains(plc.Commands, c => c.Contains("\"command\":1,"));
+            Assert.Equal(0, plc.Values[ScenarioRunner.SimulationResetSymbol][0]);
+        }
+
+        [Fact]
+        public void RunAll_ModeGuardFailureAcquiresNoRecoveryWrites()
+        {
+            var plc = FakePlc.Machine();
+            var scenario = Load(@"{ ""do"": ""send"", ""command"": 41 }");
+            var results = plc.Runner().RunAll(new[] { scenario }, null, 1, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Empty(plc.Writes);
+            Assert.Empty(plc.Commands);
+        }
+
+        [Fact]
+        public void RunAll_PreparationExceptionAfterResetWriteStillRecovers()
+        {
+            var plc = new FakePlc();
+            bool once = true;
+            plc.ReadError = symbol =>
+            {
+                if (once && symbol == ScenarioRunner.SimulationResetSymbol && plc.Values[symbol][0] == 1)
+                { once = false; throw new System.IO.IOException("ADS disconnected"); }
+                return 0;
+            };
+            var scenario = Load(@"{ ""do"": ""wait"", ""seconds"": 0.01 }");
+            var results = plc.Runner().RunAll(new[] { scenario, scenario }, null, 1, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal(ScenarioFailureKind.Transport, results[0].Failure.Kind);
+            Assert.Equal(ScenarioStatus.Passed, results[1].Status);
+            Assert.Contains(plc.Commands, c => c.Contains("\"command\":1,"));
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -527,6 +571,40 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains("cleanup", result.Message);
             Assert.Equal(7, plc.Dint("MAIN.fault"));
             Assert.DoesNotContain(plc.Commands, c => c.Contains("\"command\":55,"));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void RunAll_SlowOrThrowingRestorationCannotPreventCancellation(bool throws)
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.override", 7);
+            plc.Receiver = command =>
+            {
+                if (command == 200) plc.SetInt(Seq, 5);
+                if (command == 1) plc.SetInt(Seq, 0);
+                return true;
+            };
+            plc.WriteError = symbol =>
+            {
+                if (symbol == "MAIN.override" && plc.Writes.Contains(symbol))
+                {
+                    if (throws) throw new System.IO.IOException("restoration failed");
+                    plc.Time += 3;
+                }
+                return 0;
+            };
+            var scenario = Load(@"{ ""do"": ""send"", ""command"": 200 },
+                { ""do"": ""write"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""value"": 0 },
+                { ""do"": ""check"", ""symbol"": ""MAIN.override"", ""type"": ""DINT"", ""equals"": 8 }");
+            var results = plc.Runner().RunAll(new[] { scenario, scenario }, null, 1, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Equal(ScenarioFailureKind.Cleanup, results[0].Failure.Kind);
+            Assert.Contains(plc.Commands, c => c.Contains("\"command\":1,"));
+            Assert.Equal(0, BitConverter.ToInt16(plc.Values[Seq], 0));
+            Assert.Contains("subsequent scenarios blocked", results[1].Message);
+            Assert.Single(plc.Commands, c => c.Contains("\"command\":200,"));
         }
 
         [Fact]
@@ -1048,6 +1126,37 @@ namespace BeckhoffAutomationInterface.Tests
             ScenarioResult result = plc.Runner().RunAll(new[] { Load(FlowCheck, Fault(1)) }, null, 2, null)[0];
             Assert.Equal(ScenarioStatus.Passed, result.Status);
             Assert.Contains(result.Details, d => d.Contains("fails at step 1"));
+        }
+
+        [Fact]
+        public void FaultProof_SlowInjectionCannotStartTheFaultedSteps()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.flow", 200);
+            bool once = true;
+            plc.WriteError = symbol =>
+            {
+                if (once && symbol == "MAIN.flow") { once = false; plc.Time += 3; }
+                return 0;
+            };
+            ScenarioResult result = plc.Runner().RunAll(new[] { Load(FlowCheck, Fault(2)) }, null, 1, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Equal(ScenarioFailureKind.Deadline, result.Failure.Kind);
+            Assert.Single(plc.Commands, c => c.Contains("\"command\":41,"));
+            Assert.Equal(200, plc.Dint("MAIN.flow"));
+        }
+
+        [Fact]
+        public void RunAll_FailedPendingResetClearBlocksFurtherScenarios()
+        {
+            var plc = new FakePlc { CompleteReset = false };
+            plc.WriteError = symbol => symbol == ScenarioRunner.SimulationResetSymbol && plc.Writes.Contains(symbol) ? 1793 : 0;
+            var scenario = Load(@"{ ""do"": ""send"", ""command"": 41 }");
+            var results = plc.Runner().RunAll(new[] { scenario, scenario }, null, 1, null);
+            Assert.Equal(ScenarioFailureKind.Cleanup, results[0].Failure.Kind);
+            Assert.Contains("cannot clear", results[0].Message);
+            Assert.Contains("subsequent scenarios blocked", results[1].Message);
+            Assert.DoesNotContain(plc.Commands, c => c.Contains("\"command\":41,"));
         }
 
         [Fact]

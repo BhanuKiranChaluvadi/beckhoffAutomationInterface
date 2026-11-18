@@ -158,8 +158,8 @@ namespace BeckhoffAutomationInterface.Sync
                 else if (preserveMembers && new[] { "Method", "Property", "Get", "Set" }.Contains(old.Name.LocalName))
                     desired.Add(new XElement(old));
             }
-            foreach (XElement metadata in existing.Elements().Where(e => e.Attribute("Name") == null &&
-                e.Name.LocalName != "Declaration" && e.Name.LocalName != "Implementation" && e.Name.LocalName != "LineIds"))
+            foreach (XElement metadata in existing.Elements().Where(e =>
+                !new[] { "Declaration", "Implementation", "LineIds", "Method", "Property", "Get", "Set" }.Contains(e.Name.LocalName)))
                 if (desired.Element(metadata.Name) == null) desired.Add(new XElement(metadata));
         }
 

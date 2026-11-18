@@ -72,11 +72,14 @@ namespace BeckhoffAutomationInterface.Tests
             old.Descendants("Get").Single().Element("Declaration").ReplaceNodes(new XCData(getter));
             old.Descendants("Set").Single().Element("Declaration").ReplaceNodes(new XCData(setter));
             old.Save(path);
-            string getId = (string)old.Descendants("Get").Single().Attribute("Id");
+            XDocument saved = XDocument.Load(path);
+            string expectedGetter = saved.Descendants("Get").Single().Element("Declaration").Value;
+            string expectedSetter = saved.Descendants("Set").Single().Element("Declaration").Value;
+            string getId = (string)saved.Descendants("Get").Single().Attribute("Id");
             PlcProjectCode.Apply(plc, PlcSourceObject.Group(new[] { Block(), Property("2") }), cache, preserveMembers);
             XDocument updated = XDocument.Load(path);
-            Assert.Equal(getter, updated.Descendants("Get").Single().Element("Declaration").Value);
-            Assert.Equal(setter, updated.Descendants("Set").Single().Element("Declaration").Value);
+            Assert.Equal(expectedGetter, updated.Descendants("Get").Single().Element("Declaration").Value);
+            Assert.Equal(expectedSetter, updated.Descendants("Set").Single().Element("Declaration").Value);
             Assert.Equal(getId, (string)updated.Descendants("Get").Single().Attribute("Id"));
             Assert.Equal("Value := cached + 2;", updated.Descendants("Get").Single().Descendants("ST").Single().Value);
         }

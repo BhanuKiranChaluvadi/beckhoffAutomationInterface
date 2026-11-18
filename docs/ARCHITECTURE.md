@@ -13,10 +13,13 @@ BAI separates reusable source conversion from project configuration and machine 
 | `PipelineOutcome` | The authoritative sync/build/validation outcome. Machine decisions consume values; the CLI translates failures into an exit code. |
 | `ScenarioRunner.RunAll` | The production scenario lifecycle: prepare, steps, diagnostics, restoration, cleanup, fault proof and reporting. |
 | `ScenarioBudget` | Overall and phase deadlines on an injected clock. Recovery receives a fresh budget after step timeout. |
+| `ScenarioFailure` | Failure kind, step number and fault-proof eligibility, independent of rendered messages. |
 
 A **source object** is a root POU, interface, DUT or GVL together with its methods and properties.
 A **conversion** contains source-derived XML; a **project update** combines that conversion with the receiving project's identities and member policy.
 Standalone sync preserves omitted members. Machine mirroring removes previously tracked members that disappeared, retaining untracked additions.
+Root, method and property declarations and supplied bodies are source-owned. Getter/setter declarations are project-local because the current source format only represents their bodies.
+Reconciliation preserves those accessor declarations, project-local IDs, attributes and unowned metadata while replacing supplied bodies. Stale source-position line maps are not copied.
 
 File updates finish conversion and path validation before committing any writes or deletions.
 Each replacement is atomic, and a reported write failure restores attempted files in reverse order.
@@ -29,8 +32,17 @@ A **successful pipeline** also requires completed sync and final validation. Com
 The machine state keeps a completed project after a compiler error; sync and validation failures require a fresh project next time.
 
 Each scenario's prepare phase shares one timeout across waiting for idle, acknowledging and resetting.
-The steps share `timeoutS`. Cleanup shares one independent prepare-timeout budget, including restoration and cancellation.
-Restoration is attempted even after the main deadline expires. Cleanup failure blocks subsequent scenarios.
+The steps share `timeoutS`; a shorter step timeout also constrains successful observations and command acknowledgments.
+Execution checks phase deadlines before and after each operation, including fault injection and explicit cleanup.
+Failure evidence distinguishes observed expectation/command-answer mismatches from transport errors and elapsed deadlines.
+Fault proof requires an observed mismatch at the nominated step. An in-time value that continues to fail a polled condition is evidence; a late read or an ADS error is not.
+
+The lifecycle records recovery obligations before preparation writes, and cleanup runs after partial preparation or recoverable transport exceptions.
+The mode guard must pass before recovery writes. A failed guard acquires no preparation writes.
+Cleanup first clears a pending simulation reset and attempts to restore all fault snapshots, even after the main deadline expires.
+Cancellation then gets its own bounded prepare-timeout acknowledgment window, so slow restoration cannot prevent a cancellation attempt and injected interlocks are restored first.
+Explicit cleanup steps share the original independent cleanup deadline. Exceeding that deadline fails cleanup even if cancellation succeeds.
+Recovery attempts continue after individual recoverable errors; any cleanup failure blocks subsequent scenarios.
 The overall budget remains `timeoutS + 2 * prepareTimeoutS + 30` seconds.
 ADS calls and operator input are synchronous: the runner checks elapsed time when they return, then stops further steps if needed.
 `RunSteps` is an internal narrow test surface; lifecycle regressions use `RunAll` with a fake PLC and clock.

@@ -1005,11 +1005,11 @@ project with no variants, use `"default": [ ... ]`.
 | `name` | Required. The name in the results. |
 | `tags` | Optional. Names that select a set of scenarios. |
 | `requires` | Optional. Feature groups that the machine must have. Never a machine name. |
-| `timeoutS` | Optional. One shared budget for scenario steps (default 600 s). Prepare shares one prepare timeout across its operations; cleanup has its own prepare-timeout budget, including restoration and cancellation. The whole-run limit is `timeoutS + 2 * prepareTimeoutS + 30` seconds. A blocking ADS call cannot be interrupted; elapsed time is checked on return. Cleanup still runs after step timeout, and cleanup failure blocks later scenarios. Calls longer than 1 s appear in the slow ADS report. |
+| `timeoutS` | Optional. One shared budget for scenario steps (default 600 s). Prepare shares one prepare timeout across its operations; cleanup has its own prepare-timeout budget. Pending simulation reset and injected values are restored before cancellation, which gets a separate bounded acknowledgment window even after slow restoration. Explicit cleanup uses the original cleanup deadline; overrunning it fails cleanup. The whole-run limit is `timeoutS + 2 * prepareTimeoutS + 30` seconds. A blocking ADS call cannot be interrupted; elapsed time is checked on return. Cleanup still runs after step timeout, and cleanup failure blocks later scenarios. Calls longer than 1 s appear in the slow ADS report. |
 | `steps` | Required. The steps, in order. |
 | `cleanup` | Optional. Steps that run after the scenario, also after a failure. Use them to undo manual commands: CancelProcess does not undo all of them. |
 | `purpose`, `estimateS`, `prepare` | Optional for `test`; `purpose` and `estimateS` are required by `acceptance`. What the scenario proves, its expected duration in seconds, and a list of what the user does before it. `acceptance` shows them in its run plan. |
-| `simulationFault` | Optional. `{ "write": [ { "symbol", "type", "value" } ], "failsAtStep": n }`. In `test` the scenario runs healthy (it must pass), then again with these writes (it must fail at step n); the values are restored. A scenario that passes with the fault fails: its checks cannot see the fault. `acceptance` ignores it. |
+| `simulationFault` | Optional. `{ "write": [ { "symbol", "type", "value" } ], "failsAtStep": n }`. In `test` the scenario runs healthy (it must pass), then again with these writes (an observed condition or command-answer mismatch must occur at step n); the values are restored. ADS errors and late observations cannot prove the fault. A scenario that passes with the fault fails: its checks cannot see the fault. `acceptance` ignores it. |
 
 | `do` | Fields | What it does |
 |---|---|---|

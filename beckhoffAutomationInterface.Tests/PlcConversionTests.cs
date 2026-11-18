@@ -221,7 +221,7 @@ namespace BeckhoffAutomationInterface.Tests
             var source = Block(folder: "../outside");
             Assert.Throws<InvalidOperationException>(() => PlcProjectCode.Apply(plc,
                 PlcSourceObject.Group(new[] { source }), new PlcObjectCache(Path.Combine(dir, "cache"), "converter"), false));
-            Assert.Empty(XDocument.Load(plc).Elements());
+            Assert.Empty(XDocument.Load(plc).Root.Elements());
         }
     }
 }
