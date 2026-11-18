@@ -139,11 +139,17 @@ namespace BeckhoffAutomationInterface.Sync
             return PlcObjectXml.Bytes(converted);
         }
 
-        /// <summary>Keep project-local IDs and, for standalone sync, members absent from the supplied source.</summary>
+        /// <summary>Source owns object declarations and bodies. Accessor declarations and IDs remain project-local.</summary>
         static void MergeExisting(XElement desired, XElement existing, bool preserveMembers)
         {
             if (existing == null || desired.Name != existing.Name) return;
-            if (existing.Attribute("Id") != null) desired.SetAttributeValue("Id", (string)existing.Attribute("Id"));
+            foreach (XAttribute attribute in existing.Attributes().Where(a => a.Name.LocalName != "Name"))
+                desired.SetAttributeValue(attribute.Name, attribute.Value);
+            if (desired.Name.LocalName == "Get" || desired.Name.LocalName == "Set")
+            {
+                XElement declaration = existing.Element("Declaration");
+                if (declaration != null) desired.Element("Declaration")?.ReplaceWith(new XElement(declaration));
+            }
             foreach (XElement old in existing.Elements().Where(e => e.Attribute("Name") != null))
             {
                 XElement current = desired.Elements(old.Name).SingleOrDefault(e => PlcSourceObject.Names.Equals(
@@ -152,6 +158,9 @@ namespace BeckhoffAutomationInterface.Sync
                 else if (preserveMembers && new[] { "Method", "Property", "Get", "Set" }.Contains(old.Name.LocalName))
                     desired.Add(new XElement(old));
             }
+            foreach (XElement metadata in existing.Elements().Where(e => e.Attribute("Name") == null &&
+                e.Name.LocalName != "Declaration" && e.Name.LocalName != "Implementation" && e.Name.LocalName != "LineIds"))
+                if (desired.Element(metadata.Name) == null) desired.Add(new XElement(metadata));
         }
 
         static string Inside(string directory, string relative)

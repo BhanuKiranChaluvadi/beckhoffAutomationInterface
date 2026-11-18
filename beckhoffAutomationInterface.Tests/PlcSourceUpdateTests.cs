@@ -53,6 +53,34 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(id, (string)member.Attribute("Id"));
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void UpdatingPropertyBodiesPreservesProjectLocalAccessorDeclarations(bool preserveMembers)
+        {
+            string dir = TestProjects.NewTempDir("bai_accessor_declarations");
+            string plc = Path.Combine(dir, "P.plcproj");
+            File.WriteAllText(plc, "<Project />");
+            var cache = new PlcObjectCache(Path.Combine(dir, "cache"), "converter");
+            StPouSource Property(string body) => new StPouSource("Value", PouKind.Property, "FB_Heat",
+                "PROPERTY Value : INT", null, "INT", "Value := cached + " + body + ";", "cached := Value;");
+            PlcProjectCode.Apply(plc, PlcSourceObject.Group(new[] { Block(), Property("1") }), cache, true);
+            string path = Path.Combine(dir, "Lib", "FB_Heat.TcPOU");
+            XDocument old = XDocument.Load(path);
+            const string getter = "PRIVATE\r\nVAR\r\n    cached : INT;\r\nEND_VAR";
+            const string setter = "PROTECTED\r\nVAR\r\n    cached : INT;\r\nEND_VAR";
+            old.Descendants("Get").Single().Element("Declaration").ReplaceNodes(new XCData(getter));
+            old.Descendants("Set").Single().Element("Declaration").ReplaceNodes(new XCData(setter));
+            old.Save(path);
+            string getId = (string)old.Descendants("Get").Single().Attribute("Id");
+            PlcProjectCode.Apply(plc, PlcSourceObject.Group(new[] { Block(), Property("2") }), cache, preserveMembers);
+            XDocument updated = XDocument.Load(path);
+            Assert.Equal(getter, updated.Descendants("Get").Single().Element("Declaration").Value);
+            Assert.Equal(setter, updated.Descendants("Set").Single().Element("Declaration").Value);
+            Assert.Equal(getId, (string)updated.Descendants("Get").Single().Attribute("Id"));
+            Assert.Equal("Value := cached + 2;", updated.Descendants("Get").Single().Descendants("ST").Single().Value);
+        }
+
         [Fact]
         public void MirroringMovesObjectsAndRemovesOnlyPreviouslyTrackedMembers()
         {

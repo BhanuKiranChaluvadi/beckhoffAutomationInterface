@@ -54,3 +54,10 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
 - Consolidated link success presentation around the same value-based decision used by machine continuation.
 - Final C# compilation of the tool and test project succeeded with zero errors and the existing xUnit1031 warning at MachineCommandsTests.cs:222. No test suite, gate, XAE compilation, runtime activation or deployment was executed.
 - Saved the work in ordered local feature-branch commits. The PLC repository tool pin remains unchanged; no main push or publication has been performed.
+
+## Second review implementation: property preservation
+
+- Added getter/setter preservation regressions before changing the merge policy; cases cover standalone preservation and full member replacement.
+- Kept accessor declarations and IDs project-local while updating supplied accessor bodies. Preserved project XML attributes and unowned metadata; declaration/body text remains source-owned for roots, methods and properties.
+- Compiled tool and test project successfully (zero errors, the existing xUnit1031 warning). Regression cases are written but unrun.
+- Retained the existing isolated feature branch and left the PLC tool pin and repository work untouched.
