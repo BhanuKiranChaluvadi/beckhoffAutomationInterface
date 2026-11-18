@@ -65,6 +65,7 @@ namespace BeckhoffAutomationInterface.Tests
                 continuation: () => continued = true));
             Assert.False(continued);
             Assert.False(outcome.Succeeded);
+            Assert.True(outcome.ValidationFailed);
         }
 
         [Fact]
@@ -77,6 +78,29 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.False(outcome.SyncCompleted);
             Assert.True(outcome.HasErrors);
             Assert.False(continued);
+        }
+
+        [Fact]
+        public void BuildExceptionKeepsSyncButCannotPassAndDoesNotRunFinalContinuation()
+        {
+            var outcome = new PipelineOutcome();
+            bool continued = false;
+            Assert.Throws<InvalidOperationException>(() => new PipelineCompletion(outcome).Finish(
+                () => throw new InvalidOperationException("compiler disconnected"), () => { },
+                continuation: () => continued = true));
+            Assert.True(outcome.SyncCompleted);
+            Assert.True(outcome.HasErrors);
+            Assert.False(continued);
+        }
+
+        [Fact]
+        public void LateSyncFailureInvalidatesTheRecordedOutcome()
+        {
+            var outcome = new PipelineOutcome();
+            new PipelineCompletion(outcome).Finish(null, null);
+            Assert.True(outcome.SyncCompleted);
+            outcome.Fail(PipelinePhase.Sync, "sync bookkeeping failed");
+            Assert.False(outcome.SyncCompleted);
         }
     }
 }

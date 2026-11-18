@@ -58,16 +58,14 @@ namespace BeckhoffAutomationInterface.Machines
         /// build did NOT run with the I/O on, which is a failure here.</summary>
         public static string LinkResult(int declared, PipelineOutcome o)
         {
+            int linked = o.LinksLinked + o.FileLinks;
+            if (LinksPassed(declared, o))
+                return declared == 0 ? "none" : string.Format("PASS ({0}/{1})", linked, declared);
             if (o.DisabledMasters.Count > 0)
                 return "FAIL (master disabled)";
-            if (declared == 0)
-                return "none";
             if (!o.LinkSyncRan)
                 return "FAIL (no link result)";
-            int linked = o.LinksLinked + o.FileLinks;
-            if (linked != declared || o.LinksUnresolved != 0)
-                return string.Format("FAIL ({0}/{1} linked, {2} unresolved)", linked, declared, o.LinksUnresolved);
-            return string.Format("PASS ({0}/{1})", linked, declared);
+            return string.Format("FAIL ({0}/{1} linked, {2} unresolved)", linked, declared, o.LinksUnresolved);
         }
 
         public static bool LinksPassed(int declared, PipelineOutcome o) => o.LinksComplete(declared);

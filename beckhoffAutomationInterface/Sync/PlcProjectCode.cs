@@ -9,6 +9,26 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>Applies converted objects to a CLOSED tool-owned PLC project. Configuration stays project-local.</summary>
     static class PlcProjectCode
     {
+        public static bool NeedsMirror(string plcproj, IReadOnlyList<PlcSourceObject> sources, IReadOnlyCollection<string> previousNames)
+        {
+            if (KnownNamesTracker.DiffFull(previousNames ?? new string[0],
+                KnownNamesTracker.CollectNames(sources.SelectMany(s => s.Sources))).Count > 0) return true;
+            XDocument project = XDocument.Load(plcproj);
+            var includes = ObjectIncludes(project);
+            return sources.Where(s => s.Root.Kind != PouKind.Program).Any(source =>
+            {
+                XElement include = FindInclude(includes, source);
+                return include != null && !PlcSourceObject.Names.Equals(
+                    ((string)include.Attribute("Include")).Replace('/', '\\'), RelativePath(source).Replace('/', '\\'));
+            });
+        }
+
+        static List<XElement> ObjectIncludes(XDocument project) => project.Descendants(project.Root.Name.Namespace + "Compile")
+            .Where(e => e.Attribute("Include") != null && PlcSourceObject.IsObjectFile((string)e.Attribute("Include"))).ToList();
+
+        static string RelativePath(PlcSourceObject source) =>
+            Path.Combine(source.Root.RelativeFolder.Replace('/', Path.DirectorySeparatorChar), source.FileName);
+
         public static SyncReport Apply(string plcproj, IReadOnlyList<PlcSourceObject> sources, PlcObjectCache cache,
             bool preserveMembers, ICollection<string> skip = null, IReadOnlyCollection<string> previousNames = null,
             Action<string, byte[]> write = null)
@@ -19,7 +39,7 @@ namespace BeckhoffAutomationInterface.Sync
             var report = new SyncReport();
             var batch = new ProjectFileBatch();
             bool projectChanged = false;
-            List<XElement> includes = project.Descendants(ns + "Compile").Where(e => e.Attribute("Include") != null).ToList();
+            List<XElement> includes = ObjectIncludes(project);
             var skipped = new HashSet<string>(skip ?? new string[0], PlcSourceObject.Names);
             var stale = new HashSet<string>(KnownNamesTracker.DiffFull(previousNames ?? new string[0],
                 KnownNamesTracker.CollectNames(sources.SelectMany(s => s.Sources))), PlcSourceObject.Names);
@@ -40,18 +60,18 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (PlcSourceObject source in sources)
             {
                 bool prune = stale.Any(n => n.StartsWith(source.Root.Name + ".", StringComparison.OrdinalIgnoreCase));
-                if (skipped.Contains(source.Root.Name) && !prune)
-                {
-                    Report(report.Unchanged, source);
-                    report.Skipped += source.Sources.Count;
-                    continue;
-                }
-                string relative = Path.Combine(source.Root.RelativeFolder.Replace('/', Path.DirectorySeparatorChar), source.FileName);
+                string relative = RelativePath(source);
                 XElement include = FindInclude(includes, source);
                 // The template's MAIN already has task references; retain its file and ID.
                 string oldRelative = (string)include?.Attribute("Include");
                 bool moved = oldRelative != null && previousNames != null && source.Root.Kind != PouKind.Program &&
                     !PlcSourceObject.Names.Equals(oldRelative.Replace('/', '\\'), relative.Replace('/', '\\'));
+                if (skipped.Contains(source.Root.Name) && !prune && !moved)
+                {
+                    Report(report.Unchanged, source);
+                    report.Skipped += source.Sources.Count;
+                    continue;
+                }
                 if (oldRelative != null && !moved) relative = oldRelative;
                 string path = Inside(directory, relative);
                 string oldPath = oldRelative == null ? path : Inside(directory, oldRelative);
@@ -76,7 +96,7 @@ namespace BeckhoffAutomationInterface.Sync
                     includes.Add(include);
                     projectChanged = true;
                 }
-                AddFolders(project, ns, relative);
+                projectChanged |= AddFolders(project, ns, relative);
             }
             // Finish every conversion and path check before changing any project file.
             if (projectChanged) batch.Set(plcproj, PlcObjectXml.Bytes(project));
@@ -86,10 +106,8 @@ namespace BeckhoffAutomationInterface.Sync
 
         static XElement FindInclude(IEnumerable<XElement> includes, PlcSourceObject source)
         {
-            string[] extensions = { ".TcPOU", ".TcIO", ".TcDUT", ".TcGVL" };
             XElement[] matching = includes.Where(e =>
-                string.Equals(Path.GetFileNameWithoutExtension((string)e.Attribute("Include")), source.Root.Name, StringComparison.OrdinalIgnoreCase) &&
-                extensions.Contains(Path.GetExtension((string)e.Attribute("Include")), StringComparer.OrdinalIgnoreCase)).ToArray();
+                PlcSourceObject.Names.Equals(Path.GetFileNameWithoutExtension((string)e.Attribute("Include")), source.Root.Name)).ToArray();
             if (matching.Length > 1) throw new InvalidOperationException("Ambiguous PLC project object: " + source.Root.Name);
             XElement item = matching.SingleOrDefault();
             if (item != null && !string.Equals(Path.GetExtension((string)item.Attribute("Include")), Path.GetExtension(source.FileName), StringComparison.OrdinalIgnoreCase))
@@ -152,15 +170,21 @@ namespace BeckhoffAutomationInterface.Sync
             return items;
         }
 
-        static void AddFolders(XDocument project, XNamespace ns, string relative)
+        static bool AddFolders(XDocument project, XNamespace ns, string relative)
         {
+            bool changed = false;
             string folder = Path.GetDirectoryName(relative);
             var folders = new HashSet<string>(project.Descendants(ns + "Folder").Select(e => (string)e.Attribute("Include")), StringComparer.OrdinalIgnoreCase);
             while (!string.IsNullOrEmpty(folder))
             {
-                if (folders.Add(folder)) Items(project, ns).Add(new XElement(ns + "Folder", new XAttribute("Include", folder)));
+                if (folders.Add(folder))
+                {
+                    Items(project, ns).Add(new XElement(ns + "Folder", new XAttribute("Include", folder)));
+                    changed = true;
+                }
                 folder = Path.GetDirectoryName(folder);
             }
+            return changed;
         }
 
         static void Report(List<string> report, PlcSourceObject source) => report.AddRange(source.Sources.Select(s =>

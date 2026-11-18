@@ -14,7 +14,8 @@ namespace BeckhoffAutomationInterface
         readonly List<KeyValuePair<PipelinePhase, string>> _failures = new List<KeyValuePair<PipelinePhase, string>>();
         public void Fail(PipelinePhase phase, string reason) => _failures.Add(new KeyValuePair<PipelinePhase, string>(phase, reason));
         public IEnumerable<string> Failures => _failures.Select(f => f.Value);
-        public bool SyncCompleted { get; private set; }
+        bool _syncCompleted;
+        public bool SyncCompleted => _syncCompleted && !SyncProblems;
         public bool ValidationCompleted { get; internal set; }
         public bool ValidationFailed => _failures.Any(f => f.Key == PipelinePhase.Validation);
         public int? ExpectedLinks { get; set; }
@@ -25,9 +26,10 @@ namespace BeckhoffAutomationInterface
             BuildFailures > 0 || BuildTimedOut;
         public bool Succeeded => SyncCompleted && ValidationCompleted && BuildPassed && !HasErrors;
 
-        internal void CompleteSync() => SyncCompleted = !_failures.Any(f => f.Key == PipelinePhase.Sync) &&
-            IoErrors == 0 && LinksUnresolved == 0 && DisabledMasters.Count == 0 && StaleNames == 0 &&
-            (!ExpectedLinks.HasValue || LinksComplete(ExpectedLinks.Value));
+        bool SyncProblems => _failures.Any(f => f.Key == PipelinePhase.Sync) || IoErrors > 0 ||
+            LinksUnresolved > 0 || DisabledMasters.Count > 0 || StaleNames > 0 ||
+            (ExpectedLinks.HasValue && !LinksComplete(ExpectedLinks.Value));
+        internal void CompleteSync() => _syncCompleted = true;
 
         /// <summary>Names synced before and no longer in the source ([drift]): still compiling in the project.</summary>
         public int StaleNames { get; set; }

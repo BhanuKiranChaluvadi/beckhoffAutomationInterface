@@ -91,7 +91,8 @@ namespace BeckhoffAutomationInterface.Sync
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
             SyncReport syncReport;
-            if (useFiles && (skip.Count < sourceObjects.Count || DeleteStaleObjects))
+            if (useFiles && (skip.Count < sourceObjects.Count ||
+                (DeleteStaleObjects && PlcProjectCode.NeedsMirror(_options.PlcprojFilePath, sourceObjects, previousNames))))
             {
                 _session.Project.Save();
                 _session.EnsureClosed();

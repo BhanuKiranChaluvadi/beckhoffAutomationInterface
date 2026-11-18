@@ -46,3 +46,11 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
 - Static review also found that file mirroring must exclude task configuration includes; added coverage before centralizing the object-file predicate. Added a case proving invalid paths cannot commit a planned stale deletion.
 - Tests, gates, TwinCAT compilation and runtime actions remain unrun. C# compilation is the only executed code check.
 - Final static review kept the warm-sync path from unnecessarily closing/reopening XAE: file work is selected only for changed source or actual mirror changes. A regression case covers a tracked move after standalone sync, where the manifest can legitimately skip unchanged source content.
+
+## Final review and compilation
+
+- Kept task files outside source-object mirroring, preserved the open-session shortcut for unchanged mirrors, and ensured a real folder move bypasses a content-only manifest skip. Added regression cases before those adjustments.
+- Made completion record exceptions in their actual phase before rethrowing. A validation exception now forces the next machine run fresh; a compiler exception retains completed sync. Late sync failures also invalidate the authoritative sync result.
+- Consolidated link success presentation around the same value-based decision used by machine continuation.
+- Final C# compilation of the tool and test project succeeded with zero errors and the existing xUnit1031 warning at MachineCommandsTests.cs:222. No test suite, gate, XAE compilation, runtime activation or deployment was executed.
+- Saved the work in ordered local feature-branch commits. The PLC repository tool pin remains unchanged; no main push or publication has been performed.

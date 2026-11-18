@@ -65,8 +65,6 @@ namespace BeckhoffAutomationInterface.Sync
 
         internal static string FileExtension(PouKind kind) => PlcSourceObject.FileExtension(kind);
 
-        static readonly string[] ObjectExtensions = { ".TcPOU", ".TcDUT", ".TcGVL", ".TcIO" };
-
         /// <summary>The object files the .plcproj names (Compile Include), by file name (any case),
         /// as paths relative to the PLC project folder. A file name that is there twice is left out.</summary>
         internal static Dictionary<string, string> ProjectFiles(string plcprojText)
@@ -76,7 +74,7 @@ namespace BeckhoffAutomationInterface.Sync
             foreach (XElement compile in XDocument.Parse(plcprojText).Descendants().Where(e => e.Name.LocalName == "Compile"))
             {
                 string include = (string)compile.Attribute("Include");
-                if (include == null || !ObjectExtensions.Contains(Path.GetExtension(include), StringComparer.OrdinalIgnoreCase))
+                if (include == null || !PlcSourceObject.IsObjectFile(include))
                     continue;
                 string name = Path.GetFileName(include);
                 if (files.ContainsKey(name))

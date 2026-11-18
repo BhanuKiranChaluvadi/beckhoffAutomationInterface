@@ -71,6 +71,31 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void UnchangedMirrorKeepsTheSessionOpenButMovesAndDeletionsRequireFileWork()
+        {
+            string dir = TestProjects.NewTempDir("bai_mirror_work");
+            string plc = Path.Combine(dir, "P.plcproj");
+            File.WriteAllText(plc, "<Project />");
+            var cache = new PlcObjectCache(Path.Combine(dir, "cache"), "converter");
+            var initial = PlcSourceObject.Group(new[] { Block(), Method("Run") });
+            PlcProjectCode.Apply(plc, initial, cache, true);
+            string[] tracked = { "FB_Heat", "FB_Heat.Run" };
+            Assert.False(PlcProjectCode.NeedsMirror(plc, initial, tracked));
+            Assert.True(PlcProjectCode.NeedsMirror(plc, PlcSourceObject.Group(new[] { Block() }), tracked));
+            Assert.True(PlcProjectCode.NeedsMirror(plc,
+                PlcSourceObject.Group(new[] { Block("Moved"), Method("Run") }), tracked));
+            var moved = PlcSourceObject.Group(new[] { Block("Moved"), Method("Run") });
+            // Standalone sync can retain a location different from the source folder.
+            PlcProjectCode.Apply(plc, moved, cache, true);
+            var manifest = SyncManifest.Record("bai", moved.SelectMany(s => s.Sources), plc);
+            var skip = SyncManifest.Skippable(manifest, moved.SelectMany(s => s.Sources), plc);
+            Assert.Single(skip);
+            PlcProjectCode.Apply(plc, moved, cache, true, skip, tracked);
+            Assert.True(File.Exists(Path.Combine(dir, "Moved", "FB_Heat.TcPOU")));
+            Assert.False(File.Exists(Path.Combine(dir, "Lib", "FB_Heat.TcPOU")));
+        }
+
+        [Fact]
         public void FailedProjectWriteRestoresReplacedAndDeletedObjectFiles()
         {
             string dir = TestProjects.NewTempDir("bai_source_rollback");
@@ -91,6 +116,42 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(oldProject, File.ReadAllBytes(plc));
             Assert.Equal(oldObject, File.ReadAllBytes(oldPath));
             Assert.False(File.Exists(Path.Combine(dir, "Moved", "FB_Heat.TcPOU")));
+        }
+
+        [Fact]
+        public void MirroringRemovesGoneObjectsAndLeavesTaskFilesAlone()
+        {
+            string dir = TestProjects.NewTempDir("bai_source_delete");
+            string plc = Path.Combine(dir, "P.plcproj");
+            File.WriteAllText(plc, "<Project><ItemGroup><Compile Include='FB_Task.TcTTO' /></ItemGroup></Project>");
+            string task = Path.Combine(dir, "FB_Task.TcTTO");
+            File.WriteAllText(task, "task configuration");
+            var cache = new PlcObjectCache(Path.Combine(dir, "cache"), "converter");
+            PlcProjectCode.Apply(plc, PlcSourceObject.Group(new[] { Block() }), cache, true);
+            PlcProjectCode.Apply(plc, PlcSourceObject.Group(new StPouSource[0]), cache, true,
+                previousNames: new[] { "FB_Heat", "FB_Task" });
+            Assert.False(File.Exists(Path.Combine(dir, "Lib", "FB_Heat.TcPOU")));
+            Assert.Equal("task configuration", File.ReadAllText(task));
+            Assert.Equal("FB_Task.TcTTO", (string)XDocument.Load(plc).Descendants("Compile").Single().Attribute("Include"));
+        }
+
+        [Fact]
+        public void InvalidDestinationCannotDeleteAStaleObjectBeforePlanningFinishes()
+        {
+            string dir = TestProjects.NewTempDir("bai_source_plan");
+            string plc = Path.Combine(dir, "P.plcproj");
+            File.WriteAllText(plc, "<Project />");
+            var cache = new PlcObjectCache(Path.Combine(dir, "cache"), "converter");
+            PlcProjectCode.Apply(plc, PlcSourceObject.Group(new[] { Block() }), cache, true);
+            byte[] project = File.ReadAllBytes(plc);
+            string path = Path.Combine(dir, "Lib", "FB_Heat.TcPOU");
+            byte[] original = File.ReadAllBytes(path);
+            var invalid = new StPouSource("FB_Other", PouKind.FunctionBlock, null, "FUNCTION_BLOCK FB_Other", "")
+                { RelativeFolder = "../outside" };
+            Assert.Throws<InvalidOperationException>(() => PlcProjectCode.Apply(plc,
+                PlcSourceObject.Group(new[] { invalid }), cache, true, previousNames: new[] { "FB_Heat" }));
+            Assert.Equal(project, File.ReadAllBytes(plc));
+            Assert.Equal(original, File.ReadAllBytes(path));
         }
     }
 }

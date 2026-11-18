@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +11,8 @@ namespace BeckhoffAutomationInterface.Sync
     sealed class PlcSourceObject
     {
         public static StringComparer Names { get; } = StringComparer.OrdinalIgnoreCase;
+        static readonly string[] ObjectExtensions = { ".TcPOU", ".TcIO", ".TcDUT", ".TcGVL" };
+        public static bool IsObjectFile(string path) => ObjectExtensions.Contains(Path.GetExtension(path), Names);
         public StPouSource Root => Sources[0];
         public IReadOnlyList<StPouSource> Sources { get; }
         public string ContentHash => SourceHash(Sources, includeFolder: false);
