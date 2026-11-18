@@ -35,3 +35,14 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
 - Made MachineBuilder, native bootstrap, and machine-dev consult the outcome instead of process-global exit status or a successful compiler count. Expected link counts are part of machine-run success, and link decisions use values instead of parsing display strings.
 - Machine state retains completed sync after compiler failures and marks sync/validation failures for a fresh rebuild. Existing activation and crash handling remains separate from compiler reporting.
 - Compiled tool and test project successfully, with only the existing xUnit1031 warning. Tests and gates remain unrun.
+
+## Architecture follow-up: scenario lifecycle
+
+- Wrote lifecycle regressions through production RunAll first: one prepare deadline across idle/reset, slow-step timeout with restoration/cancellation and a fresh next-scenario budget, and cleanup time consumed by restoration before explicit commands.
+- Centralized overall, phase, step and recovery deadline calculation in ScenarioBudget. Prepare and cleanup no longer restart their timeout for each sub-operation; step checks also reject elapsed budgets after synchronous calls return.
+- Retained independent cleanup time after a step/overall timeout, fault restoration, failure diagnostics, simulation fault proofs, hardware restrictions and blocking later scenarios after cleanup failure.
+- Renamed the internal step-only surface to RunSteps so it cannot be confused with the production RunAll lifecycle. Existing narrow step tests use that name; lifecycle cases call RunAll.
+- Updated timeout documentation and described module ownership, domain terms and rollback limits in docs/ARCHITECTURE.md.
+- Static review also found that file mirroring must exclude task configuration includes; added coverage before centralizing the object-file predicate. Added a case proving invalid paths cannot commit a planned stale deletion.
+- Tests, gates, TwinCAT compilation and runtime actions remain unrun. C# compilation is the only executed code check.
+- Final static review kept the warm-sync path from unnecessarily closing/reopening XAE: file work is selected only for changed source or actual mirror changes. A regression case covers a tracked move after standalone sync, where the manifest can legitimately skip unchanged source content.

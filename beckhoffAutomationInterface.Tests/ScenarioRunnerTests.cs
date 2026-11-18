@@ -119,7 +119,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc();
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 200, ""parameters"": { ""mode"": 1, ""side"": 1 } }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 200, ""parameters"": { ""mode"": 1, ""side"": 1 } }"));
 
             Assert.Equal(ScenarioStatus.Passed, r.Status);
             Assert.Equal(new[] { "{\"command\":200,\"index\":100,\"parameters\":{\"mode\":1,\"side\":1}}" }, plc.Commands);
@@ -131,7 +131,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc { Receiver = command => false };
 
-            Assert.Equal(ScenarioStatus.Passed, plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 51, ""expect"": ""rejected"" }")).Status);
+            Assert.Equal(ScenarioStatus.Passed, plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 51, ""expect"": ""rejected"" }")).Status);
         }
 
         [Fact]
@@ -139,7 +139,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc { Receiver = command => false };
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 51 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 51 }"));
 
             Assert.Equal(ScenarioStatus.Failed, r.Status);
             Assert.Equal("step 1 (send) command 51 (index 100): expected accepted, actual rejected", r.Message);
@@ -150,7 +150,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc();
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 51, ""expect"": ""rejected"" }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 51, ""expect"": ""rejected"" }"));
 
             Assert.Equal("step 1 (send) command 51 (index 100): expected rejected, actual accepted", r.Message);
         }
@@ -160,7 +160,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc { Receiver = command => null };
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 4242, ""timeoutS"": 3 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 4242, ""timeoutS"": 3 }"));
 
             Assert.Equal(ScenarioStatus.Failed, r.Status);
             Assert.StartsWith("step 1 (send) command 4242 (index 100): no answer after 3.0 s", r.Message);
@@ -172,7 +172,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc { Receiver = command => null };
 
-            plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 1 }"));
+            plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 1 }"));
 
             Assert.InRange(plc.Time, 10.0, 10.2);
         }
@@ -184,7 +184,7 @@ namespace BeckhoffAutomationInterface.Tests
             plc.SetDint(ScenarioRunner.AcceptedSymbol, 100);   // from an earlier run
             plc.SetDint(ScenarioRunner.RejectedSymbol, 101);
 
-            plc.Runner(100).Run(Load(@"{ ""do"": ""send"", ""command"": 1 }, { ""do"": ""send"", ""command"": 2 }"));
+            plc.Runner(100).RunSteps(Load(@"{ ""do"": ""send"", ""command"": 1 }, { ""do"": ""send"", ""command"": 2 }"));
 
             Assert.Contains("\"index\":102", plc.Commands[0]);
             Assert.Contains("\"index\":103", plc.Commands[1]);
@@ -196,7 +196,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.Values.Remove(ScenarioRunner.StreamSymbol);
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""send"", ""command"": 1 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""send"", ""command"": 1 }"));
 
             Assert.Contains("cannot write PRG_Telemetry.fbCommandReceiver.AdsStream: not in the program (ADS error 1808)", r.Message);
         }
@@ -220,7 +220,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.ByTime[Seq] = t => BitConverter.GetBytes((short)(t >= 2 ? 7 : 0));
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""waitUntil"", ""symbol"": """ + Seq + @""", ""type"": ""INT"", ""equals"": 7, ""timeoutS"": 5 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""waitUntil"", ""symbol"": """ + Seq + @""", ""type"": ""INT"", ""equals"": 7, ""timeoutS"": 5 }"));
 
             Assert.Equal(ScenarioStatus.Passed, r.Status);
             Assert.InRange(plc.Time, 2.0, 2.2);
@@ -231,7 +231,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc();
 
-            ScenarioResult r = plc.Runner().Run(Load(
+            ScenarioResult r = plc.Runner().RunSteps(Load(
                 @"{ ""do"": ""wait"", ""seconds"": 1 }, { ""do"": ""waitUntil"", ""symbol"": """ + Seq + @""", ""type"": ""INT"", ""equals"": 7, ""timeoutS"": 5 }"));
 
             Assert.Equal(ScenarioStatus.Failed, r.Status);
@@ -244,7 +244,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.Values["PRG_Sequence.fbOrchestrator.bDone"] = new byte[] { 0 };
 
-            ScenarioResult r = plc.Runner().Run(Load(
+            ScenarioResult r = plc.Runner().RunSteps(Load(
                 @"{ ""do"": ""wait"", ""seconds"": 4 }, { ""do"": ""waitUntil"", ""symbol"": ""PRG_Sequence.fbOrchestrator.bDone"", ""equals"": true }",
                 @"""timeoutS"": 30,"));
 
@@ -258,7 +258,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc();
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""GVL_X.bNone"", ""equals"": true, ""timeoutS"": 60 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""GVL_X.bNone"", ""equals"": true, ""timeoutS"": 60 }"));
 
             Assert.Equal("step 1 (waitUntil) GVL_X.bNone: expected = TRUE, actual not in the program (ADS error 1808)", r.Message);
             Assert.Equal(0, plc.Time);
@@ -278,7 +278,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.SetInt("MAIN.n", 5);
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", " + condition + " }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", " + condition + " }"));
 
             Assert.Equal(passes ? ScenarioStatus.Passed : ScenarioStatus.Failed, r.Status);
         }
@@ -290,8 +290,8 @@ namespace BeckhoffAutomationInterface.Tests
             plc.Values["PRG_Sequence.fbOrchestrator.sStatus"] = FakePlc.Str("Invalid purge mode");
             plc.Values["MAIN.r"] = BitConverter.GetBytes(2.5f);
 
-            ScenarioResult a = plc.Runner().Run(Load(@"{ ""do"": ""check"", ""symbol"": ""PRG_Sequence.fbOrchestrator.sStatus"", ""type"": ""STRING(255)"", ""equals"": ""Ready"" }"));
-            ScenarioResult b = plc.Runner().Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.r"", ""type"": ""REAL"", ""greaterThan"": 3, ""lessThan"": 9 }"));
+            ScenarioResult a = plc.Runner().RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""PRG_Sequence.fbOrchestrator.sStatus"", ""type"": ""STRING(255)"", ""equals"": ""Ready"" }"));
+            ScenarioResult b = plc.Runner().RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.r"", ""type"": ""REAL"", ""greaterThan"": 3, ""lessThan"": 9 }"));
 
             Assert.Equal("step 1 (check) PRG_Sequence.fbOrchestrator.sStatus: expected = 'Ready', actual 'Invalid purge mode'", a.Message);
             Assert.Equal("step 1 (check) MAIN.r: expected > 3 and < 9, actual 2.5", b.Message);
@@ -306,7 +306,7 @@ namespace BeckhoffAutomationInterface.Tests
             plc.Values["GVL_Simulation.bSafetyOk"] = new byte[] { 1 };
             plc.Values["GVL_Simulation.rLeakRate"] = new byte[4];
 
-            ScenarioResult r = plc.Runner().Run(Load(
+            ScenarioResult r = plc.Runner().RunSteps(Load(
                 @"{ ""do"": ""write"", ""symbol"": ""GVL_Simulation.bSafetyOk"", ""value"": false }," +
                 @"{ ""do"": ""write"", ""symbol"": ""GVL_Simulation.rLeakRate"", ""type"": ""REAL"", ""value"": 0.25 }"));
 
@@ -320,7 +320,7 @@ namespace BeckhoffAutomationInterface.Tests
         {
             var plc = new FakePlc();
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""write"", ""symbol"": ""GVL_X.n"", ""type"": ""INT"", ""value"": 3 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""write"", ""symbol"": ""GVL_X.n"", ""type"": ""INT"", ""value"": 3 }"));
 
             Assert.Equal("step 1 (write) GVL_X.n := 3: not in the program (ADS error 1808)", r.Message);
         }
@@ -329,11 +329,11 @@ namespace BeckhoffAutomationInterface.Tests
         public void Wait_Sleeps_AndStopsAtTheScenarioTimeout()
         {
             var plc = new FakePlc();
-            Assert.Equal(ScenarioStatus.Passed, plc.Runner().Run(Load(@"{ ""do"": ""wait"", ""seconds"": 2 }")).Status);
+            Assert.Equal(ScenarioStatus.Passed, plc.Runner().RunSteps(Load(@"{ ""do"": ""wait"", ""seconds"": 2 }")).Status);
             Assert.Equal(2, plc.Time, 3);
 
             plc.Time = 0;
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""wait"", ""seconds"": 20 }", @"""timeoutS"": 5,"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""wait"", ""seconds"": 20 }", @"""timeoutS"": 5,"));
             Assert.Equal("step 1 (wait) 20.0 s: scenario timeout 5.0 s", r.Message);
             Assert.Equal(5, plc.Time, 3);
         }
@@ -344,7 +344,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.Values["MAIN.n"] = BitConverter.GetBytes((short)0);
 
-            ScenarioResult r = plc.Runner().Run(Load(
+            ScenarioResult r = plc.Runner().RunSteps(Load(
                 @"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""equals"": 0 }," +
                 @"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""equals"": 1 }," +
                 @"{ ""do"": ""write"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""value"": 9 }"));
@@ -481,6 +481,52 @@ namespace BeckhoffAutomationInterface.Tests
         // ------------------------------------------------------------------ slow ADS and the scenario limit
 
         [Fact]
+        public void RunAll_PrepareUsesOneBudgetAcrossSequenceWaitAndReset()
+        {
+            var plc = new FakePlc { CompleteReset = false };
+            plc.ByTime[Seq] = t => BitConverter.GetBytes((short)(t >= 1.5 ? 0 : 5));
+            var result = plc.Runner().RunAll(new[] { Load(@"{ ""do"": ""wait"", ""seconds"": 0.1 }") }, null, 2, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Contains("did not clear", result.Message);
+            Assert.InRange(plc.Time, 2, 2.1);
+        }
+
+        [Fact]
+        public void RunAll_SlowStepTimeoutStillRestoresAndCancelsAndNextScenarioGetsFreshBudget()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.fault", 7);
+            plc.SetDint("MAIN.slow", 1);
+            plc.CallSeconds = symbol => symbol == "MAIN.slow" ? 3 : 0;
+            Scenario first = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.fault"", ""type"": ""DINT"", ""value"": 0 },
+                { ""do"": ""check"", ""symbol"": ""MAIN.slow"", ""type"": ""DINT"", ""equals"": 1 },
+                { ""do"": ""send"", ""command"": 55 }", @"""timeoutS"": 1,");
+            Scenario next = Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.fault"", ""type"": ""DINT"", ""equals"": 7 }");
+            var results = plc.Runner().RunAll(new[] { first, next }, null, 2, null);
+            Assert.Equal(ScenarioStatus.Failed, results[0].Status);
+            Assert.Contains("scenario timeout", results[0].Message);
+            Assert.Equal(ScenarioStatus.Passed, results[1].Status);
+            Assert.Equal(7, plc.Dint("MAIN.fault"));
+            Assert.Contains(plc.Commands, c => c.Contains("\"command\":1,"));
+            Assert.DoesNotContain(plc.Commands, c => c.Contains("\"command\":55,"));
+        }
+
+        [Fact]
+        public void RunAll_CleanupBudgetIncludesRestorationBeforeExplicitSteps()
+        {
+            var plc = new FakePlc();
+            plc.SetDint("MAIN.fault", 7);
+            plc.CallSeconds = symbol => symbol == "MAIN.fault" && plc.Writes.Contains(symbol) ? 2 : 0;
+            var scenario = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.fault"", ""type"": ""DINT"", ""value"": 0 }",
+                @"""cleanup"": [{ ""do"": ""send"", ""command"": 55 }],");
+            var result = plc.Runner().RunAll(new[] { scenario }, null, 1, null)[0];
+            Assert.Equal(ScenarioStatus.Failed, result.Status);
+            Assert.Contains("cleanup", result.Message);
+            Assert.Equal(7, plc.Dint("MAIN.fault"));
+            Assert.DoesNotContain(plc.Commands, c => c.Contains("\"command\":55,"));
+        }
+
+        [Fact]
         public void RunAll_CountsSlowAdsCalls_AndShowsThemWithTheResult()
         {
             var plc = new FakePlc();
@@ -503,20 +549,20 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.SetDint("MAIN.n", 7);
             plc.CallSeconds = symbol => 0.9;
-            ScenarioResult r = plc.Runner().RunAll(new[] { Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }") }, null, 2, null)[0];
+            ScenarioResult r = plc.Runner().RunAll(new[] { Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }") }, null, 20, null)[0];
             Assert.Equal(ScenarioStatus.Passed, r.Status);
             Assert.DoesNotContain(r.Details, d => d.StartsWith("slow ADS"));
         }
 
-        /// <summary>timeoutS 5, prepare 2 s: limit 5 + 2 x 2 + 30 = 39 s. Each read of MAIN.n takes
-        /// 10 s: the steps stop at the limit, and the cleanup still restores the write.</summary>
+        /// <summary>A blocking ADS read exceeds the 39 s overall limit. It cannot be interrupted,
+        /// but later steps stop and cleanup still restores the write.</summary>
         [Fact]
         public void RunAll_FailsAScenarioThatRunsLongerThanItsLimit_AndStillCleansUp()
         {
             var plc = new FakePlc();
             plc.SetDint("MAIN.n", 7);
             plc.SetDint("MAIN.w", 0);
-            plc.CallSeconds = symbol => symbol == "MAIN.n" ? 10 : 0;
+            plc.CallSeconds = symbol => symbol == "MAIN.n" ? 40 : 0;
             string check = @"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }";
             Scenario s = Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.w"", ""type"": ""DINT"", ""value"": 5 }, "
                 + string.Join(", ", Enumerable.Repeat(check, 8)), @"""timeoutS"": 5,");
@@ -524,7 +570,7 @@ namespace BeckhoffAutomationInterface.Tests
             ScenarioResult r = plc.Runner().RunAll(new[] { s }, null, 2, null)[0];
 
             Assert.Equal(ScenarioStatus.Failed, r.Status);
-            Assert.StartsWith("scenario took 40.0 s, more than its limit 39.0 s (slow ADS: 4 calls > 1 s (max 10.0 s))", r.Message);
+            Assert.StartsWith("scenario took 40.0 s, more than its limit 39.0 s (slow ADS: 1 call > 1 s (max 40.0 s))", r.Message);
             Assert.Equal(0, plc.Dint("MAIN.w"));
             Assert.True(plc.Time < 60, "the remaining steps did not run");
         }
@@ -653,7 +699,7 @@ namespace BeckhoffAutomationInterface.Tests
             plc.SetDint("MAIN.n", 7);
             plc.ByTime["MAIN.flow"] = t => BitConverter.GetBytes(t < 0.25 ? 100 : 200);
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 },
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 },
                 { ""do"": ""send"", ""command"": 41 },
                 { ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 5 }"));
 
@@ -675,7 +721,7 @@ namespace BeckhoffAutomationInterface.Tests
                 return BitConverter.GetBytes(t - first.Value < 0.03 ? 100 : 200);
             };
 
-            ScenarioResult r = plc.Runner().Run(Load(
+            ScenarioResult r = plc.Runner().RunSteps(Load(
                 @"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 5 }"));
 
             Assert.Equal(ScenarioStatus.Passed, r.Status);
@@ -697,7 +743,7 @@ namespace BeckhoffAutomationInterface.Tests
                 Condition = new Comparison { EqualsValue = 0.0, EqualsName = "E_Sequence.None" } });
             s.Steps.Add(new ScenarioStep { Number = 3, Kind = StepKind.Send, Command = 50, CommandName = "SetValve" });
 
-            ScenarioResult r = plc.Runner().Run(s);
+            ScenarioResult r = plc.Runner().RunSteps(s);
 
             Assert.Equal(new[] { "step 1: T.SAFE_[E_SafetyIdentifier.EXHAUST_OK].State = TRUE (expected = TRUE)",
                 "step 2: T.Seq = 0 (expected = E_Sequence.None (0))" }, r.Measurements.Select(m => m.ToString()));
@@ -711,7 +757,7 @@ namespace BeckhoffAutomationInterface.Tests
             var plc = new FakePlc();
             plc.SetDint("MAIN.flow", 100);
 
-            ScenarioResult r = plc.Runner().Run(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 1 }"));
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 1 }"));
 
             Assert.Equal(ScenarioStatus.Failed, r.Status);
             Assert.Equal(new[] { "step 1: MAIN.flow = 100 (expected > 190)" }, r.Measurements.Select(m => m.ToString()));
@@ -835,7 +881,7 @@ namespace BeckhoffAutomationInterface.Tests
             var runner = plc.HardwareRunner();
             runner.Ask = prompt => { asked.Add(prompt); return "y"; };
 
-            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""instruct"", ""text"": ""Place a 100 mm test wafer on the chuck"" },
+            ScenarioResult r = runner.RunSteps(Load(@"{ ""do"": ""instruct"", ""text"": ""Place a 100 mm test wafer on the chuck"" },
                 { ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
 
             Assert.Equal(ScenarioStatus.Passed, r.Status);
@@ -853,7 +899,7 @@ namespace BeckhoffAutomationInterface.Tests
             var runner = FakePlc.Machine().HardwareRunner();
             runner.Ask = prompt => "n";
 
-            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
+            ScenarioResult r = runner.RunSteps(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
 
             Assert.Equal("step 1 (confirm) the operator answered no: Is the beacon green?", r.Message);
         }
@@ -861,7 +907,7 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void Hardware_OperatorStep_WithoutAnOperator_Fails()
         {
-            ScenarioResult r = FakePlc.Machine().HardwareRunner().Run(Load(@"{ ""do"": ""instruct"", ""text"": ""Open the argon cylinder"" }"));
+            ScenarioResult r = FakePlc.Machine().HardwareRunner().RunSteps(Load(@"{ ""do"": ""instruct"", ""text"": ""Open the argon cylinder"" }"));
 
             Assert.Equal("step 1 (instruct) no operator input (the run is not interactive)", r.Message);
         }
@@ -872,7 +918,7 @@ namespace BeckhoffAutomationInterface.Tests
             var runner = new FakePlc().Runner();
             runner.Ask = prompt => throw new InvalidOperationException("simulation must not ask");
 
-            ScenarioResult r = runner.Run(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
+            ScenarioResult r = runner.RunSteps(Load(@"{ ""do"": ""confirm"", ""text"": ""Is the beacon green?"" }"));
 
             Assert.Equal(ScenarioStatus.Passed, r.Status);
             Assert.Equal("step 1: operator: Is the beacon green? = auto (simulation) (expected yes)", r.Measurements.Single().ToString());
@@ -995,13 +1041,13 @@ namespace BeckhoffAutomationInterface.Tests
             });
             var runner = new ScenarioRunner(guard.Reader(plc.Read), guard.Writer(plc.Write), plc.Sleep, () => plc.Time, 1) { PlcTypeNote = guard.Note };
 
-            Assert.Equal(ScenarioStatus.Passed, runner.Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }")).Status);
+            Assert.Equal(ScenarioStatus.Passed, runner.RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""DINT"", ""equals"": 7 }")).Status);
             Assert.Equal("step 1 (check) MAIN.n: expected = 7, actual the \"type\" does not match the PLC symbol (ADS error 1797) (the PLC symbol is DINT, 4 bytes)",
-                runner.Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""equals"": 7 }")).Message);
+                runner.RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""equals"": 7 }")).Message);
             Assert.Equal("step 1 (write) MAIN.n := 3: the \"type\" does not match the PLC symbol (ADS error 1797) (the PLC symbol is DINT, 4 bytes)",
-                runner.Run(Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""value"": 3 }")).Message);
+                runner.RunSteps(Load(@"{ ""do"": ""write"", ""symbol"": ""MAIN.n"", ""type"": ""INT"", ""value"": 3 }")).Message);
             Assert.Equal(7, plc.Dint("MAIN.n"));   // nothing was written
-            Assert.Contains("not in the program", runner.Run(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.x"", ""type"": ""INT"", ""equals"": 7 }")).Message);
+            Assert.Contains("not in the program", runner.RunSteps(Load(@"{ ""do"": ""check"", ""symbol"": ""MAIN.x"", ""type"": ""INT"", ""equals"": 7 }")).Message);
         }
     }
 }

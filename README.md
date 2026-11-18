@@ -1005,7 +1005,7 @@ project with no variants, use `"default": [ ... ]`.
 | `name` | Required. The name in the results. |
 | `tags` | Optional. Names that select a set of scenarios. |
 | `requires` | Optional. Feature groups that the machine must have. Never a machine name. |
-| `timeoutS` | Optional. The time limit for the scenario steps. Default: 600 s. The whole scenario (prepare, steps, cleanup) may take `timeoutS` + 2 × the prepare timeout + 30 s; after that its next steps do not run, the cleanup still runs, and it fails with `scenario took N s, more than its limit M s (...)`. ADS calls longer than 1 s are counted: `slow ADS: 37 calls > 1 s (max 4.9 s); the runtime or the PC was overloaded` shows with the result. |
+| `timeoutS` | Optional. One shared budget for scenario steps (default 600 s). Prepare shares one prepare timeout across its operations; cleanup has its own prepare-timeout budget, including restoration and cancellation. The whole-run limit is `timeoutS + 2 * prepareTimeoutS + 30` seconds. A blocking ADS call cannot be interrupted; elapsed time is checked on return. Cleanup still runs after step timeout, and cleanup failure blocks later scenarios. Calls longer than 1 s appear in the slow ADS report. |
 | `steps` | Required. The steps, in order. |
 | `cleanup` | Optional. Steps that run after the scenario, also after a failure. Use them to undo manual commands: CancelProcess does not undo all of them. |
 | `purpose`, `estimateS`, `prepare` | Optional for `test`; `purpose` and `estimateS` are required by `acceptance`. What the scenario proves, its expected duration in seconds, and a list of what the user does before it. `acceptance` shows them in its run plan. |
@@ -1112,3 +1112,5 @@ Each action only shows a preview until you add `-Apply`. Use short work paths su
 
 To install a GitHub Actions runner for PLC CI, see
 [docs/github-self-hosted-runner-install-steps.md](docs/github-self-hosted-runner-install-steps.md).
+
+Build and scenario ownership is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

@@ -63,6 +63,7 @@ namespace BeckhoffAutomationInterface.Runtime
         readonly Writer _write;
         readonly Action<int> _sleepMs;
         readonly Func<double> _nowS;
+        ScenarioBudget _budget;
         int _nextIndex;
         Dictionary<string, byte[]> _originalWrites;
         List<Measurement> _measurements;   // the running scenario's steps only (not prepare or cleanup)
@@ -123,18 +124,14 @@ namespace BeckhoffAutomationInterface.Runtime
             };
             _sleepMs = sleepMs;
             _nowS = nowS;
+            _budget = new ScenarioBudget(nowS);
             _nextIndex = Math.Max(1, firstIndex);
         }
 
         /// <summary>An ADS call longer than this is slow (counted and reported with the result).</summary>
         public const double SlowCallS = 1.0;
-        /// <summary>A scenario (prepare, steps, cleanup) may take timeoutS + 2 x the prepare timeout + this.</summary>
-        public const double LimitMarginS = 30;
-
         int _slowCalls;
         double _slowMaxS;
-        double _limitAt = double.PositiveInfinity;   // RunOnce: the steps stop when the scenario limit has passed
-        double _limitS;                              // RunOnce: the limit (LimitS)
 
         void CountCall(double seconds)
         {
@@ -146,9 +143,6 @@ namespace BeckhoffAutomationInterface.Runtime
 
         string SlowAds() => string.Format("slow ADS: {0} call{1} > {2} (max {3})", _slowCalls, _slowCalls == 1 ? "" : "s",
             SlowCallS.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " s", ScenarioNumbers.Seconds(_slowMaxS));
-
-        /// <summary>The longest a scenario may take: its timeoutS, prepare and cleanup, and a margin.</summary>
-        internal static double LimitS(Scenario s, double prepareTimeoutS) => s.TimeoutS + 2 * prepareTimeoutS + LimitMarginS;
 
         /// <summary>First command index of a run: from the clock, so that a new run does not use the
         /// index of an earlier run (the PLC keeps the last one). 1000 indexes per second; the cycle
@@ -202,23 +196,21 @@ namespace BeckhoffAutomationInterface.Runtime
         /// every later run: cleanupFailure stays set and the next RunOnce fails before it sends.</summary>
         ScenarioResult RunOnce(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
         {
-            double start = _nowS();
-            double limitS = LimitS(s, prepareTimeoutS);
-            _limitS = limitS;
-            _limitAt = start + limitS;
+            ScenarioBudget previous = _budget;
+            _budget = ScenarioBudget.ForScenario(_nowS, s, prepareTimeoutS);
             try
             {
                 ScenarioResult r = RunOnceUnbounded(s, prepareTimeoutS, inject, ref cleanupFailure);
-                double took = _nowS() - start;
-                if (took > limitS && !(r.Message ?? "").StartsWith(TookPrefix, StringComparison.Ordinal))
+                double took = _budget.Elapsed;
+                if (_budget.Overrun && !(r.Message ?? "").StartsWith(TookPrefix, StringComparison.Ordinal))
                 {
                     string prior = r.Status == ScenarioStatus.Failed ? r.Message : null;
                     r.Status = ScenarioStatus.Failed;
-                    r.Message = LimitMessage(took, limitS) + (prior != null ? "; " + prior : "");
+                    r.Message = LimitMessage(took, _budget.DurationS) + (prior != null ? "; " + prior : "");
                 }
                 return r;
             }
-            finally { _limitAt = double.PositiveInfinity; }
+            finally { _budget = previous; }
         }
 
         const string TookPrefix = "scenario took ";
@@ -240,9 +232,10 @@ namespace BeckhoffAutomationInterface.Runtime
             try
             {
                 // A fault proof's writes are restored like a scenario's own writes.
+                ScenarioBudget injection = _budget.Phase(prepareTimeoutS);
                 foreach (ScenarioStep write in inject ?? new ScenarioStep[0])
                 {
-                    problem = Execute(write, _nowS() + prepareTimeoutS, prepareTimeoutS);
+                    problem = Execute(write, injection);
                     if (problem != null)
                     {
                         r.Message = "cannot inject the fault: " + problem;
@@ -250,7 +243,7 @@ namespace BeckhoffAutomationInterface.Runtime
                     }
                 }
                 if (problem == null)
-                    r = Run(s);
+                    r = RunSteps(s);
                 if (r.Status == ScenarioStatus.Failed)
                     r.Details.AddRange(Diagnostics()); // capture before cleanup changes the state
             }
@@ -295,30 +288,36 @@ namespace BeckhoffAutomationInterface.Runtime
         /// idle with no error (an acknowledge could hide a real fault). Returns null, or what went wrong.</summary>
         public string Prepare(double timeoutS)
         {
+            ScenarioBudget phase = _budget.Phase(timeoutS);
             string problem = RequireMode();
             if (problem != null)
                 return problem;
+            if (phase.Expired) return "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS);
             if (Mode == ScenarioMode.Hardware)
-                return RequireIdle();
+            {
+                problem = RequireIdle();
+                return problem ?? (phase.Expired ? "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS) : null);
+            }
             // Check the reset symbol before sending even ErrorAcknowledge.
             int resetError = _read(SimulationResetSymbol, 1, out byte[] unused);
             if (resetError != 0)
                 return "cannot read " + SimulationResetSymbol + ": " + AdsError(resetError, SimulationResetSymbol);
-            problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
+            problem = WaitForSequence(new[] { SequenceNone, SequenceError }, phase);
             if (problem != null)
                 return problem;
 
-            problem = Send(ErrorAcknowledgeCommand, null, _nowS() + ScenarioStep.DefaultSendTimeoutS, out bool accepted, out int index);
+            problem = Send(ErrorAcknowledgeCommand, null, phase.StepDeadline(ScenarioStep.DefaultSendTimeoutS), out bool accepted, out int index);
             if (problem != null)
                 return "ErrorAcknowledge (9999): " + problem;
             if (!accepted)
                 return string.Format("ErrorAcknowledge (9999, index {0}) was rejected", index);
 
+            if (phase.Expired) return "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS);
+
             int err = _write(SimulationResetSymbol, new byte[] { 1 });
             if (err != 0)
                 return "cannot write " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
 
-            double deadline = _nowS() + timeoutS;
             while (true)
             {
                 err = _read(SimulationResetSymbol, 1, out byte[] reset);
@@ -326,11 +325,11 @@ namespace BeckhoffAutomationInterface.Runtime
                     return "cannot read " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
                 if (reset[0] == 0)
                     break;
-                if (_nowS() >= deadline)
+                if (phase.Expired)
                     return SimulationResetSymbol + " did not clear after " + ScenarioNumbers.Seconds(timeoutS);
                 _sleepMs(PollMs);
             }
-            return WaitForSequence(new[] { SequenceNone }, timeoutS);
+            return WaitForSequence(new[] { SequenceNone }, phase);
         }
 
         /// <summary>The one place that matches the build to the mode: simulation needs bActive TRUE,
@@ -359,6 +358,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
         string Cleanup(bool failed, double timeoutS, IReadOnlyList<ScenarioStep> steps)
         {
+            ScenarioBudget phase = _budget.Recovery(timeoutS);
             string guard = RequireMode();
             if (guard != null)
                 return "cleanup stopped: " + guard;
@@ -375,47 +375,47 @@ namespace BeckhoffAutomationInterface.Runtime
                 problems.Add("cannot read " + ActiveSequenceSymbol + ": " + AdsError(readError, ActiveSequenceSymbol));
             else if (failed || (BitConverter.ToInt16(sequence, 0) != SequenceNone && BitConverter.ToInt16(sequence, 0) != SequenceError))
             {
-                string problem = Send(CancelProcessCommand, null, _nowS() + timeoutS, out bool accepted, out int index);
+                string problem = Send(CancelProcessCommand, null, phase.Deadline, out bool accepted, out int index);
                 if (problem == null && !accepted)
                     problem = "CancelProcess was rejected";
                 if (problem == null)
-                    problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
+                    problem = WaitForSequence(new[] { SequenceNone, SequenceError }, phase);
                 if (problem != null)
                     problems.Add(problem);
             }
             // Explicit cleanup owns manual commands that CancelProcess does not undo.
             // Cleanup writes are intentional final values, not new fault-injection snapshots.
             _originalWrites = null;
-            double deadline = _nowS() + timeoutS;
             foreach (ScenarioStep step in steps)
             {
-                if (_nowS() >= deadline)
+                if (phase.Expired)
                 {
                     problems.Add("explicit cleanup timeout after " + ScenarioNumbers.Seconds(timeoutS));
                     break;
                 }
-                string problem = Execute(step, deadline, timeoutS);
+                string problem = Execute(step, phase);
                 if (problem != null)
                     problems.Add("cleanup step " + step.Number + ": " + problem);
                 // Try the remaining cleanup steps even when one fails, within the deadline.
             }
+            if (phase.Overrun && problems.Count == 0)
+                problems.Add("cleanup timeout after " + ScenarioNumbers.Seconds(timeoutS));
             return problems.Count == 0 ? null : "cleanup failed; subsequent scenarios blocked: " + string.Join("; ", problems);
         }
 
-        string WaitForSequence(int[] wanted, double timeoutS)
+        string WaitForSequence(int[] wanted, ScenarioBudget phase)
         {
-            double start = _nowS();
             while (true)
             {
                 int err = _read(ActiveSequenceSymbol, 2, out byte[] data);
                 if (err != 0)
                     return "cannot read " + ActiveSequenceSymbol + ": " + AdsError(err, ActiveSequenceSymbol);
                 int value = BitConverter.ToInt16(data, 0);
-                if (Array.IndexOf(wanted, value) >= 0)
+                if (Array.IndexOf(wanted, value) >= 0 && !phase.Expired)
                     return null;
-                if (_nowS() - start >= timeoutS)
+                if (phase.Expired)
                     return string.Format("{0} = {1} after {2} (expected {3})", ActiveSequenceSymbol, value,
-                        ScenarioNumbers.Seconds(timeoutS), string.Join(" or ", wanted));
+                        ScenarioNumbers.Seconds(phase.DurationS), string.Join(" or ", wanted));
                 _sleepMs(PollMs);
             }
         }
@@ -442,11 +442,11 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // ------------------------------------------------------------------ one scenario
 
-        /// <summary>Runs the steps in order and stops at the first failed step.</summary>
-        public ScenarioResult Run(Scenario scenario)
+        /// <summary>Step execution only. Production callers use RunAll for preparation, recovery and reporting.</summary>
+        internal ScenarioResult RunSteps(Scenario scenario)
         {
             double start = _nowS();
-            double deadline = start + scenario.TimeoutS;
+            ScenarioBudget phase = _budget.Phase(scenario.TimeoutS);
             var result = new ScenarioResult { Scenario = scenario, Status = ScenarioStatus.Passed };
             _measurements = result.Measurements;
             try
@@ -455,13 +455,15 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     // Slow ADS calls can stretch the steps past every deadline: stop at the scenario
                     // limit (RunOnce); the cleanup still runs.
-                    if (_nowS() > _limitAt)
+                    if (_budget.Expired)
                     {
                         result.Status = ScenarioStatus.Failed;
-                        result.Message = LimitMessage(_nowS() - (_limitAt - _limitS), _limitS) + string.Format("; step {0} not run", step.Number);
+                        result.Message = LimitMessage(_budget.Elapsed, _budget.DurationS) + string.Format("; step {0} not run", step.Number);
                         break;
                     }
-                    string failure = Execute(step, deadline, scenario.TimeoutS);
+                    string failure = Execute(step, phase);
+                    if (failure == null && phase.Overrun)
+                        failure = "scenario timeout " + ScenarioNumbers.Seconds(scenario.TimeoutS);
                     if (failure != null)
                     {
                         result.Status = ScenarioStatus.Failed;
@@ -476,14 +478,17 @@ namespace BeckhoffAutomationInterface.Runtime
         }
 
         /// <summary>Null when the step passed, else what went wrong (symbol, expected, actual).</summary>
-        string Execute(ScenarioStep step, double scenarioDeadline, double scenarioTimeoutS)
+        string Execute(ScenarioStep step, ScenarioBudget phase)
         {
             double now = _nowS();
+            double scenarioDeadline = phase.Deadline;
+            double scenarioTimeoutS = phase.DurationS;
+            if (phase.Expired) return "scenario timeout " + ScenarioNumbers.Seconds(scenarioTimeoutS);
             switch (step.Kind)
             {
                 case StepKind.Send:
                 {
-                    double deadline = Math.Min(now + (step.TimeoutS ?? ScenarioStep.DefaultSendTimeoutS), scenarioDeadline);
+                    double deadline = phase.StepDeadline(step.TimeoutS ?? ScenarioStep.DefaultSendTimeoutS);
                     string problem = Send(step.Command, step.Parameters, deadline, out bool accepted, out int index);
                     string what = string.Format("command {0} (index {1}): ", step.CommandText, index);
                     if (problem != null)
@@ -616,9 +621,12 @@ namespace BeckhoffAutomationInterface.Runtime
         {
             accepted = false;
             index = 0;
+            double start = _nowS();
+            if (start >= deadline) return "command timeout before send";
             string problem = ReadIndexes(out int lastAccepted, out int lastRejected);
             if (problem != null)
                 return problem;
+            if (_nowS() >= deadline) return "command timeout before send";
             do
                 index = NextIndex();
             while (index == lastAccepted || index == lastRejected);
@@ -628,7 +636,6 @@ namespace BeckhoffAutomationInterface.Runtime
             if (err != 0)
                 return "cannot write " + StreamSymbol + ": " + AdsError(err, StreamSymbol);
 
-            double start = _nowS();
             while (true)
             {
                 problem = ReadIndexes(out lastAccepted, out lastRejected);
