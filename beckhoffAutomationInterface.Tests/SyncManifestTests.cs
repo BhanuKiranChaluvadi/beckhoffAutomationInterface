@@ -37,12 +37,14 @@ namespace BeckhoffAutomationInterface.Tests
         // ------------------------------------------------------------------ groups and source hashes
 
         [Fact]
-        public void Groups_PutMembersWithTheirOwner_AndLeaveOutMembersWithoutOne()
+        public void Groups_PutMembersWithTheirOwner_AndRejectMembersWithoutOne()
         {
-            var sources = new List<StPouSource> { Fb("FB_A"), Method("FB_A", "Run"), Gvl("GVL_B"), Method("FB_Missing", "Run") };
+            var sources = new List<StPouSource> { Fb("FB_A"), Method("fb_a", "Run"), Gvl("GVL_B") };
             Dictionary<string, List<StPouSource>> groups = SyncManifest.Groups(sources);
             Assert.Equal(new[] { "FB_A", "GVL_B" }, groups.Keys.OrderBy(k => k));
             Assert.Equal(new[] { "FB_A", "Run" }, groups["FB_A"].Select(s => s.Name));
+            sources.Add(Method("FB_Missing", "Run"));
+            Assert.Throws<System.InvalidOperationException>(() => SyncManifest.Groups(sources));
         }
 
         [Fact]

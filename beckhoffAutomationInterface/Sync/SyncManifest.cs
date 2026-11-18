@@ -22,7 +22,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// </summary>
     sealed class SyncManifest
     {
-        public const int Format = 1;
+        public const int Format = 2;
         public const string FileName = "bai-sync-manifest.json";
 
         public sealed class Entry
@@ -54,19 +54,10 @@ namespace BeckhoffAutomationInterface.Sync
         internal static bool CanSkip(Entry entry, string sourceHash, string diskHash) =>
             entry != null && sourceHash != null && diskHash != null && entry.Source == sourceHash && entry.Disk == diskHash;
 
-        /// <summary>Top-level objects with their METHODs and PROPERTYs (owner first). A member whose
-        /// owner is not in the source belongs to no group (the sync reports it as before). Names
-        /// match as PouSyncEngine matches owners.</summary>
+        /// <summary>The same validated object groups used by conversion and synchronization.</summary>
         internal static Dictionary<string, List<StPouSource>> Groups(IEnumerable<StPouSource> sources)
         {
-            List<StPouSource> all = sources.ToList();
-            var groups = all.Where(s => s.OwnerName == null).GroupBy(s => s.Name, StringComparer.Ordinal)
-                .Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => new List<StPouSource> { g.First() }, StringComparer.Ordinal);
-            foreach (StPouSource member in all.Where(s => s.OwnerName != null)
-                         .OrderBy(s => s.Kind).ThenBy(s => s.Name, StringComparer.Ordinal))
-                if (groups.TryGetValue(member.OwnerName, out List<StPouSource> group))
-                    group.Add(member);
-            return groups;
+            return PlcSourceObject.Group(sources).ToDictionary(s => s.Root.Name, s => s.Sources.ToList(), PlcSourceObject.Names);
         }
 
         /// <summary>SHA-256 of kind, names, base type and texts. Sync manifests also include the destination folder; conversions do not.</summary>

@@ -17,3 +17,12 @@
 - Recorded this implementation on an isolated local feature branch. No main merge/push, publication or tool-pin update is part of this untested change.
 
 Pending acceptance (only when authorized): run the conversion regressions and a fresh TwinCAT build for each family plus representative property/interface and test projects. Measure cold/warm import times before claiming a speedup.
+
+## Architecture follow-up: source updates
+
+- Added regression cases first for mixed-case member owners, case-only member renames, tracked member removal during moves, and rollback after a project-file write failure. They have not been executed.
+- Unified object grouping and case-insensitive identity across the manifest, converter, file merge, and COM owner lookup. Bumped the manifest format to invalidate records that could omit mixed-case owners.
+- Moved source-stage ownership into PlcSourceUpdate. Closed managed projects now plan stale deletions, member pruning, moves and replacements together; hand-written untracked members and template program identities survive.
+- Added atomic per-file publication and rollback of attempted writes/deletions on synchronous failure. This is rollback for reported I/O failures, not a durable transaction across power loss; source and disk hashes still force incomplete objects to be revisited.
+- Shared COM-busy retry policy through ComInterop rather than depending on the pipeline from the source-update module.
+- Compiled the tool and regression project successfully (one existing xUnit1031 warning). No tests, gates, XAE builds or runtime actions ran.

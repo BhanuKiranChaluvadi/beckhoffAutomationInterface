@@ -9,25 +9,38 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>Applies converted objects to a CLOSED tool-owned PLC project. Configuration stays project-local.</summary>
     static class PlcProjectCode
     {
-        sealed class ObjectWrite
-        {
-            public string Path;
-            public byte[] Bytes;
-        }
-
         public static SyncReport Apply(string plcproj, IReadOnlyList<PlcSourceObject> sources, PlcObjectCache cache,
-            bool preserveMembers, ICollection<string> skip = null)
+            bool preserveMembers, ICollection<string> skip = null, IReadOnlyCollection<string> previousNames = null,
+            Action<string, byte[]> write = null)
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(plcproj));
             XDocument project = XDocument.Load(plcproj, LoadOptions.PreserveWhitespace);
             XNamespace ns = project.Root.Name.Namespace;
             var report = new SyncReport();
-            var writes = new List<ObjectWrite>();
+            var batch = new ProjectFileBatch();
+            bool projectChanged = false;
             List<XElement> includes = project.Descendants(ns + "Compile").Where(e => e.Attribute("Include") != null).ToList();
-            var skipped = new HashSet<string>(skip ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            var skipped = new HashSet<string>(skip ?? new string[0], PlcSourceObject.Names);
+            var stale = new HashSet<string>(KnownNamesTracker.DiffFull(previousNames ?? new string[0],
+                KnownNamesTracker.CollectNames(sources.SelectMany(s => s.Sources))), PlcSourceObject.Names);
+            foreach (string name in stale.Where(n => !n.Contains(".")))
+            {
+                XElement[] matches = includes.Where(e => PlcSourceObject.Names.Equals(
+                    Path.GetFileNameWithoutExtension((string)e.Attribute("Include")), name)).ToArray();
+                if (matches.Length > 1) throw new InvalidOperationException("Ambiguous stale PLC object: " + name);
+                foreach (XElement include in matches)
+                {
+                    batch.Set(Inside(directory, (string)include.Attribute("Include")), null);
+                    include.Remove();
+                    includes.Remove(include);
+                    projectChanged = true;
+                    report.Deleted.Add(name + " (gone)");
+                }
+            }
             foreach (PlcSourceObject source in sources)
             {
-                if (skipped.Contains(source.Root.Name))
+                bool prune = stale.Any(n => n.StartsWith(source.Root.Name + ".", StringComparison.OrdinalIgnoreCase));
+                if (skipped.Contains(source.Root.Name) && !prune)
                 {
                     Report(report.Unchanged, source);
                     report.Skipped += source.Sources.Count;
@@ -36,12 +49,24 @@ namespace BeckhoffAutomationInterface.Sync
                 string relative = Path.Combine(source.Root.RelativeFolder.Replace('/', Path.DirectorySeparatorChar), source.FileName);
                 XElement include = FindInclude(includes, source);
                 // The template's MAIN already has task references; retain its file and ID.
-                if (include != null) relative = (string)include.Attribute("Include");
+                string oldRelative = (string)include?.Attribute("Include");
+                bool moved = oldRelative != null && previousNames != null && source.Root.Kind != PouKind.Program &&
+                    !PlcSourceObject.Names.Equals(oldRelative.Replace('/', '\\'), relative.Replace('/', '\\'));
+                if (oldRelative != null && !moved) relative = oldRelative;
                 string path = Inside(directory, relative);
-                byte[] previous = File.Exists(path) ? File.ReadAllBytes(path) : null;
-                byte[] bytes = ObjectBytes(source, cache, previous, preserveMembers);
+                string oldPath = oldRelative == null ? path : Inside(directory, oldRelative);
+                if (moved && File.Exists(path)) throw new InvalidOperationException("PLC move would overwrite an existing file: " + path);
+                byte[] previous = File.Exists(oldPath) ? File.ReadAllBytes(oldPath) : null;
+                byte[] bytes = ObjectBytes(source, cache, previous, preserveMembers, stale, report.Deleted);
                 bool changed = previous == null || !bytes.SequenceEqual(previous);
-                if (changed) writes.Add(new ObjectWrite { Path = path, Bytes = bytes });
+                if (changed || moved) batch.Set(path, bytes);
+                if (moved)
+                {
+                    batch.Set(oldPath, null);
+                    include.SetAttributeValue("Include", relative.Replace('/', '\\'));
+                    projectChanged = true;
+                    report.Deleted.Add(source.Root.Name + " (moved from " + Path.GetDirectoryName(oldRelative) + ")");
+                }
                 Report(include == null ? report.Created : changed ? report.Updated : report.Unchanged, source);
                 if (include == null)
                 {
@@ -49,16 +74,13 @@ namespace BeckhoffAutomationInterface.Sync
                         new XElement(ns + "SubType", "Code"));
                     Items(project, ns).Add(include);
                     includes.Add(include);
+                    projectChanged = true;
                 }
                 AddFolders(project, ns, relative);
             }
             // Finish every conversion and path check before changing any project file.
-            foreach (ObjectWrite write in writes)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(write.Path));
-                File.WriteAllBytes(write.Path, write.Bytes);
-            }
-            if (writes.Count > 0 || report.Created.Count > 0) project.Save(plcproj);
+            if (projectChanged) batch.Set(plcproj, PlcObjectXml.Bytes(project));
+            batch.Commit(write);
             return report;
         }
 
@@ -75,7 +97,8 @@ namespace BeckhoffAutomationInterface.Sync
             return item;
         }
 
-        static byte[] ObjectBytes(PlcSourceObject source, PlcObjectCache cache, byte[] previous, bool preserveMembers)
+        static byte[] ObjectBytes(PlcSourceObject source, PlcObjectCache cache, byte[] previous, bool preserveMembers,
+            ISet<string> stale, List<string> deleted)
         {
             XDocument converted;
             using (var input = new MemoryStream(cache.Get(source))) converted = XDocument.Load(input, LoadOptions.PreserveWhitespace);
@@ -86,6 +109,13 @@ namespace BeckhoffAutomationInterface.Sync
                 XElement root = old.Root.Elements().Single();
                 if (!string.Equals((string)root.Attribute("Name"), source.Root.Name, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("PLC file name does not match its object: " + source.FileName);
+                foreach (XElement member in root.Elements().Where(e => e.Name.LocalName == "Method" || e.Name.LocalName == "Property").ToList())
+                {
+                    string name = source.Root.Name + "." + (string)member.Attribute("Name");
+                    if (!stale.Contains(name)) continue;
+                    member.Remove();
+                    deleted.Add(name + " (gone)");
+                }
                 MergeExisting(converted.Root.Elements().Single(), root, preserveMembers);
             }
             return PlcObjectXml.Bytes(converted);
@@ -98,7 +128,8 @@ namespace BeckhoffAutomationInterface.Sync
             if (existing.Attribute("Id") != null) desired.SetAttributeValue("Id", (string)existing.Attribute("Id"));
             foreach (XElement old in existing.Elements().Where(e => e.Attribute("Name") != null))
             {
-                XElement current = desired.Elements(old.Name).SingleOrDefault(e => (string)e.Attribute("Name") == (string)old.Attribute("Name"));
+                XElement current = desired.Elements(old.Name).SingleOrDefault(e => PlcSourceObject.Names.Equals(
+                    (string)e.Attribute("Name"), (string)old.Attribute("Name")));
                 if (current != null) MergeExisting(current, old, preserveMembers);
                 else if (preserveMembers && new[] { "Method", "Property", "Get", "Set" }.Contains(old.Name.LocalName))
                     desired.Add(new XElement(old));

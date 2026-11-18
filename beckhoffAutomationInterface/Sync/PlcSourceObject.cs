@@ -9,6 +9,7 @@ namespace BeckhoffAutomationInterface.Sync
     /// <summary>The cache and file unit: one PLC object with all its methods and properties.</summary>
     sealed class PlcSourceObject
     {
+        public static StringComparer Names { get; } = StringComparer.OrdinalIgnoreCase;
         public StPouSource Root => Sources[0];
         public IReadOnlyList<StPouSource> Sources { get; }
         public string ContentHash => SourceHash(Sources, includeFolder: false);
@@ -58,12 +59,12 @@ namespace BeckhoffAutomationInterface.Sync
         {
             List<StPouSource> all = sources.ToList();
             var names = all.GroupBy(s => s.OwnerName == null ? s.Name : s.OwnerName + "." + s.Name,
-                StringComparer.OrdinalIgnoreCase);
+                Names);
             string[] duplicates = names.Where(g => g.Count() > 1).Select(g => g.Key).ToArray();
             if (duplicates.Length > 0)
                 throw new InvalidOperationException("Duplicate PLC objects: " + string.Join(", ", duplicates));
 
-            var roots = all.Where(s => s.OwnerName == null).ToDictionary(s => s.Name, StringComparer.OrdinalIgnoreCase);
+            var roots = all.Where(s => s.OwnerName == null).ToDictionary(s => s.Name, Names);
             foreach (StPouSource member in all.Where(s => s.OwnerName != null))
             {
                 if (!roots.TryGetValue(member.OwnerName, out StPouSource owner) ||
