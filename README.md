@@ -667,6 +667,36 @@ Exit code: 0 = pass, 1 = refused or failed (the record gives the reason), 2 = wr
   `package rollback`, `runtime-state --set` or `machine test` (only on UmRT_Default).
 - It never reads `--confirm-delete-io`, `--overwrite` or `--plc` from `.stconfig`.
 
+### Shared PLC source conversion
+
+`bai convert Lib App/NFLite App/NFPro` prepares reusable TwinCAT PLC source files without
+starting XAE, compiling, or activating a runtime. Each argument is an independent source tree;
+methods and properties must have their owner in that tree. Omit this command for local builds:
+`init`, `sync`, machine builds, release builds and test benches populate the same cache on demand.
+
+One cache entry contains a whole POU, interface, DUT or GVL, including its methods and properties.
+Its key includes the source texts, names, kinds, converter format and exact BAI executable identity.
+Destination folders, project names and machine names do not affect the key. Identical `Lib` objects
+therefore travel between LITE, PRO and test projects. Generated build identities, gas models and
+test doubles have their own content hashes. Conditional compiler directives stay in the XML;
+each project still compiles its own flags and configuration.
+
+The default cache is `%LOCALAPPDATA%\BeckhoffAutomationInterface\conversions`. Set
+`BAI_CONVERSION_CACHE` to choose a directory or restore a CI artifact. Entries include payload hashes;
+missing or corrupt entries are rebuilt. Concurrent writers publish complete entries atomically.
+Projects receive independent files rather than writable links to cache entries. Removing the cache
+only loses conversion reuse; it does not remove a project or change its configuration.
+
+BAI saves and closes its managed project before updating the object files and `.plcproj`, then
+reopens it for the remaining stages. Existing object/member IDs are retained. Standalone sync keeps
+members absent from the supplied source, as before; a machine sync deletes tracked removed members.
+The machine-dev loop retains its open-session COM path, and adopted projects retain their read-only
+shadow-copy path. Unchanged kept projects still use the existing sync-manifest shortcut.
+
+This feature needs acceptance in XAE before promotion of the new tool pin. The regression suite and
+`e2e/shared-conversion.ps1` are provided but have not been executed during implementation. No speedup
+has been measured yet; compilation, I/O links, safety configuration and tests remain per project.
+
 ## 5. The source folder
 
 ### Layout

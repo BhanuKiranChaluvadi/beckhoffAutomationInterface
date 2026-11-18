@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Xml;
@@ -70,38 +69,10 @@ namespace BeckhoffAutomationInterface.Sync
             return groups;
         }
 
-        /// <summary>SHA-256 of everything bai sends for a group: kind, folder, names, base type and the texts.</summary>
-        internal static string SourceHash(IReadOnlyList<StPouSource> group)
-        {
-            var b = new StringBuilder();
-            void Add(string s) => b.Append(s == null ? "-1:" : s.Length + ":" + s);
-            foreach (StPouSource s in group.Take(1).Concat(group.Skip(1).OrderBy(m => m.Kind).ThenBy(m => m.Name, StringComparer.Ordinal)))
-            {
-                Add(s.Kind.ToString());
-                Add(s.RelativeFolder);
-                Add(s.Name);
-                Add(s.OwnerName);
-                Add(s.BaseType);
-                Add(s.DeclarationText);
-                Add(s.ImplementationText);
-                Add(s.GetText);
-                Add(s.SetText);
-            }
-            return Sha256(Encoding.UTF8.GetBytes(b.ToString()));
-        }
+        /// <summary>SHA-256 of kind, names, base type and texts. Sync manifests also include the destination folder; conversions do not.</summary>
+        internal static string SourceHash(IReadOnlyList<StPouSource> group) => PlcSourceObject.SourceHash(group, includeFolder: true);
 
-        internal static string FileExtension(PouKind kind)
-        {
-            switch (kind)
-            {
-                case PouKind.Interface: return ".TcIO";
-                case PouKind.EnumDut:
-                case PouKind.StructDut:
-                case PouKind.AliasDut: return ".TcDUT";
-                case PouKind.Gvl: return ".TcGVL";
-                default: return ".TcPOU";
-            }
-        }
+        internal static string FileExtension(PouKind kind) => PlcSourceObject.FileExtension(kind);
 
         static readonly string[] ObjectExtensions = { ".TcPOU", ".TcDUT", ".TcGVL", ".TcIO" };
 
@@ -271,10 +242,6 @@ namespace BeckhoffAutomationInterface.Sync
                 File.Move(temp, path);
         }
 
-        internal static string Sha256(byte[] bytes)
-        {
-            using (SHA256 sha = SHA256.Create())
-                return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
-        }
+        internal static string Sha256(byte[] bytes) => PlcSourceObject.Sha256(bytes);
     }
 }

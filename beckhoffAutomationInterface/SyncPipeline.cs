@@ -54,6 +54,9 @@ namespace BeckhoffAutomationInterface
         /// the code sync, so a kept project stays usable. False: only warn about them (bai sync).</summary>
         public bool DeleteStaleObjects { get; set; }
 
+        /// <summary>The interactive machine-dev loop retains XAE and applies its small changes through COM.</summary>
+        public bool KeepSessionOpen { get; set; }
+
         /// <summary>
         /// Executes the selected stages (see SyncStages; all of them when no stage flag
         /// was given) in a fixed three-phase order regardless of flag order:
@@ -361,6 +364,8 @@ namespace BeckhoffAutomationInterface
                     "{0} object(s) are defined in more than one .st file; nothing was synced. Delete or rename the stale file:\n    {1}",
                     duplicates.Count, string.Join("\n    ", duplicates)));
 
+            List<PlcSourceObject> sourceObjects = PlcSourceObject.Group(desiredPous);
+
             // Drift: a previously-synced name missing from the current parse means its .st
             // source was renamed/deleted, but the PLC object still compiles. With
             // DeleteStaleObjects it is deleted (and a moved object too); otherwise only reported.
@@ -407,8 +412,24 @@ namespace BeckhoffAutomationInterface
                 : new List<string>();
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
-            SyncReport syncReport = syncEngine.Sync(desiredPous, skip);
+            SyncReport syncReport;
+            if (useManifest && !KeepSessionOpen && skip.Count < sourceObjects.Count)
+            {
+                _session.Project.Save();
+                _session.EnsureClosed();
+                var cache = PlcObjectCache.Open();
+                syncReport = PlcProjectCode.Apply(_options.PlcprojFilePath, sourceObjects, cache,
+                    preserveMembers: true, skip: skip);
+                Console.WriteLine("{0}: Conversion cache: {1} reused, {2} converted ({3}).",
+                    Now(), cache.Reused, cache.Converted, PlcObjectCache.DefaultDirectory);
+                _session.EnsureOpen();
+            }
+            else
+            {
+                // Adopted projects retain their shadow-copy/COM path. An unchanged owned project has no COM text reads.
+                var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
+                syncReport = syncEngine.Sync(desiredPous, skip);
+            }
             syncReport.Deleted.AddRange(deletedObjects);
 
             PrintLines("+ created  ", syncReport.Created);
