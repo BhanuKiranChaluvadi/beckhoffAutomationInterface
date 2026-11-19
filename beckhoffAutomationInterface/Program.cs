@@ -194,6 +194,9 @@ namespace BeckhoffAutomationInterface
             RunOptions options = null;
             switch (args[0])
             {
+                case "convert":
+                    Environment.Exit(Sync.ConversionCommand.Run(args));
+                    break;
                 case "package":
                 case "libraries":
                 case "toolchain":
@@ -379,7 +382,9 @@ namespace BeckhoffAutomationInterface
             {
                 using (var session = new TwinCatSession(options))
                 {
-                    new SyncPipeline(session, options, ignore).Run();
+                    var pipeline = new SyncPipeline(session, options, ignore);
+                    pipeline.Run();
+                    if (pipeline.Outcome.HasErrors) Environment.ExitCode = 1;
                 }
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException

@@ -61,8 +61,11 @@ namespace BeckhoffAutomationInterface.Machines
     {
         public string Stamp;
         public bool Simulation;
-        /// <summary>running (the process ended during the build), passed, failed or crashed.</summary>
+        /// <summary>running (the process ended before the sync completed), synced (the process ended
+        /// after the sync: in the compile, the activation or machine dev), passed, failed or crashed.</summary>
         public string Result;
+        /// <summary>With failed or crashed: where the run stopped (see FailureKind). Null: passed, or older bai.</summary>
+        public string Failure;
 
         public static MachineState Read(string file)
         {
@@ -76,18 +79,64 @@ namespace BeckhoffAutomationInterface.Machines
                     Stamp = d.TryGetValue("stamp", out object s) ? s as string : null,
                     Simulation = d.TryGetValue("simulation", out object m) && m is bool b && b,
                     Result = d.TryGetValue("result", out object r) ? r as string : null,
+                    Failure = d.TryGetValue("failure", out object f) ? f as string : null,
                 };
             }
             catch (ArgumentException) { return null; }
         }
 
-        public void Write(string file) =>
-            File.WriteAllText(file, new JavaScriptSerializer().Serialize(new Dictionary<string, object>
-                { ["stamp"] = Stamp, ["simulation"] = Simulation, ["result"] = Result }));
+        /// <summary>Through a temporary file: a run that ends during the write leaves the old state.</summary>
+        public void Write(string file)
+        {
+            var d = new Dictionary<string, object> { ["stamp"] = Stamp, ["simulation"] = Simulation, ["result"] = Result };
+            if (Failure != null)
+                d["failure"] = Failure;
+            string temp = file + ".tmp";
+            File.WriteAllText(temp, new JavaScriptSerializer().Serialize(d));
+            if (File.Exists(file))
+                File.Replace(temp, file, null);
+            else
+                File.Move(temp, file);
+        }
 
-        /// <summary>A kept project can be used: same build mode and the last run did not end in a crash or in the middle.</summary>
-        internal static bool Usable(MachineState s, bool simulation) =>
-            s != null && s.Stamp != null && s.Simulation == simulation && (s.Result == "passed" || s.Result == "failed");
+        /// <summary>Where a failed run stopped. "compile": the sync completed (the compiler, the
+        /// links check or the activation failed): the project is fine. "shell": a kept project, the
+        /// shell did not start: the project was not touched. "open": a kept project whose solution
+        /// did not open. "sync": the sync did not complete (always so for a new project before its
+        /// sync completed).</summary>
+        internal static string FailureKind(bool kept, bool shellStarted, bool opened, bool synced) =>
+            synced ? "compile" : !kept ? "sync" : !shellStarted ? "shell" : !opened ? "open" : "sync";
+
+        /// <summary>Null: the kept project can be used. Otherwise why it is built fresh. A compile
+        /// error is a source error: the project is kept. Fresh only when the solution did not open or
+        /// the sync did not complete (or the state is from another build mode).</summary>
+        internal static string FreshReason(MachineState s, bool simulation)
+        {
+            if (s == null || s.Stamp == null)
+                return "no state of an earlier build";
+            if (s.Simulation != simulation)
+                return "the earlier build had the other build mode";
+            switch (s.Result)
+            {
+                case "passed":
+                case "synced":
+                    return null;
+                case "running":
+                    return "the earlier run ended before its sync completed";
+                case "failed":
+                case "crashed":
+                    // No kind: a state of an older bai, kept after a failure as before.
+                    if (s.Failure == "compile" || s.Failure == "shell" || (s.Failure == null && s.Result == "failed"))
+                        return null;
+                    return s.Failure == "open" ? "the earlier run could not open the solution"
+                        : string.Format("the earlier run {0} before its sync completed", s.Result == "crashed" ? "crashed" : "failed");
+                default:
+                    return "unknown state '" + s.Result + "'";
+            }
+        }
+
+        /// <summary>A kept project can be used (see FreshReason).</summary>
+        internal static bool Usable(MachineState s, bool simulation) => FreshReason(s, simulation) == null;
     }
 
     /// <summary>
@@ -118,8 +167,11 @@ namespace BeckhoffAutomationInterface.Machines
 
             // 1. Kept or fresh. All checks before TwinCAT starts.
             MachineState state = MachineState.Read(l.StateFile);
-            bool keep = !r.Fresh && !r.Release && !forceFresh && File.Exists(l.Sln) && Directory.Exists(l.Src) && MachineState.Usable(state, r.Simulation);
+            string stateProblem = MachineState.FreshReason(state, r.Simulation);
+            bool keep = !r.Fresh && !r.Release && !forceFresh && File.Exists(l.Sln) && Directory.Exists(l.Src) && stateProblem == null;
             row.Mode = keep ? "kept" : freshReason ?? "fresh";
+            if (!keep && state != null && stateProblem != null && Directory.Exists(l.Dir))
+                Console.WriteLine("{0}: Not keeping the project: {1}.", Now(), stateProblem);
             if (keep)
             {
                 MachineSources.Assemble(l, RunCommand);
@@ -143,8 +195,9 @@ namespace BeckhoffAutomationInterface.Machines
             {
                 if (Directory.Exists(l.Dir))
                 {
-                    if (state != null && state.Result != "passed")
-                        Console.WriteLine("{0}: Previous failed build kept: {1}", Now(), BuildLocation.SaveFailedEvidence(l.FamilyWork, l.Dir, l.Machine));
+                    if (state != null && state.Result != "passed" && state.Result != "synced")
+                        Console.WriteLine("{0}: Previous failed build kept ({1}{2}): {3}", Now(), state.Result,
+                            state.Failure != null ? ", at " + state.Failure : "", BuildLocation.SaveFailedEvidence(l.FamilyWork, l.Dir, l.Machine));
                     BuildLocation.Delete(l.Dir);
                 }
                 MachineSources.Assemble(l, RunCommand);
@@ -158,14 +211,17 @@ namespace BeckhoffAutomationInterface.Machines
             BuildInfo.Write(buildInfo, BuildInfo.FromGit(l.RepoRoot, l.Machine, r.BuildInputs, BuildInfo.RunGit, DateTime.UtcNow));
 
             // 3. One TwinCAT session: init or sync, build, (activate).
-            new MachineState { Stamp = MachineSources.Stamp(l.Src), Simulation = r.Simulation, Result = "running" }.Write(l.StateFile);
+            var progress = new StateRecorder(l.StateFile, MachineSources.Stamp(l.Src), r.Simulation);
+            progress.Running();
+            TwinCatSession current = null;
             // A fresh native build bootstraps the project and applies the native configuration
             // first: the main session then syncs into that project (not 'init').
             var options = Options(r, init: !keep && !nativeConfig);
             int declaredLinks = MachineChecks.DeclaredLinks(options.IoManifestPath) + MachineChecks.DeclaredFileLinks(options.VarLinksManifestPath);
             string phase = "build";
             PipelineOutcome outcome = null;
-            Environment.ExitCode = 0;
+            bool executionFailed = false;
+            string safetyProblem = null, axesProblem = null;
             try
             {
                 if (nativeConfig && !keep)
@@ -178,9 +234,23 @@ namespace BeckhoffAutomationInterface.Machines
                     NativeProject.CopySafety(l); // kept: only files whose bytes differ (XAE is closed)
                 using (var session = new TwinCatSession(options))
                 {
+                    current = session;
                     var pipeline = new SyncPipeline(session, options, IgnoreRules.Load(options.SourceFolder, options.IgnorePatterns));
                     outcome = pipeline.Outcome;
+                    outcome.ExpectedLinks = declaredLinks;
                     pipeline.DeleteStaleObjects = keep;
+                    pipeline.BeforeBuild = progress.Synced;
+                    if (nativeConfig)
+                        pipeline.ValidateBuild = () =>
+                        {
+                            safetyProblem = NativeProject.SafetyProblem(l, safetyBefore);
+                            axesProblem = NativeProject.AxesProblem(l.Tsproj, r.Simulation);
+                            foreach (string problem in new[] { safetyProblem, axesProblem }.Where(p => p != null))
+                            {
+                                Console.WriteLine("{0}: VALIDATION FAILED — {1}", Now(), problem);
+                                outcome.Fail(PipelinePhase.Validation, problem);
+                            }
+                        };
                     pipeline.AfterBuild = s =>
                     {
                         // A kept project with I/O items the manifest no longer has: build fresh, activate that one.
@@ -188,13 +258,13 @@ namespace BeckhoffAutomationInterface.Machines
                             return;
                         if (!r.Simulation && !CheckNoSimulationDefine(s, options))
                         {
-                            Environment.ExitCode = 1;
+                            outcome.Fail(PipelinePhase.Validation, "Release project contains SIMULATION.");
                             return;
                         }
                         if (!r.Activate)
                             return;
                         string links = MachineChecks.LinkResult(declaredLinks, outcome);
-                        if (links.StartsWith("FAIL"))
+                        if (!MachineChecks.LinksPassed(declaredLinks, outcome))
                         {
                             Console.WriteLine("{0}: Not activated: links {1}.", Now(), links);
                             return;
@@ -209,7 +279,7 @@ namespace BeckhoffAutomationInterface.Machines
                         row.Activate = Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, options.PlcProjectName, options.Variant,
                             new[] { SimulationDefine }, Runtime.RuntimeTargets.UmRt, r.ActivateNetId, r.TimeoutS, p => p) ? "PASS" : "FAIL";
                         if (row.Activate == "PASS" && r.Develop)
-                            Develop(r, s, row);
+                            Develop(r, s, row, progress);
                     };
                     pipeline.Run();
                 }
@@ -218,6 +288,7 @@ namespace BeckhoffAutomationInterface.Machines
             {
                 Console.WriteLine("{0}: ERROR: the TwinCAT shell crashed or stopped answering ({1}): {2}", Now(), phase, ex.Message);
                 row.Crashed = true;
+                executionFailed = true;
             }
             catch (Exception ex) when (ex is InvalidOperationException || ex is IOException || ex is UnauthorizedAccessException
                                        || ex is FormatException || ex is ArgumentException || ex is System.Xml.XmlException || ex is COMException)
@@ -226,28 +297,25 @@ namespace BeckhoffAutomationInterface.Machines
                 if (phase == "activate")
                     row.Activate = "FAIL";
                 else
-                    Environment.ExitCode = 1;
+                    executionFailed = true;
             }
             if (outcome != null && outcome.BuildTimedOut)
                 row.Crashed = true;
-            bool failed = Environment.ExitCode != 0 || outcome == null || !outcome.BuildPassed;
-            Environment.ExitCode = 0;
-            string safetyProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.SafetyProblem(l, safetyBefore) : null;
-            if (safetyProblem != null)
-            {
-                Console.WriteLine("{0}: SAFETY FAILED — {1}", Now(), safetyProblem);
-                failed = true;
-            }
-            // Simulated NC axes only in the -sim project, never in a normal (release) project.
-            string axesProblem = nativeConfig && !row.Crashed && outcome != null ? NativeProject.AxesProblem(l.Tsproj, r.Simulation) : null;
-            if (axesProblem != null)
-            {
-                Console.WriteLine("{0}: NC AXES FAILED — {1}", Now(), axesProblem);
-                failed = true;
-            }
+            bool failed = executionFailed || outcome == null || !outcome.Succeeded;
 
-            new MachineState { Stamp = MachineSources.Stamp(l.Src), Simulation = r.Simulation, Result = row.Crashed ? "crashed" : failed ? "failed" : "passed" }.Write(l.StateFile);
+            // The state for the next run: a sync that did not complete (also a machine dev round
+            // stopped by an exception) is a failure, whatever the first build did.
+            bool stateFailed = failed || !progress.IsSynced;
+            bool completeSync = progress.IsSynced && outcome != null && outcome.SyncCompleted && !outcome.ValidationFailed;
+            string failure = row.Crashed || stateFailed
+                ? MachineState.FailureKind(keep, current != null && current.ShellStarted, current != null && current.Opened, completeSync) : null;
+            progress.Write(row.Crashed ? "crashed" : stateFailed ? "failed" : "passed", failure);
 
+            if (!row.Crashed && keep && failure == "open" && !retried)
+            {
+                Console.WriteLine("{0}: The kept project could not be opened: building it fresh.", Now());
+                return Build(r, retried: true, forceFresh: true, freshReason: "fresh (cannot open)");
+            }
             if (!row.Crashed && IsDrift(keep, outcome, ioFromManifest: !native))
             {
                 Console.WriteLine("{0}: The kept project has objects the source no longer has: building it fresh.", Now());
@@ -281,12 +349,45 @@ namespace BeckhoffAutomationInterface.Machines
             return row;
         }
 
+        /// <summary>The state file during one build, written where a later run must know how far
+        /// this one came: 'running' until the sync completed, then 'synced' (a process that ends
+        /// now leaves a complete project), and the result at the end.</summary>
+        sealed class StateRecorder
+        {
+            readonly string _file, _stamp;
+            readonly bool _simulation;
+
+            public StateRecorder(string file, string stamp, bool simulation)
+            {
+                _file = file;
+                _stamp = stamp;
+                _simulation = simulation;
+            }
+
+            public bool IsSynced { get; private set; }
+
+            public void Running()
+            {
+                IsSynced = false;
+                Write("running", null);
+            }
+
+            public void Synced()
+            {
+                IsSynced = true;
+                Write("synced", null);
+            }
+
+            public void Write(string result, string failure) =>
+                new MachineState { Stamp = _stamp, Simulation = _simulation, Result = result, Failure = failure }.Write(_file);
+        }
+
         /// <summary>The release tag (set by the command after its release checks).</summary>
         internal static string ReleaseTag { get; set; }
 
         /// <summary>machine dev in the open session: verify and test the activated PLC, then one
         /// round per change (MachineDev). The manifests must stay as they were at the start.</summary>
-        static void Develop(MachineBuildRequest r, TwinCatSession s, MachineRow row)
+        static void Develop(MachineBuildRequest r, TwinCatSession s, MachineRow row, StateRecorder progress)
         {
             MachineLayout l = r.Layout;
             string stamp = MachineSources.Stamp(l.Src);
@@ -295,7 +396,7 @@ namespace BeckhoffAutomationInterface.Machines
             string machines = Path.GetDirectoryName(l.MachineFolder).Substring(l.RepoRoot.Length).TrimStart('\\', '/');
             MachineDev.Watch(l.RepoRoot, l.Family.Sources, l.Family.Tests, new[] { machines, MachineManifest.FileName, "Safety" },
                 Path.Combine(l.FamilyWork, l.Machine + ".dev-stop"),
-                step => step == DevStep.TestsOnly ? Test(r, row, verify: false) : Rebuild(r, s, row, stamp));
+                step => step == DevStep.TestsOnly ? Test(r, row, verify: false) : Rebuild(r, s, row, stamp, progress));
         }
 
         /// <summary>verify: the startup values hold only right after an activation, not after scenarios ran.</summary>
@@ -307,7 +408,7 @@ namespace BeckhoffAutomationInterface.Machines
 
         /// <summary>One dev round: the changed code into the open project (gone objects deleted),
         /// then build, activate, verify and test.</summary>
-        static string Rebuild(MachineBuildRequest r, TwinCatSession s, MachineRow row, string stamp)
+        static string Rebuild(MachineBuildRequest r, TwinCatSession s, MachineRow row, string stamp, StateRecorder progress)
         {
             MachineLayout l = r.Layout;
             MachineSources.Assemble(l, RunCommand);
@@ -318,8 +419,12 @@ namespace BeckhoffAutomationInterface.Machines
             BuildInfo.Write(MachineSources.RepoPath(l.Src, l.Family.BuildInfo),
                 BuildInfo.FromGit(l.RepoRoot, l.Machine, r.BuildInputs, BuildInfo.RunGit, DateTime.UtcNow));
             RunOptions code = Options(r, init: false, stages: SyncStages.Code);
-            var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true };
+            var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true, KeepSessionOpen = true };
+            progress.Running(); // a process that ends in this sync leaves a project to build fresh
             pipeline.Run();
+            if (!pipeline.Outcome.SyncCompleted || pipeline.Outcome.HasErrors)
+                return "FAIL (sync)";
+            progress.Synced();
             if (pipeline.Outcome.StaleNames > 0)
                 return "STOP — the kept project has objects it cannot delete: run 'bai machine test'.";
             if (!Runtime.RuntimeCommands.ActivateOpenProject(s.Vs, s.SysManager, code.PlcProjectName, code.Variant,

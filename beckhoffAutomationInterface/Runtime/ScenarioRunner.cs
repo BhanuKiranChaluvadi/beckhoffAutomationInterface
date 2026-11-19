@@ -15,6 +15,13 @@ namespace BeckhoffAutomationInterface.Runtime
         public ScenarioStatus Status { get; set; }
         public string Message { get; set; }        // failure: "step 3 (waitUntil) ..."; skip: the reason
         public double Seconds { get; set; }
+        public ScenarioFailure Failure { get; private set; }
+        public void Fail(ScenarioFailure failure)
+        {
+            Failure = failure;
+            Status = ScenarioStatus.Failed;
+            Message = failure.Message;
+        }
         public List<string> Details { get; } = new List<string>();   // failure: sStatus, stLastError, ...
         public List<Measurement> Measurements { get; } = new List<Measurement>();   // check/waitUntil, passed or failed
     }
@@ -55,14 +62,25 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public const int ErrorAcknowledgeCommand = 9999;
         const int SequenceNone = 0, SequenceError = 99;   // E_Sequence.None, E_Sequence.Error
-        public const int PollMs = 100;
+        /// <summary>Wait between two reads of the same symbol (send, waitUntil, reset). 20 ms: a
+        /// step ends at most 20 ms after the PLC value changes (100 ms cost about 25 s per machine).</summary>
+        public const int PollMs = 20;
 
         readonly ExpectationChecker.Reader _read;
         readonly Writer _write;
         readonly Action<int> _sleepMs;
         readonly Func<double> _nowS;
+        ScenarioBudget _budget;
         int _nextIndex;
-        Dictionary<string, byte[]> _originalWrites;
+        RecoveryState _recovery;
+
+        sealed class RecoveryState
+        {
+            public bool Required;
+            public bool ResetPending;
+            public bool CaptureWrites = true;
+            public readonly Dictionary<string, byte[]> Originals = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        }
         List<Measurement> _measurements;   // the running scenario's steps only (not prepare or cleanup)
 
         /// <summary>Optional: a note on the PLC type of a symbol, for an ADS size error (for
@@ -103,12 +121,43 @@ namespace BeckhoffAutomationInterface.Runtime
 
         public ScenarioRunner(ExpectationChecker.Reader read, Writer write, Action<int> sleepMs, Func<double> nowS, int firstIndex)
         {
-            _read = read;
-            _write = write;
+            // Each ADS call is timed: a starved runtime or PC makes calls take seconds (TcAdsDll
+            // waits about 5 s per call), which stretches a scenario far beyond its timeoutS.
+            _read = (string symbol, int size, out byte[] data) =>
+            {
+                double t = nowS();
+                int err = read(symbol, size, out data);
+                CountCall(nowS() - t);
+                return err;
+            };
+            _write = (symbol, data) =>
+            {
+                double t = nowS();
+                int err = write(symbol, data);
+                CountCall(nowS() - t);
+                return err;
+            };
             _sleepMs = sleepMs;
             _nowS = nowS;
+            _budget = new ScenarioBudget(nowS);
             _nextIndex = Math.Max(1, firstIndex);
         }
+
+        /// <summary>An ADS call longer than this is slow (counted and reported with the result).</summary>
+        public const double SlowCallS = 1.0;
+        int _slowCalls;
+        double _slowMaxS;
+
+        void CountCall(double seconds)
+        {
+            if (seconds <= SlowCallS)
+                return;
+            _slowCalls++;
+            _slowMaxS = Math.Max(_slowMaxS, seconds);
+        }
+
+        string SlowAds() => string.Format("slow ADS: {0} call{1} > {2} (max {3})", _slowCalls, _slowCalls == 1 ? "" : "s",
+            SlowCallS.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " s", ScenarioNumbers.Seconds(_slowMaxS));
 
         /// <summary>First command index of a run: from the clock, so that a new run does not use the
         /// index of an earlier run (the PLC keeps the last one). 1000 indexes per second; the cycle
@@ -142,10 +191,14 @@ namespace BeckhoffAutomationInterface.Runtime
                 {
                     OnStart?.Invoke(s);
                     double start = _nowS();
+                    _slowCalls = 0;
+                    _slowMaxS = 0;
                     r = RunOnce(s, prepareTimeoutS, null, ref cleanupFailure);
                     if (Mode == ScenarioMode.Simulation && s.SimulationFault != null && r.Status == ScenarioStatus.Passed)
                         ProveFault(s, r, prepareTimeoutS, ref cleanupFailure);
                     r.Seconds = _nowS() - start;
+                    if (_slowCalls > 0)
+                        r.Details.Add(SlowAds() + "; the runtime or the PC was overloaded");
                 }
                 stopped |= Mode == ScenarioMode.Hardware && r.Status == ScenarioStatus.Failed;
                 results.Add(r);
@@ -158,44 +211,102 @@ namespace BeckhoffAutomationInterface.Runtime
         /// every later run: cleanupFailure stays set and the next RunOnce fails before it sends.</summary>
         ScenarioResult RunOnce(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
         {
-            string problem = cleanupFailure ?? Prepare(prepareTimeoutS);
-            var r = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Failed, Message = "before the scenario: " + problem };
-            if (problem != null)
-            {
-                r.Details.AddRange(Diagnostics());
-                return r;
-            }
-            _originalWrites = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            ScenarioBudget previous = _budget;
+            _budget = ScenarioBudget.ForScenario(_nowS, s, prepareTimeoutS);
             try
             {
-                // A fault proof's writes are restored like a scenario's own writes.
-                foreach (ScenarioStep write in inject ?? new ScenarioStep[0])
+                ScenarioResult r = RunLifecycle(s, prepareTimeoutS, inject, ref cleanupFailure);
+                double took = _budget.Elapsed;
+                if (_budget.Overrun && !(r.Message ?? "").StartsWith(TookPrefix, StringComparison.Ordinal))
                 {
-                    problem = Execute(write, _nowS() + prepareTimeoutS, prepareTimeoutS);
-                    if (problem != null)
-                    {
-                        r.Message = "cannot inject the fault: " + problem;
-                        break;
-                    }
+                    string prior = r.Status == ScenarioStatus.Failed ? r.Message : null;
+                    r.Fail(new ScenarioFailure(ScenarioFailureKind.Deadline,
+                        LimitMessage(took, _budget.DurationS) + (prior != null ? "; " + prior : "")));
                 }
-                if (problem == null)
-                    r = Run(s);
-                if (r.Status == ScenarioStatus.Failed)
-                    r.Details.AddRange(Diagnostics()); // capture before cleanup changes the state
+                return r;
+            }
+            finally { _budget = previous; }
+        }
+
+        const string TookPrefix = "scenario took ";
+
+        string LimitMessage(double tookS, double limitS) =>
+            string.Format("{0}{1}, more than its limit {2} ({3})", TookPrefix, ScenarioNumbers.Seconds(tookS), ScenarioNumbers.Seconds(limitS),
+                _slowCalls > 0 ? SlowAds() : "no slow ADS call");
+
+        ScenarioResult RunLifecycle(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject, ref string cleanupFailure)
+        {
+            var result = new ScenarioResult { Scenario = s, Status = ScenarioStatus.Passed };
+            if (cleanupFailure != null)
+            {
+                result.Fail(new ScenarioFailure(ScenarioFailureKind.Cleanup, "before the scenario: " + cleanupFailure));
+                CaptureDiagnostics(result);
+                return result;
+            }
+            RecoveryState previous = _recovery;
+            var recovery = new RecoveryState();
+            _recovery = recovery;
+            bool completed = false;
+            try
+            {
+                string problem = Prepare(prepareTimeoutS);
+                if (problem != null)
+                    result.Fail(new ScenarioFailure(ScenarioFailureKind.Preparation, "before the scenario: " + problem));
+                else
+                {
+                    recovery.Required = true;
+                    result = RunPrepared(s, prepareTimeoutS, inject);
+                }
+                completed = true;
+            }
+            catch (Exception ex) when (Recoverable(ex))
+            {
+                result.Fail(new ScenarioFailure(ScenarioFailureKind.Transport, "scenario execution failed: " + ex.Message));
             }
             finally
             {
-                cleanupFailure = Cleanup(r.Status == ScenarioStatus.Failed, prepareTimeoutS, s.CleanupSteps);
-                _originalWrites = null;
+                try
+                {
+                    if (!completed || result.Status == ScenarioStatus.Failed) CaptureDiagnostics(result);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (recovery.Required)
+                            cleanupFailure = Cleanup(!completed || result.Status == ScenarioStatus.Failed, prepareTimeoutS, s.CleanupSteps);
+                    }
+                    finally { _recovery = previous; }
+                }
             }
             if (cleanupFailure != null)
-            {
-                r.Status = ScenarioStatus.Failed;
-                r.Message = (r.Message == null ? "" : r.Message + "; ") + cleanupFailure;
-            }
-            return r;
+                result.Fail(new ScenarioFailure(ScenarioFailureKind.Cleanup,
+                    (result.Message == null ? "" : result.Message + "; ") + cleanupFailure));
+            return result;
         }
 
+        ScenarioResult RunPrepared(Scenario s, double prepareTimeoutS, IReadOnlyList<ScenarioStep> inject)
+        {
+            ScenarioBudget injection = _budget.Phase(prepareTimeoutS);
+            foreach (ScenarioStep write in inject ?? new ScenarioStep[0])
+            {
+                ScenarioFailure problem = Execute(write, injection);
+                if (problem == null) continue;
+                var failed = new ScenarioResult { Scenario = s };
+                failed.Fail(problem.WithMessage("cannot inject the fault: " + problem.Message));
+                return failed;
+            }
+            return RunSteps(s);
+        }
+
+        static bool Recoverable(Exception ex) => ex is System.IO.IOException ||
+            ex is InvalidOperationException || ex is TimeoutException;
+
+        void CaptureDiagnostics(ScenarioResult result)
+        {
+            try { result.Details.AddRange(Diagnostics()); }
+            catch (Exception ex) when (Recoverable(ex)) { result.Details.Add("diagnostics unavailable: " + ex.Message); }
+        }
         /// <summary>The scenario passed healthy; with its simulationFault written it must fail at the
         /// named step. Otherwise the scenario fails: a check that cannot fail proves nothing.</summary>
         void ProveFault(Scenario s, ScenarioResult healthy, double prepareTimeoutS, ref string cleanupFailure)
@@ -205,7 +316,7 @@ namespace BeckhoffAutomationInterface.Runtime
             string verdict =
                 faulted.Status == ScenarioStatus.Passed
                     ? "fault proof: the scenario passed with the fault injected, so its checks cannot see the fault"
-                : faulted.Message.StartsWith("step " + n + " (", StringComparison.Ordinal) && cleanupFailure == null
+                : faulted.Failure?.Step == n && faulted.Failure.ProvesFault && cleanupFailure == null
                     ? null
                     : "fault proof: with the fault it failed at " + faulted.Message + "; expected step " + n;
             if (verdict == null)
@@ -213,8 +324,7 @@ namespace BeckhoffAutomationInterface.Runtime
                 healthy.Details.Add(string.Format("fault proof: with the fault it fails at step {0} ({1}), as expected", n, s.Steps[n - 1].KindName));
                 return;
             }
-            healthy.Status = ScenarioStatus.Failed;
-            healthy.Message = verdict;
+            healthy.Fail((faulted.Failure ?? new ScenarioFailure(ScenarioFailureKind.FaultProof, verdict)).WithMessage(verdict));
             healthy.Details.AddRange(faulted.Details);
         }
 
@@ -224,42 +334,52 @@ namespace BeckhoffAutomationInterface.Runtime
         /// idle with no error (an acknowledge could hide a real fault). Returns null, or what went wrong.</summary>
         public string Prepare(double timeoutS)
         {
+            ScenarioBudget phase = _budget.Phase(timeoutS);
             string problem = RequireMode();
             if (problem != null)
                 return problem;
+            if (phase.Expired) return "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS);
             if (Mode == ScenarioMode.Hardware)
-                return RequireIdle();
+            {
+                problem = RequireIdle();
+                return problem ?? (phase.Expired ? "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS) : null);
+            }
             // Check the reset symbol before sending even ErrorAcknowledge.
             int resetError = _read(SimulationResetSymbol, 1, out byte[] unused);
             if (resetError != 0)
                 return "cannot read " + SimulationResetSymbol + ": " + AdsError(resetError, SimulationResetSymbol);
-            problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
+            problem = WaitForSequence(new[] { SequenceNone, SequenceError }, phase);
             if (problem != null)
                 return problem;
 
-            problem = Send(ErrorAcknowledgeCommand, null, _nowS() + ScenarioStep.DefaultSendTimeoutS, out bool accepted, out int index);
-            if (problem != null)
-                return "ErrorAcknowledge (9999): " + problem;
+            ScenarioFailure sendFailure = Send(ErrorAcknowledgeCommand, null, phase.Phase(ScenarioStep.DefaultSendTimeoutS), out bool accepted, out int index);
+            if (sendFailure != null)
+                return "ErrorAcknowledge (9999): " + sendFailure.Message;
             if (!accepted)
                 return string.Format("ErrorAcknowledge (9999, index {0}) was rejected", index);
 
+            if (phase.Expired) return "prepare timeout after " + ScenarioNumbers.Seconds(timeoutS);
+
+            if (_recovery != null) { _recovery.Required = true; _recovery.ResetPending = true; }
             int err = _write(SimulationResetSymbol, new byte[] { 1 });
             if (err != 0)
                 return "cannot write " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
 
-            double deadline = _nowS() + timeoutS;
             while (true)
             {
                 err = _read(SimulationResetSymbol, 1, out byte[] reset);
                 if (err != 0)
                     return "cannot read " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
                 if (reset[0] == 0)
+                {
+                    if (_recovery != null) _recovery.ResetPending = false;
                     break;
-                if (_nowS() >= deadline)
+                }
+                if (phase.Expired)
                     return SimulationResetSymbol + " did not clear after " + ScenarioNumbers.Seconds(timeoutS);
                 _sleepMs(PollMs);
             }
-            return WaitForSequence(new[] { SequenceNone }, timeoutS);
+            return WaitForSequence(new[] { SequenceNone }, phase);
         }
 
         /// <summary>The one place that matches the build to the mode: simulation needs bActive TRUE,
@@ -288,63 +408,96 @@ namespace BeckhoffAutomationInterface.Runtime
 
         string Cleanup(bool failed, double timeoutS, IReadOnlyList<ScenarioStep> steps)
         {
-            string guard = RequireMode();
-            if (guard != null)
-                return "cleanup stopped: " + guard;
+            ScenarioBudget phase = _budget.Recovery(timeoutS);
+            string guard;
+            try { guard = RequireMode(); }
+            catch (Exception ex) when (Recoverable(ex)) { guard = ex.Message; }
+            if (guard != null) return "cleanup stopped: " + guard + "; subsequent scenarios blocked";
+
             var problems = new List<string>();
-            // Restore explicit fault injections even when a later scenario step failed.
-            foreach (var entry in _originalWrites)
+            _recovery.CaptureWrites = false;
+            AttemptRecovery(problems, "clear pending reset", ClearPendingReset);
+            // Restore injected values before cancellation so an injected interlock cannot prevent it.
+            foreach (var entry in _recovery.Originals)
+                AttemptRecovery(problems, "restore " + entry.Key, () =>
+                {
+                    int err = _write(entry.Key, entry.Value);
+                    return err == 0 ? null : "cannot restore " + entry.Key + ": " + AdsError(err, entry.Key);
+                });
+
+            bool cancel = true;
+            AttemptRecovery(problems, "read active sequence", () =>
             {
-                int err = _write(entry.Key, entry.Value);
-                if (err != 0)
-                    problems.Add("cannot restore " + entry.Key + ": " + AdsError(err, entry.Key));
-            }
-            int readError = _read(ActiveSequenceSymbol, 2, out byte[] sequence);
-            if (readError != 0)
-                problems.Add("cannot read " + ActiveSequenceSymbol + ": " + AdsError(readError, ActiveSequenceSymbol));
-            else if (failed || (BitConverter.ToInt16(sequence, 0) != SequenceNone && BitConverter.ToInt16(sequence, 0) != SequenceError))
-            {
-                string problem = Send(CancelProcessCommand, null, _nowS() + timeoutS, out bool accepted, out int index);
-                if (problem == null && !accepted)
-                    problem = "CancelProcess was rejected";
-                if (problem == null)
-                    problem = WaitForSequence(new[] { SequenceNone, SequenceError }, timeoutS);
-                if (problem != null)
-                    problems.Add(problem);
-            }
-            // Explicit cleanup owns manual commands that CancelProcess does not undo.
-            // Cleanup writes are intentional final values, not new fault-injection snapshots.
-            _originalWrites = null;
-            double deadline = _nowS() + timeoutS;
+                int err = _read(ActiveSequenceSymbol, 2, out byte[] sequence);
+                if (err != 0) { cancel = true; return "cannot read " + ActiveSequenceSymbol + ": " + AdsError(err, ActiveSequenceSymbol); }
+                int value = BitConverter.ToInt16(sequence, 0);
+                cancel = failed || (value != SequenceNone && value != SequenceError);
+                return null;
+            });
+            // Cancellation gets an acknowledgment window even when restoration exhausted the shared cleanup budget.
+            if (cancel)
+                AttemptRecovery(problems, "cancel process", () => CancelAndWait(_budget.Recovery(timeoutS)));
+
             foreach (ScenarioStep step in steps)
             {
-                if (_nowS() >= deadline)
+                if (phase.Expired)
                 {
                     problems.Add("explicit cleanup timeout after " + ScenarioNumbers.Seconds(timeoutS));
                     break;
                 }
-                string problem = Execute(step, deadline, timeoutS);
-                if (problem != null)
-                    problems.Add("cleanup step " + step.Number + ": " + problem);
-                // Try the remaining cleanup steps even when one fails, within the deadline.
+                AttemptRecovery(problems, "cleanup step " + step.Number, () =>
+                {
+                    ScenarioFailure problem = Execute(step, phase);
+                    return problem == null ? null : "cleanup step " + step.Number + ": " + problem.Message;
+                });
             }
+            if (phase.Overrun) problems.Add("cleanup timeout after " + ScenarioNumbers.Seconds(timeoutS));
             return problems.Count == 0 ? null : "cleanup failed; subsequent scenarios blocked: " + string.Join("; ", problems);
         }
 
-        string WaitForSequence(int[] wanted, double timeoutS)
+        string ClearPendingReset()
         {
-            double start = _nowS();
+            if (!_recovery.ResetPending) return null;
+            int err = _read(SimulationResetSymbol, 1, out byte[] reset);
+            if (err != 0) return "cannot read pending " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
+            if (reset[0] != 0)
+            {
+                err = _write(SimulationResetSymbol, new byte[] { 0 });
+                if (err != 0) return "cannot clear " + SimulationResetSymbol + ": " + AdsError(err, SimulationResetSymbol);
+            }
+            _recovery.ResetPending = false;
+            return null;
+        }
+
+        string CancelAndWait(ScenarioBudget budget)
+        {
+            ScenarioFailure problem = Send(CancelProcessCommand, null, budget, out bool accepted, out int index);
+            if (problem != null) return problem.Message;
+            return !accepted ? "CancelProcess was rejected" : WaitForSequence(new[] { SequenceNone, SequenceError }, budget);
+        }
+
+        static void AttemptRecovery(List<string> problems, string action, Func<string> attempt)
+        {
+            try
+            {
+                string problem = attempt();
+                if (problem != null) problems.Add(problem);
+            }
+            catch (Exception ex) when (Recoverable(ex)) { problems.Add(action + ": " + ex.Message); }
+        }
+        string WaitForSequence(int[] wanted, ScenarioBudget phase)
+        {
             while (true)
             {
                 int err = _read(ActiveSequenceSymbol, 2, out byte[] data);
                 if (err != 0)
                     return "cannot read " + ActiveSequenceSymbol + ": " + AdsError(err, ActiveSequenceSymbol);
                 int value = BitConverter.ToInt16(data, 0);
-                if (Array.IndexOf(wanted, value) >= 0)
+                if (Array.IndexOf(wanted, value) >= 0 && !phase.Expired)
                     return null;
-                if (_nowS() - start >= timeoutS)
+                if (phase.Expired)
                     return string.Format("{0} = {1} after {2} (expected {3})", ActiveSequenceSymbol, value,
-                        ScenarioNumbers.Seconds(timeoutS), string.Join(" or ", wanted));
+                        ScenarioNumbers.Seconds(phase.DurationS), string.Join(" or ", wanted));
                 _sleepMs(PollMs);
             }
         }
@@ -371,22 +524,29 @@ namespace BeckhoffAutomationInterface.Runtime
 
         // ------------------------------------------------------------------ one scenario
 
-        /// <summary>Runs the steps in order and stops at the first failed step.</summary>
-        public ScenarioResult Run(Scenario scenario)
+        /// <summary>Step execution only. Production callers use RunAll for preparation, recovery and reporting.</summary>
+        internal ScenarioResult RunSteps(Scenario scenario)
         {
             double start = _nowS();
-            double deadline = start + scenario.TimeoutS;
+            ScenarioBudget phase = _budget.Phase(scenario.TimeoutS);
             var result = new ScenarioResult { Scenario = scenario, Status = ScenarioStatus.Passed };
             _measurements = result.Measurements;
             try
             {
                 foreach (ScenarioStep step in scenario.Steps)
                 {
-                    string failure = Execute(step, deadline, scenario.TimeoutS);
+                    // Slow ADS calls can stretch the steps past every deadline: stop at the scenario
+                    // limit (RunOnce); the cleanup still runs.
+                    if (_budget.Expired)
+                    {
+                        result.Fail(new ScenarioFailure(ScenarioFailureKind.Deadline,
+                            LimitMessage(_budget.Elapsed, _budget.DurationS) + string.Format("; step {0} not run", step.Number)));
+                        break;
+                    }
+                    ScenarioFailure failure = Execute(step, phase);
                     if (failure != null)
                     {
-                        result.Status = ScenarioStatus.Failed;
-                        result.Message = string.Format("step {0} ({1}) {2}", step.Number, step.KindName, failure);
+                        result.Fail(failure.AtStep(step));
                         break;
                     }
                 }
@@ -396,93 +556,112 @@ namespace BeckhoffAutomationInterface.Runtime
             return result;
         }
 
-        /// <summary>Null when the step passed, else what went wrong (symbol, expected, actual).</summary>
-        string Execute(ScenarioStep step, double scenarioDeadline, double scenarioTimeoutS)
+        /// <summary>Null when the step passed; otherwise typed execution evidence.</summary>
+        ScenarioFailure Execute(ScenarioStep step, ScenarioBudget phase)
         {
-            double now = _nowS();
+            if (phase.Expired) return PhaseTimeout(phase);
+            ScenarioFailure failure = ExecuteStep(step, phase);
+            return failure ?? (phase.Overrun ? PhaseTimeout(phase) : null);
+        }
+
+        ScenarioFailure ExecuteStep(ScenarioStep step, ScenarioBudget phase)
+        {
             switch (step.Kind)
             {
-                case StepKind.Send:
-                {
-                    double deadline = Math.Min(now + (step.TimeoutS ?? ScenarioStep.DefaultSendTimeoutS), scenarioDeadline);
-                    string problem = Send(step.Command, step.Parameters, deadline, out bool accepted, out int index);
-                    string what = string.Format("command {0} (index {1}): ", step.CommandText, index);
-                    if (problem != null)
-                        return what + problem;
-                    if (accepted != step.ExpectAccepted)
-                        return what + string.Format("expected {0}, actual {1}", Answer(step.ExpectAccepted), Answer(accepted));
-                    return null;
-                }
-
-                case StepKind.WaitUntil:
-                {
-                    bool scenarioLimit = step.TimeoutS == null || now + step.TimeoutS.Value >= scenarioDeadline;
-                    double deadline = scenarioLimit ? scenarioDeadline : now + step.TimeoutS.Value;
-                    while (true)
-                    {
-                        string problem = ReadValue(step, out object actual);
-                        if (problem != null)
-                            return problem;
-                        if (step.Condition.Matches(actual))
-                            return Measured(step, actual);
-                        if (_nowS() >= deadline)
-                            return Measured(step, actual) ?? string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.SymbolAsWritten, step.Condition.Text,
-                                Comparison.Quote(actual), ScenarioNumbers.Seconds(deadline - now),
-                                scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(scenarioTimeoutS) : "");
-                        _sleepMs(PollMs);
-                    }
-                }
-
-                case StepKind.Check:
-                {
-                    string problem = ReadValue(step, out object actual);
-                    if (problem != null)
-                        return problem;
-                    Measured(step, actual);
-                    return step.Condition.Matches(actual)
-                        ? null
-                        : string.Format("{0}: expected {1}, actual {2}", step.SymbolAsWritten, step.Condition.Text, Comparison.Quote(actual));
-                }
-
-                case StepKind.Write:
-                {
-                    if (Mode == ScenarioMode.Hardware)
-                        return WriteNotAllowed;
-                    if (string.Equals(step.Symbol, SimulationActiveSymbol, StringComparison.OrdinalIgnoreCase))
-                        return "scenario cannot change " + SimulationActiveSymbol;
-                    if (_originalWrites != null && !_originalWrites.ContainsKey(step.Symbol))
-                    {
-                        int readError = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] original);
-                        if (readError != 0)
-                            return "cannot save " + step.SymbolAsWritten + " before write: " + AdsError(readError, step.Symbol);
-                        _originalWrites.Add(step.Symbol, (byte[])original.Clone());
-                    }
-                    int err = _write(step.Symbol, PlcValue.Encode(step.Type, step.Value));
-                    return err == 0 ? null
-                        : string.Format("{0} := {1}: {2}", step.SymbolAsWritten, Comparison.Quote(step.Value), AdsError(err, step.Symbol));
-                }
-
-                case StepKind.Wait:
-                {
-                    double left = scenarioDeadline - now;
-                    if (step.Seconds > left)
-                    {
-                        _sleepMs((int)Math.Max(0, left * 1000));
-                        return string.Format("{0}: scenario timeout {1}", ScenarioNumbers.Seconds(step.Seconds), ScenarioNumbers.Seconds(scenarioTimeoutS));
-                    }
-                    _sleepMs((int)(step.Seconds * 1000));
-                    return null;
-                }
-
+                case StepKind.Send: return SendStep(step, phase);
+                case StepKind.WaitUntil: return WaitUntil(step, phase);
+                case StepKind.Check: return Check(step, phase);
+                case StepKind.Write: return WriteStep(step, phase);
+                case StepKind.Wait: return WaitStep(step, phase);
                 case StepKind.Instruct:
-                case StepKind.Confirm:
-                    return Operator(step);
-
-                default:
-                    return "unknown step";
+                case StepKind.Confirm: return Operator(step);
+                default: return new ScenarioFailure(ScenarioFailureKind.InvalidOperation, "unknown step");
             }
         }
 
+        static ScenarioFailure PhaseTimeout(ScenarioBudget phase) =>
+            new ScenarioFailure(ScenarioFailureKind.Deadline, "scenario timeout " + ScenarioNumbers.Seconds(phase.DurationS));
+
+        ScenarioFailure SendStep(ScenarioStep step, ScenarioBudget phase)
+        {
+            ScenarioFailure problem = Send(step.Command, step.Parameters,
+                phase.Phase(step.TimeoutS ?? ScenarioStep.DefaultSendTimeoutS), out bool accepted, out int index);
+            string what = string.Format("command {0} (index {1}): ", step.CommandText, index);
+            if (problem != null) return problem.WithMessage(what + problem.Message);
+            return accepted == step.ExpectAccepted ? null : new ScenarioFailure(ScenarioFailureKind.CommandAnswer,
+                what + string.Format("expected {0}, actual {1}", Answer(step.ExpectAccepted), Answer(accepted)));
+        }
+
+        ScenarioFailure WaitUntil(ScenarioStep step, ScenarioBudget phase)
+        {
+            ScenarioBudget wait = phase.Phase(step.TimeoutS ?? phase.DurationS);
+            bool scenarioLimit = wait.Deadline == phase.Deadline;
+            object last = null;
+            bool observed = false;
+            while (true)
+            {
+                if (wait.Expired)
+                {
+                    if (!observed) return PhaseTimeout(wait);
+                    Measured(step, last);
+                    return new ScenarioFailure(ScenarioFailureKind.Expectation,
+                        string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.SymbolAsWritten,
+                            step.Condition.Text, Comparison.Quote(last), ScenarioNumbers.Seconds(wait.Deadline - wait.StartedAt),
+                            scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(phase.DurationS) : ""));
+                }
+                ScenarioFailure problem = ReadValue(step, out object actual);
+                if (problem != null) return problem;
+                if (wait.Overrun) return new ScenarioFailure(ScenarioFailureKind.Deadline,
+                    "waitUntil timeout " + ScenarioNumbers.Seconds(wait.Deadline - wait.StartedAt));
+                if (step.Condition.Matches(actual)) return Measured(step, actual);
+                last = actual;
+                observed = true;
+                if (!wait.Expired)
+                    _sleepMs((int)Math.Ceiling(Math.Min(PollMs, wait.RemainingS * 1000)));
+            }
+        }
+
+        ScenarioFailure Check(ScenarioStep step, ScenarioBudget phase)
+        {
+            ScenarioFailure problem = ReadValue(step, out object actual);
+            if (problem != null) return problem;
+            if (phase.Overrun) return PhaseTimeout(phase);
+            Measured(step, actual);
+            return step.Condition.Matches(actual) ? null : new ScenarioFailure(ScenarioFailureKind.Expectation,
+                string.Format("{0}: expected {1}, actual {2}", step.SymbolAsWritten, step.Condition.Text, Comparison.Quote(actual)));
+        }
+
+        ScenarioFailure WriteStep(ScenarioStep step, ScenarioBudget phase)
+        {
+            if (Mode == ScenarioMode.Hardware)
+                return new ScenarioFailure(ScenarioFailureKind.InvalidOperation, WriteNotAllowed);
+            if (string.Equals(step.Symbol, SimulationActiveSymbol, StringComparison.OrdinalIgnoreCase))
+                return new ScenarioFailure(ScenarioFailureKind.InvalidOperation, "scenario cannot change " + SimulationActiveSymbol);
+            if (_recovery != null && _recovery.CaptureWrites && !_recovery.Originals.ContainsKey(step.Symbol))
+            {
+                int readError = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] original);
+                if (readError != 0) return new ScenarioFailure(ScenarioFailureKind.Transport,
+                    "cannot save " + step.SymbolAsWritten + " before write: " + AdsError(readError, step.Symbol));
+                if (phase.Overrun) return PhaseTimeout(phase);
+                _recovery.Originals.Add(step.Symbol, (byte[])original.Clone());
+            }
+            int err = _write(step.Symbol, PlcValue.Encode(step.Type, step.Value));
+            return err == 0 ? null : new ScenarioFailure(ScenarioFailureKind.Transport,
+                string.Format("{0} := {1}: {2}", step.SymbolAsWritten, Comparison.Quote(step.Value), AdsError(err, step.Symbol)));
+        }
+
+        ScenarioFailure WaitStep(ScenarioStep step, ScenarioBudget phase)
+        {
+            double left = phase.RemainingS;
+            if (step.Seconds > left)
+            {
+                _sleepMs((int)Math.Max(0, left * 1000));
+                return new ScenarioFailure(ScenarioFailureKind.Deadline,
+                    string.Format("{0}: scenario timeout {1}", ScenarioNumbers.Seconds(step.Seconds), ScenarioNumbers.Seconds(phase.DurationS)));
+            }
+            _sleepMs((int)(step.Seconds * 1000));
+            return null;
+        }
         /// <summary>The one rule for a yes: "y" or "yes", any case; anything else (also no input) is no.</summary>
         internal static bool IsYes(string line)
         {
@@ -492,7 +671,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
         /// <summary>An instruct or confirm step. Hardware: the user answers (no user = failure).
         /// Simulation: answered automatically, and the report says so.</summary>
-        string Operator(ScenarioStep step)
+        ScenarioFailure Operator(ScenarioStep step)
         {
             bool confirm = step.Kind == StepKind.Confirm;
             string answer = "auto (simulation)";
@@ -500,19 +679,19 @@ namespace BeckhoffAutomationInterface.Runtime
             {
                 string line = Ask?.Invoke(confirm ? step.Text + " [y/n]" : step.Text.TrimEnd('.') + ". Press Enter when done.");
                 if (line == null)
-                    return "no operator input (the run is not interactive)";
+                    return new ScenarioFailure(ScenarioFailureKind.Operator, "no operator input (the run is not interactive)");
                 answer = !confirm ? "done" : IsYes(line) ? "yes" : "no";
             }
             _measurements?.Add(new Measurement
             {
                 Step = step.Number, Symbol = "operator: " + step.Text, Value = answer, Expected = confirm ? "yes" : "done",
             });
-            return answer == "no" ? "the operator answered no: " + step.Text : null;
+            return answer == "no" ? new ScenarioFailure(ScenarioFailureKind.Operator, "the operator answered no: " + step.Text) : null;
         }
 
         /// <summary>Records the value a scenario step read (not in prepare or cleanup). Always null, so
         /// "return Measured(...) ?? failure" keeps the step's own result.</summary>
-        string Measured(ScenarioStep step, object actual)
+        ScenarioFailure Measured(ScenarioStep step, object actual)
         {
             _measurements?.Add(new Measurement
             {
@@ -521,40 +700,44 @@ namespace BeckhoffAutomationInterface.Runtime
             return null;
         }
 
-        string ReadValue(ScenarioStep step, out object value)
+        ScenarioFailure ReadValue(ScenarioStep step, out object value)
         {
             value = null;
             int err = _read(step.Symbol, PlcValue.SizeOf(step.Type), out byte[] data);
             if (err != 0)
-                return string.Format("{0}: expected {1}, actual {2}", step.SymbolAsWritten, step.Condition.Text, AdsError(err, step.Symbol));
+                return new ScenarioFailure(ScenarioFailureKind.Transport, string.Format("{0}: expected {1}, actual {2}", step.SymbolAsWritten, step.Condition.Text, AdsError(err, step.Symbol)));
             value = PlcValue.Decode(step.Type, data);
             return null;
         }
 
         /// <summary>Sends one command and waits for the receiver's answer. Returns null when an answer
         /// came (accepted tells which), else what went wrong.</summary>
-        internal string Send(int command, Dictionary<string, object> parameters, double deadline, out bool accepted, out int index)
+        ScenarioFailure Send(int command, Dictionary<string, object> parameters, ScenarioBudget budget, out bool accepted, out int index)
         {
             accepted = false;
             index = 0;
-            string problem = ReadIndexes(out int lastAccepted, out int lastRejected);
+            if (budget.Expired) return new ScenarioFailure(ScenarioFailureKind.Deadline, "command timeout before send");
+            ScenarioFailure problem = ReadIndexes(out int lastAccepted, out int lastRejected);
             if (problem != null)
                 return problem;
+            if (budget.Expired) return new ScenarioFailure(ScenarioFailureKind.Deadline, "command timeout before send");
             do
                 index = NextIndex();
             while (index == lastAccepted || index == lastRejected);
 
             byte[] stream = CommandJson.ToStream(CommandJson.Build(command, index, parameters));
+            if (_recovery != null) _recovery.Required = true;
             int err = _write(StreamSymbol, stream);
             if (err != 0)
-                return "cannot write " + StreamSymbol + ": " + AdsError(err, StreamSymbol);
+                return new ScenarioFailure(ScenarioFailureKind.Transport, "cannot write " + StreamSymbol + ": " + AdsError(err, StreamSymbol));
 
-            double start = _nowS();
             while (true)
             {
+                if (budget.Expired) return CommandTimeout(budget, index);
                 problem = ReadIndexes(out lastAccepted, out lastRejected);
                 if (problem != null)
                     return problem;
+                if (budget.Overrun) return CommandTimeout(budget, index);
                 if (lastAccepted == index)
                 {
                     accepted = true;
@@ -562,25 +745,26 @@ namespace BeckhoffAutomationInterface.Runtime
                 }
                 if (lastRejected == index)
                     return null;
-                if (_nowS() >= deadline)
-                    return string.Format("no answer after {0}: neither nLastCommandIndex nor nLastRejectedCommandIndex became {1}" +
-                        " (an unknown command id, or the command receiver does not run)", ScenarioNumbers.Seconds(deadline - start), index);
                 _sleepMs(PollMs);
             }
         }
 
-        string ReadIndexes(out int accepted, out int rejected)
+        static ScenarioFailure CommandTimeout(ScenarioBudget budget, int index) => new ScenarioFailure(ScenarioFailureKind.Deadline,
+            string.Format("no answer after {0}: neither nLastCommandIndex nor nLastRejectedCommandIndex became {1}" +
+                " (an unknown command id, or the command receiver does not run)", ScenarioNumbers.Seconds(budget.Deadline - budget.StartedAt), index));
+
+        ScenarioFailure ReadIndexes(out int accepted, out int rejected)
         {
             rejected = 0;
             return ReadIndex(AcceptedSymbol, out accepted) ?? ReadIndex(RejectedSymbol, out rejected);
         }
 
-        string ReadIndex(string symbol, out int value)
+        ScenarioFailure ReadIndex(string symbol, out int value)
         {
             value = 0;
             int err = _read(symbol, 4, out byte[] data);
             if (err != 0)
-                return "cannot read " + symbol + ": " + AdsError(err, symbol);
+                return new ScenarioFailure(ScenarioFailureKind.Transport, "cannot read " + symbol + ": " + AdsError(err, symbol));
             value = BitConverter.ToInt32(data, 0);
             return null;
         }

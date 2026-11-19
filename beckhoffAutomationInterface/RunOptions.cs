@@ -157,6 +157,12 @@ namespace BeckhoffAutomationInterface
         /// from their .TcTLEO file on disk instead (see PlcObjectExporter.Export).</summary>
         public string PlcProjectDiskFolder => Path.Combine(Path.GetDirectoryName(TsprojFilePath), PlcProjectName);
 
+        /// <summary>The PLC project file, which names every object file (see Sync/SyncManifest.cs).</summary>
+        public string PlcprojFilePath => Path.Combine(PlcProjectDiskFolder, PlcProjectName + ".plcproj");
+
+        /// <summary>The sync manifest next to the .tsproj (see Sync/SyncManifest.cs).</summary>
+        public string SyncManifestPath => Path.Combine(Path.GetDirectoryName(TsprojFilePath), Sync.SyncManifest.FileName);
+
         public string LibraryManifestPath => Path.Combine(SourceFolder, "libraries.xml");
         public string EventManifestPath => Path.Combine(SourceFolder, "events.xml");
         public string IoManifestPath => Path.Combine(SourceFolder, "io-devices.xml");

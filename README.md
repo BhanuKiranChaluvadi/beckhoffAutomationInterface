@@ -476,9 +476,23 @@ whose `.st` file moved to another folder (`- deleted  FB_X (moved from A)`; the 
 again in the new folder). A PROGRAM is updated where it is. An empty PLC folder stays. The tool
 builds a fresh project when you give `--fresh`, when a manifest changed, when it cannot delete an
 old object (two objects with the name, or TwinCAT refuses), when the kept project has I/O items
-that the manifest does not have, or when the last run did not end. When the shell
-crashes or stops (RPC error or time-out), the tool keeps the failed folder in
-`<work>\<family>\_failed\` and builds once more, fresh. A compile error is not tried again.
+that the manifest does not have, when the last run could not open the solution, or when the last
+run ended (or failed) before its sync completed. A compile error is a source error: the project
+is kept and the next run syncs it. A run that ends after its sync (in the compile, the activation
+or `machine dev`) also keeps it. `bai-machine.json` in the project folder records this (`result`:
+`running`, `synced`, `passed`, `failed`, `crashed`; `failure`: `open`, `sync`, `compile`,
+`shell`). When the shell crashes or stops (RPC error or time-out), or the kept solution does not
+open, the tool keeps the failed folder in `<work>\<family>\_failed\` and builds once more, fresh.
+A compile error is not tried again.
+
+The code sync of a kept project reads an object over COM only when it may have changed.
+`bai-sync-manifest.json` next to the `.tsproj` records, per object (with its METHODs and
+PROPERTYs), the SHA-256 of the texts bai sends and of its object file (`.TcPOU`, `.TcDUT`,
+`.TcGVL`, `.TcIO`, as the `.plcproj` names it) after the save; an object is recorded only when
+its file holds every text. The next sync skips an object when both hashes are the same
+(`Sync complete (..., of which N not read: unchanged in the sync manifest)`). A changed source,
+a file saved again (an edit in XAE), or a missing manifest or one of another bai build: the
+object is compared as before. Deleting gone objects does not change.
 
 | Option | Meaning |
 |---|---|
@@ -652,6 +666,36 @@ Exit code: 0 = pass, 1 = refused or failed (the record gives the reason), 2 = wr
 - It never activates, and never changes the runtime state, except with `activate`, `package install`,
   `package rollback`, `runtime-state --set` or `machine test` (only on UmRT_Default).
 - It never reads `--confirm-delete-io`, `--overwrite` or `--plc` from `.stconfig`.
+
+### Shared PLC source conversion
+
+`bai convert Lib App/NFLite App/NFPro` prepares reusable TwinCAT PLC source files without
+starting XAE, compiling, or activating a runtime. Each argument is an independent source tree;
+methods and properties must have their owner in that tree. Omit this command for local builds:
+`init`, `sync`, machine builds, release builds and test benches populate the same cache on demand.
+
+One cache entry contains a whole POU, interface, DUT or GVL, including its methods and properties.
+Its key includes the source texts, names, kinds, converter format and exact BAI executable identity.
+Destination folders, project names and machine names do not affect the key. Identical `Lib` objects
+therefore travel between LITE, PRO and test projects. Generated build identities, gas models and
+test doubles have their own content hashes. Conditional compiler directives stay in the XML;
+each project still compiles its own flags and configuration.
+
+The default cache is `%LOCALAPPDATA%\BeckhoffAutomationInterface\conversions`. Set
+`BAI_CONVERSION_CACHE` to choose a directory or restore a CI artifact. Entries include payload hashes;
+missing or corrupt entries are rebuilt. Concurrent writers publish complete entries atomically.
+Projects receive independent files rather than writable links to cache entries. Removing the cache
+only loses conversion reuse; it does not remove a project or change its configuration.
+
+BAI saves and closes its managed project before updating the object files and `.plcproj`, then
+reopens it for the remaining stages. Existing object/member IDs are retained. Standalone sync keeps
+members absent from the supplied source, as before; a machine sync deletes tracked removed members.
+The machine-dev loop retains its open-session COM path, and adopted projects retain their read-only
+shadow-copy path. Unchanged kept projects still use the existing sync-manifest shortcut.
+
+This feature needs acceptance in XAE before promotion of the new tool pin. The regression suite and
+`e2e/shared-conversion.ps1` are provided but have not been executed during implementation. No speedup
+has been measured yet; compilation, I/O links, safety configuration and tests remain per project.
 
 ## 5. The source folder
 
@@ -961,11 +1005,11 @@ project with no variants, use `"default": [ ... ]`.
 | `name` | Required. The name in the results. |
 | `tags` | Optional. Names that select a set of scenarios. |
 | `requires` | Optional. Feature groups that the machine must have. Never a machine name. |
-| `timeoutS` | Optional. The time limit for the scenario. Default: 600 s. |
+| `timeoutS` | Optional. One shared budget for scenario steps (default 600 s). Prepare shares one prepare timeout across its operations; cleanup has its own prepare-timeout budget. Pending simulation reset and injected values are restored before cancellation, which gets a separate bounded acknowledgment window even after slow restoration. Explicit cleanup uses the original cleanup deadline; overrunning it fails cleanup. The whole-run limit is `timeoutS + 2 * prepareTimeoutS + 30` seconds. A blocking ADS call cannot be interrupted; elapsed time is checked on return. Cleanup still runs after step timeout, and cleanup failure blocks later scenarios. Calls longer than 1 s appear in the slow ADS report. |
 | `steps` | Required. The steps, in order. |
 | `cleanup` | Optional. Steps that run after the scenario, also after a failure. Use them to undo manual commands: CancelProcess does not undo all of them. |
 | `purpose`, `estimateS`, `prepare` | Optional for `test`; `purpose` and `estimateS` are required by `acceptance`. What the scenario proves, its expected duration in seconds, and a list of what the user does before it. `acceptance` shows them in its run plan. |
-| `simulationFault` | Optional. `{ "write": [ { "symbol", "type", "value" } ], "failsAtStep": n }`. In `test` the scenario runs healthy (it must pass), then again with these writes (it must fail at step n); the values are restored. A scenario that passes with the fault fails: its checks cannot see the fault. `acceptance` ignores it. |
+| `simulationFault` | Optional. `{ "write": [ { "symbol", "type", "value" } ], "failsAtStep": n }`. In `test` the scenario runs healthy (it must pass), then again with these writes (an observed condition or command-answer mismatch must occur at step n); the values are restored. ADS errors and late observations cannot prove the fault. A scenario that passes with the fault fails: its checks cannot see the fault. `acceptance` ignores it. |
 
 | `do` | Fields | What it does |
 |---|---|---|
@@ -1068,3 +1112,5 @@ Each action only shows a preview until you add `-Apply`. Use short work paths su
 
 To install a GitHub Actions runner for PLC CI, see
 [docs/github-self-hosted-runner-install-steps.md](docs/github-self-hosted-runner-install-steps.md).
+
+Build and scenario ownership is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

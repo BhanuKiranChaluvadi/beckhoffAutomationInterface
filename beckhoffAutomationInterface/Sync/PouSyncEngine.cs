@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -30,9 +30,9 @@ namespace BeckhoffAutomationInterface.Sync
 
         readonly ITcSysManager _sysManager;
         readonly string _projectRootPath;
-        readonly Dictionary<string, ITcSmTreeItem> _folderCache = new Dictionary<string, ITcSmTreeItem>();
-        readonly Dictionary<string, ITcSmTreeItem> _ownerItems = new Dictionary<string, ITcSmTreeItem>();
-        readonly HashSet<string> _interfaceOwners = new HashSet<string>();
+        readonly Dictionary<string, ITcSmTreeItem> _folderCache = new Dictionary<string, ITcSmTreeItem>(PlcSourceObject.Names);
+        readonly Dictionary<string, ITcSmTreeItem> _ownerItems = new Dictionary<string, ITcSmTreeItem>(PlcSourceObject.Names);
+        readonly HashSet<string> _interfaceOwners = new HashSet<string>(PlcSourceObject.Names);
         SyncProgress _progress;
 
         public PouSyncEngine(ITcSysManager sysManager, string projectRootPath)
@@ -42,9 +42,22 @@ namespace BeckhoffAutomationInterface.Sync
             _folderCache[projectRootPath] = sysManager.LookupTreeItem(projectRootPath);
         }
 
-        public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources)
+        /// <param name="skip">Top-level objects (by name, with their METHODs and PROPERTYs) that the
+        /// sync manifest found unchanged: no COM call at all; reported as unchanged and counted in
+        /// SyncReport.Skipped.</param>
+        public SyncReport Sync(IReadOnlyList<StPouSource> desiredSources, ICollection<string> skip = null)
         {
             var report = new SyncReport();
+            if (skip != null && skip.Count > 0)
+            {
+                var skipped = new HashSet<string>(skip, PlcSourceObject.Names);
+                bool Skipped(StPouSource s) => skipped.Contains(s.OwnerName ?? s.Name);
+                foreach (StPouSource s in desiredSources.Where(Skipped))
+                    report.Unchanged.Add(s.OwnerName != null ? s.OwnerName + "." + s.Name
+                        : s.RelativeFolder.Length > 0 ? s.RelativeFolder + "/" + s.Name : s.Name);
+                report.Skipped = desiredSources.Count(Skipped);
+                desiredSources = desiredSources.Where(s => !Skipped(s)).ToList();
+            }
 
             List<StPouSource> nonMethods = desiredSources.Where(s => !s.IsMethod && !s.IsProperty).ToList();
             List<StPouSource> methods = desiredSources.Where(s => s.IsMethod).ToList();
@@ -162,10 +175,10 @@ namespace BeckhoffAutomationInterface.Sync
         void SyncMethods(List<StPouSource> desiredMethods, SyncReport report)
         {
             var methodsByOwner = desiredMethods
-                .GroupBy(m => m.OwnerName)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .GroupBy(m => m.OwnerName, PlcSourceObject.Names)
+                .ToDictionary(g => g.Key, g => g.ToList(), PlcSourceObject.Names);
 
-            foreach (string unknownOwner in methodsByOwner.Keys.Except(_ownerItems.Keys))
+            foreach (string unknownOwner in methodsByOwner.Keys.Except(_ownerItems.Keys, PlcSourceObject.Names))
                 throw new InvalidOperationException(
                     $"Method file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 
@@ -213,10 +226,10 @@ namespace BeckhoffAutomationInterface.Sync
         void SyncProperties(List<StPouSource> desiredProperties, SyncReport report)
         {
             var propsByOwner = desiredProperties
-                .GroupBy(p => p.OwnerName)
-                .ToDictionary(g => g.Key, g => g.ToList());
+                .GroupBy(p => p.OwnerName, PlcSourceObject.Names)
+                .ToDictionary(g => g.Key, g => g.ToList(), PlcSourceObject.Names);
 
-            foreach (string unknownOwner in propsByOwner.Keys.Except(_ownerItems.Keys))
+            foreach (string unknownOwner in propsByOwner.Keys.Except(_ownerItems.Keys, PlcSourceObject.Names))
                 throw new InvalidOperationException(
                     $"Property file(s) reference unknown FUNCTION_BLOCK/INTERFACE owner '{unknownOwner}' \u2014 ensure '{unknownOwner}.st' exists.");
 

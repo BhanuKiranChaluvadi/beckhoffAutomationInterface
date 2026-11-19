@@ -25,6 +25,9 @@ namespace BeckhoffAutomationInterface.Cli
 
         internal static readonly Command[] Commands =
         {
+            Entry("convert", "Convert shared PLC source into reusable TwinCAT XML files.", Sync.ConversionCommand.Usage,
+                "bai convert Lib App/NFLite App/NFPro",
+                notes: "No XAE session or compilation. Uses the same content-addressed cache as init, sync, machine builds and test projects. BAI_CONVERSION_CACHE overrides the cache directory."),
             Entry("init", "Create a TwinCAT solution, synchronize source, and build.", CommandLine.InitUsage,
                 @"bai init ST\sample --into C:\bai\work", config: true, shell: true,
                 notes: "The default project name is the source folder name. PLC names must contain only letters, digits, and underscores."),
