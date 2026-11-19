@@ -197,7 +197,7 @@ namespace BeckhoffAutomationInterface
         /// on the next run instead of leaving stale PLC code compiling silently.</summary>
         public string KnownNamesPath => Path.Combine(SourceFolder, ".st-known-names");
 
-        public string PousTreePath => TreePath("POUs");
+        public string PousTreePath => TreePath(Sync.PouSyncEngine.TemplatePousFolder);
         public string ReferencesTreePath => TreePath("References");
 
         /// <summary>The real TIPC tree name of the PLC project (TIPC^&lt;PlcProjectName&gt;^

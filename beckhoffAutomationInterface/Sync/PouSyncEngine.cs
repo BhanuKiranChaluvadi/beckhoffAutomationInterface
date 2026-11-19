@@ -330,11 +330,29 @@ namespace BeckhoffAutomationInterface.Sync
                 // object of the same name that already exists elsewhere — most commonly
                 // the standard template's "MAIN" (in the POUs folder), which a root-level
                 // MAIN.st would duplicate. Find and reuse the existing one so its text is
-                // updated in place instead of failing.
-                ITcSmTreeItem existing = FindDescendantByName(_folderCache[_projectRootPath], name);
+                // updated in place instead of failing. Look in the template's POUs folder
+                // first: walking the whole tree over COM takes about a minute once the
+                // project holds ~2500 items (a fresh build that imported its objects).
+                ITcSmTreeItem existing = LookupOrNull(_projectRootPath + "^" + TemplatePousFolder + "^" + name)
+                    ?? FindDescendantByName(_folderCache[_projectRootPath], name);
                 if (existing == null) throw;
                 isNew = false;
                 return existing;
+            }
+        }
+
+        /// <summary>The folder of the standard PLC template that holds its MAIN.</summary>
+        internal const string TemplatePousFolder = "POUs";
+
+        ITcSmTreeItem LookupOrNull(string path)
+        {
+            try
+            {
+                return _sysManager.LookupTreeItem(path);
+            }
+            catch (COMException)
+            {
+                return null;
             }
         }
 
