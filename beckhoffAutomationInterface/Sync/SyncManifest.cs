@@ -159,10 +159,15 @@ namespace BeckhoffAutomationInterface.Sync
 
         internal sealed class SavedFile
         {
-            public SavedFile(string name, List<StPouSource> group, byte[] bytes) { Name = name; Group = group; Bytes = bytes; }
+            public SavedFile(string name, List<StPouSource> group, byte[] bytes, string include)
+            {
+                Name = name; Group = group; Bytes = bytes; Include = include;
+            }
             public string Name { get; }
             public List<StPouSource> Group { get; }
             public byte[] Bytes { get; }
+            /// <summary>The path the .plcproj names, relative to the PLC project folder.</summary>
+            public string Include { get; }
         }
 
         /// <summary>The object files of a saved project that the .plcproj names and that hold every
@@ -176,7 +181,7 @@ namespace BeckhoffAutomationInterface.Sync
             {
                 byte[] bytes = ReadObjectFile(plcprojPath, files, g.Value[0]);
                 if (bytes != null && FileHoldsTexts(FileText(bytes), g.Value))
-                    yield return new SavedFile(g.Key, g.Value, bytes);
+                    yield return new SavedFile(g.Key, g.Value, bytes, files[g.Value[0].Name + FileExtension(g.Value[0].Kind)]);
             }
         }
 

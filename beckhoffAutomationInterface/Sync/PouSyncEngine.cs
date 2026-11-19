@@ -42,6 +42,14 @@ namespace BeckhoffAutomationInterface.Sync
             _folderCache[projectRootPath] = sysManager.LookupTreeItem(projectRootPath);
         }
 
+        /// <summary>Imports stored object files (PlcObjectImport): one CreateChild subtype 58 call
+        /// per PLC folder with all its files. Never retried: a second call would import twice.</summary>
+        public void Import(IEnumerable<PlcObjectImport.Item> items)
+        {
+            foreach (IGrouping<string, PlcObjectImport.Item> folder in items.GroupBy(i => i.Folder ?? "", StringComparer.OrdinalIgnoreCase))
+                GetOrCreateFolder(folder.Key).CreateChild(null, PlcObjectImport.ImportFiles, null, folder.Select(i => i.File).ToArray());
+        }
+
         /// <param name="skip">Top-level objects (by name, with their METHODs and PROPERTYs) that the
         /// sync manifest found unchanged: no COM call at all; reported as unchanged and counted in
         /// SyncReport.Skipped.</param>
