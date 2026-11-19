@@ -15,17 +15,15 @@ namespace BeckhoffAutomationInterface.Sync
         readonly IgnoreRules _ignore;
         readonly PipelineOutcome Outcome;
         readonly bool DeleteStaleObjects;
-        readonly bool KeepSessionOpen;
 
         public PlcSourceUpdate(TwinCatSession session, RunOptions options, IgnoreRules ignore,
-            PipelineOutcome outcome, bool mirror, bool keepSessionOpen)
+            PipelineOutcome outcome, bool mirror)
         {
             _session = session;
             _options = options;
             _ignore = ignore;
             Outcome = outcome;
             DeleteStaleObjects = mirror;
-            KeepSessionOpen = keepSessionOpen;
         }
         /// <summary>Code stage: .st files -> PLC POUs (create/update/delete), plus the
         /// warn-only drift detection, the naming lint, and the known-names baseline.</summary>
@@ -41,9 +39,7 @@ namespace BeckhoffAutomationInterface.Sync
                     "{0} object(s) are defined in more than one .st file; nothing was synced. Delete or rename the stale file:\n    {1}",
                     duplicates.Count, string.Join("\n    ", duplicates)));
 
-            List<PlcSourceObject> sourceObjects = PlcSourceObject.Group(desiredPous);
             bool useManifest = _options.ExistingTsprojPath == null && _session.Shadow == null;
-            bool useFiles = useManifest && !KeepSessionOpen;
 
             // Drift: a previously-synced name missing from the current parse means its .st
             // source was renamed/deleted, but the PLC object still compiles. With
@@ -51,7 +47,7 @@ namespace BeckhoffAutomationInterface.Sync
             List<string> currentNames = KnownNamesTracker.CollectNames(desiredPous);
             List<string> previousNames = KnownNamesTracker.Read(_options.KnownNamesPath);
             List<string> deletedObjects = new List<string>();
-            if (DeleteStaleObjects && !useFiles)
+            if (DeleteStaleObjects)
             {
                 StaleObjectPlan plan = null;
                 RetryOnBusy(() => plan = StaleObjectPlan.Build(previousNames, desiredPous,
@@ -90,25 +86,9 @@ namespace BeckhoffAutomationInterface.Sync
                 : new List<string>();
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            SyncReport syncReport;
-            if (useFiles && (skip.Count < sourceObjects.Count ||
-                (DeleteStaleObjects && PlcProjectCode.NeedsMirror(_options.PlcprojFilePath, sourceObjects, previousNames))))
-            {
-                _session.Project.Save();
-                _session.EnsureClosed();
-                var cache = PlcObjectCache.Open();
-                syncReport = PlcProjectCode.Apply(_options.PlcprojFilePath, sourceObjects, cache,
-                    preserveMembers: true, skip: skip, previousNames: DeleteStaleObjects ? previousNames ?? new List<string>() : null);
-                Console.WriteLine("{0}: Conversion cache: {1} reused, {2} converted ({3}).",
-                    Now(), cache.Reused, cache.Converted, PlcObjectCache.DefaultDirectory);
-                _session.EnsureOpen();
-            }
-            else
-            {
-                // Adopted projects retain their shadow-copy/COM path. An unchanged owned project has no COM text reads.
-                var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
-                syncReport = syncEngine.Sync(desiredPous, skip);
-            }
+            // An object unchanged in the sync manifest is not read over COM.
+            var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
+            SyncReport syncReport = syncEngine.Sync(desiredPous, skip);
             syncReport.Deleted.AddRange(deletedObjects);
 
             PrintLines("+ created  ", syncReport.Created);

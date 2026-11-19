@@ -419,7 +419,7 @@ namespace BeckhoffAutomationInterface.Machines
             BuildInfo.Write(MachineSources.RepoPath(l.Src, l.Family.BuildInfo),
                 BuildInfo.FromGit(l.RepoRoot, l.Machine, r.BuildInputs, BuildInfo.RunGit, DateTime.UtcNow));
             RunOptions code = Options(r, init: false, stages: SyncStages.Code);
-            var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true, KeepSessionOpen = true };
+            var pipeline = new SyncPipeline(s, code, IgnoreRules.Load(code.SourceFolder, code.IgnorePatterns)) { DeleteStaleObjects = true };
             progress.Running(); // a process that ends in this sync leaves a project to build fresh
             pipeline.Run();
             if (!pipeline.Outcome.SyncCompleted || pipeline.Outcome.HasErrors)

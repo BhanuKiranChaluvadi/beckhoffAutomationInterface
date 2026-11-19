@@ -53,9 +53,6 @@ namespace BeckhoffAutomationInterface
         /// the code sync, so a kept project stays usable. False: only warn about them (bai sync).</summary>
         public bool DeleteStaleObjects { get; set; }
 
-        /// <summary>The interactive machine-dev loop retains XAE and applies its small changes through COM.</summary>
-        public bool KeepSessionOpen { get; set; }
-
         /// <summary>
         /// Executes the selected stages (see SyncStages; all of them when no stage flag
         /// was given) in a fixed three-phase order regardless of flag order:
@@ -356,7 +353,7 @@ namespace BeckhoffAutomationInterface
         }
 
         void SyncCode() => new PlcSourceUpdate(_session, _options, _ignore, Outcome,
-            DeleteStaleObjects, KeepSessionOpen).Apply();
+            DeleteStaleObjects).Apply();
         /// <summary>Variants stage: apply variants.xml (see VariantSyncEngine). No manifest =
         /// nothing to do, so projects without variants are untouched.</summary>
         void SyncVariants()

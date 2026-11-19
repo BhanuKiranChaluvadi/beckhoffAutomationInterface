@@ -194,9 +194,6 @@ namespace BeckhoffAutomationInterface
             RunOptions options = null;
             switch (args[0])
             {
-                case "convert":
-                    Environment.Exit(Sync.ConversionCommand.Run(args));
-                    break;
                 case "package":
                 case "libraries":
                 case "toolchain":
