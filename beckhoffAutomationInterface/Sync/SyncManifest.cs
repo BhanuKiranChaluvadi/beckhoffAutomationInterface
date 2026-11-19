@@ -152,18 +152,32 @@ namespace BeckhoffAutomationInterface.Sync
         internal static SyncManifest Record(string bai, IEnumerable<StPouSource> sources, string plcprojPath)
         {
             var manifest = new SyncManifest(bai);
+            foreach (SavedFile saved in SavedFiles(sources, plcprojPath))
+                manifest.Entries[saved.Name] = new Entry(SourceHash(saved.Group), Sha256(saved.Bytes));
+            return manifest;
+        }
+
+        internal sealed class SavedFile
+        {
+            public SavedFile(string name, List<StPouSource> group, byte[] bytes) { Name = name; Group = group; Bytes = bytes; }
+            public string Name { get; }
+            public List<StPouSource> Group { get; }
+            public byte[] Bytes { get; }
+        }
+
+        /// <summary>The object files of a saved project that the .plcproj names and that hold every
+        /// text of their source group. None without a readable .plcproj.</summary>
+        internal static IEnumerable<SavedFile> SavedFiles(IEnumerable<StPouSource> sources, string plcprojPath)
+        {
             Dictionary<string, string> files = ReadProjectFiles(plcprojPath);
             if (files == null)
-                return manifest;
+                yield break;
             foreach (KeyValuePair<string, List<StPouSource>> g in Groups(sources))
             {
                 byte[] bytes = ReadObjectFile(plcprojPath, files, g.Value[0]);
-                if (bytes == null)
-                    continue;
-                if (FileHoldsTexts(FileText(bytes), g.Value))
-                    manifest.Entries[g.Key] = new Entry(SourceHash(g.Value), Sha256(bytes));
+                if (bytes != null && FileHoldsTexts(FileText(bytes), g.Value))
+                    yield return new SavedFile(g.Key, g.Value, bytes);
             }
-            return manifest;
         }
 
         static Dictionary<string, string> ReadProjectFiles(string plcprojPath)

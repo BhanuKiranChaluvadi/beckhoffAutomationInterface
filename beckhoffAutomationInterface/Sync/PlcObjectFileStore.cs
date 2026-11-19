@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace BeckhoffAutomationInterface.Sync
 {
@@ -65,6 +67,31 @@ namespace BeckhoffAutomationInterface.Sync
         {
             string path = PathOf(group);
             return Holds(path, group) ? path : null;
+        }
+
+        /// <summary>After a sync saved the project: stores each object file that the .plcproj
+        /// names and that holds its texts. Returns how many files the store holds for them.</summary>
+        public int PutSaved(IEnumerable<StPouSource> sources, string plcprojPath)
+        {
+            int stored = 0;
+            foreach (SyncManifest.SavedFile saved in SyncManifest.SavedFiles(sources, plcprojPath))
+                if (Put(saved.Group, saved.Bytes))
+                    stored++;
+            return stored;
+        }
+
+        /// <summary>The TwinCAT version that saved the project (TcVersion of the .tsproj), or null.</summary>
+        public static string ProjectTwinCatVersion(string tsprojPath)
+        {
+            try
+            {
+                string version = File.Exists(tsprojPath) ? (string)XDocument.Load(tsprojPath).Root.Attribute("TcVersion") : null;
+                return string.IsNullOrWhiteSpace(version) ? null : version;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is XmlException)
+            {
+                return null;
+            }
         }
 
         string PathOf(IReadOnlyList<StPouSource> group) => Path.Combine(_directory,

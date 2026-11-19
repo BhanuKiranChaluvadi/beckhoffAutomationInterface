@@ -104,6 +104,46 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Single(Directory.GetFiles(root, "*.TcPOU", SearchOption.AllDirectories));
         }
 
+        // ------------------------------------------------------------------ after a sync: the saved files of a project
+
+        static List<StPouSource> Single(string name, string impl) => new List<StPouSource>
+            { new StPouSource(name, PouKind.FunctionBlock, null, "FUNCTION_BLOCK " + name, impl) { RelativeFolder = "Lib/A" } };
+
+        [Fact]
+        public void PutSaved_StoresEachObjectFileThatTheProjectNamesAndThatHoldsItsTexts()
+        {
+            string project = TestProjects.NewTempDir("bai_object_files_project");
+            Directory.CreateDirectory(Path.Combine(project, "Lib", "A"));
+            string plcproj = Path.Combine(project, "PLC.plcproj");
+            File.WriteAllText(plcproj, @"<Project xmlns=""http://schemas.microsoft.com/developer/msbuild/2003""><ItemGroup>
+  <Compile Include=""Lib\A\FB_A.TcPOU"" /><Compile Include=""Lib\A\FB_Stale.TcPOU"" /></ItemGroup></Project>");
+            File.WriteAllBytes(Path.Combine(project, "Lib", "A", "FB_A.TcPOU"), SavedFile(Group()));
+            File.WriteAllBytes(Path.Combine(project, "Lib", "A", "FB_Stale.TcPOU"), SavedFile(Single("FB_Stale", "old := 1;")));
+            File.WriteAllBytes(Path.Combine(project, "Lib", "A", "FB_Unnamed.TcPOU"), SavedFile(Single("FB_Unnamed", "x := 1;")));
+            List<StPouSource> sources = Group().Concat(Single("FB_Stale", "new := 1;")).Concat(Single("FB_Unnamed", "x := 1;")).ToList();
+            string root = TestProjects.NewTempDir("bai_object_files");
+
+            Assert.Equal(1, Store(root).PutSaved(sources, plcproj));
+
+            Assert.NotNull(Store(root).Find(Group()));
+            Assert.Null(Store(root).Find(Single("FB_Stale", "new := 1;")));
+            Assert.Null(Store(root).Find(Single("FB_Unnamed", "x := 1;")));
+        }
+
+        [Theory]
+        [InlineData("<TcSmProject TcVersion=\"3.1.4026.24\" TcProjectVariant=\"\"/>", "3.1.4026.24")]
+        [InlineData("<TcSmProject/>", null)]
+        [InlineData("<TcSmProject TcVersion=\" \"/>", null)]
+        [InlineData("not xml", null)]
+        public void ProjectTwinCatVersion_IsTheVersionThatSavedTheProject(string tsproj, string version)
+        {
+            string path = Path.Combine(TestProjects.NewTempDir("bai_object_files_tsproj"), "M.tsproj");
+            File.WriteAllText(path, tsproj);
+
+            Assert.Equal(version, PlcObjectFileStore.ProjectTwinCatVersion(path));
+            Assert.Null(PlcObjectFileStore.ProjectTwinCatVersion(path + ".missing"));
+        }
+
         [Theory]
         [InlineData(null)]
         [InlineData("")]
