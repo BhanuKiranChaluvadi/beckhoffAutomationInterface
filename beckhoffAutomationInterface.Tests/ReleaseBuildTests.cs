@@ -18,6 +18,7 @@ namespace BeckhoffAutomationInterface.Tests
     public sealed class ReleaseBuildTests : IDisposable
     {
         const string Version = "3.1.4026.24", Platform = "TwinCAT RT (x64)", Library = "compiled fixture library\r\n";
+        const string CurrentInfo = "15F5F6E1-C1BA-56ED-2D71-3D614E4C775F", StaleInfo = "24003CFD-B962-1D85-1039-25720DF76BB8";
         readonly string scratch = TestProjects.NewTempDir("bai_release");
         readonly MachineRepoFixture repo;
         string Tool => Path.Combine(scratch, "bai");
@@ -132,7 +133,14 @@ namespace BeckhoffAutomationInterface.Tests
                 string boot = Path.Combine(project, "_Boot", m, Platform);
                 Write(Path.Combine(boot, "CurrentConfig.xml"), "<TcBootProject Platform='" + Platform + "'/>");
                 Write(Path.Combine(boot, "CurrentProjectInfo.json"), "{\"project\":{\"name\":\"" + m + "\",\"platform\":\"" + Platform + "\"}}");
-                foreach (string file in new[] { "Port_851.app", "Port_851_boot.tizip", "Port_851.crc", "Port_851.autostart" }) Write(Path.Combine(boot, "Plc", file), "fixture");
+                foreach (string file in new[] { "Port_851.app", "Port_851.crc", "Port_851.autostart" }) Write(Path.Combine(boot, "Plc", file), "fixture");
+                // TwinCAT keeps the compile information of earlier compiles; the boot project names its own.
+                Write(Path.Combine(plc, "_CompileInfo", CurrentInfo + ".compileinfo"), "current compiler information");
+                Write(Path.Combine(plc, "_CompileInfo", StaleInfo + ".compileinfo"), "stale compiler information");
+                Write(Path.Combine(boot, "Plc", "Port_851_boot.tizip"), "fixture " + (fault == "boot-names-none" ? "" : fault == "boot-names-two"
+                    ? CurrentInfo + " " + StaleInfo.ToLowerInvariant() : CurrentInfo.ToLowerInvariant()));
+                Write(l.Tsproj + ".bak", "editor backup");
+                Write(Path.Combine(project, "bai-sync-manifest.json"), "{}");
                 Write(Path.Combine(project, "Safety", "TargetSystemConfig.xml"), "<TargetSystemConfig ProjectCRC='0x1234'><SerialNumber>42</SerialNumber></TargetSystemConfig>");
                 if (fault == "boot") File.Delete(Path.Combine(boot, "CurrentConfig.xml"));
                 Write(Path.Combine(l.Dir, m, m + ".sln"), "fixture solution");
@@ -192,7 +200,7 @@ namespace BeckhoffAutomationInterface.Tests
             }
             Assert.Equal(Hash(LockFile), Hash(Path.Combine(bundle, "libraries.lock.json")));
             Assert.Equal(Hash(LockFile).ToUpperInvariant(), record["libraryLockSha256"]);
-            Assert.Equal(12, Array(project, "artifacts").Length);
+            Assert.Equal(16, Array(project, "artifacts").Length);
 
             var package = First(record["packages"]);
             string zip = Path.Combine(bundle, "packages", "M1.zip");
@@ -252,7 +260,6 @@ namespace BeckhoffAutomationInterface.Tests
                 int code = FakeCompile(a, b, c, d, e, f, g);
                 string project = Path.Combine(c, "Fam", "M1", "M1");
                 Write(Path.Combine(project, ".vs", "workspace.cache"), "IDE cache");
-                Write(Path.Combine(project, "_CompileInfo", "application.compileinfo"), "compiler information");
                 return code;
             });
             string package = Path.Combine(Bundle("service-project"), "packages", "M1.zip");
@@ -266,7 +273,10 @@ namespace BeckhoffAutomationInterface.Tests
                 {
                     var names = service.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
                     Assert.DoesNotContain(names, name => name.Split('/').Any(part => Names.Equals(part, "_Boot") || Names.Equals(part, ".vs")));
-                    Assert.Contains(names, name => name.EndsWith("application.compileinfo"));
+                    // Only the compile information that the boot project names (XAE login needs it).
+                    Assert.Equal(new[] { CurrentInfo + ".compileinfo" },
+                        names.Where(name => name.EndsWith(".compileinfo")).Select(name => name.Split('/').Last()).ToArray());
+                    Assert.DoesNotContain(names, name => name.EndsWith(".bak") || name.EndsWith("bai-sync-manifest.json"));
                     Assert.Contains(names, name => name.EndsWith("Library.compiled-library"));
                     Assert.Contains(names, name => name.EndsWith("Fam.tmc"));
                     Assert.Contains(names, name => name.EndsWith("TargetSystemConfig.xml"));
@@ -332,6 +342,8 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData("identity-tag", "Compiled build identity differs from the release record")]
         [InlineData("library-content", "resolved libraries differ from the locked baseline")]
         [InlineData("toolchain", "Installed toolchain or its archive differs")]
+        [InlineData("boot-names-none", "boot project names 0 of the 2 compile information files")]
+        [InlineData("boot-names-two", "boot project names 2 of the 2 compile information files")]
         public void DefectRejectsTheCandidateAndKeepsTheReason(string defect, string reason)
         {
             Assert.ThrowsAny<Exception>(() => Release(Request("fail-" + defect), defect));

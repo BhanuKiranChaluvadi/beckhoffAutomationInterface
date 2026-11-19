@@ -152,16 +152,37 @@ namespace BeckhoffAutomationInterface.Release
 
         // ------------------------------------------------------------------ package
 
-        static void ZipServiceProject(string folder, string destination)
+        static bool IsCompileInfo(string key) =>
+            key.EndsWith(".compileinfo", StringComparison.OrdinalIgnoreCase) && key.Split('/').Any(part => Names.Equals(part, "_CompileInfo"));
+
+        /// <summary>The compile information file that the boot project names. TwinCAT keeps the files
+        /// of earlier compiles too; XAE login to the running PLC needs the one of this boot project.</summary>
+        internal static string BootCompileInfo(IReadOnlyCollection<string> compileInfoKeys, string bootTizip)
         {
+            byte[] bytes = File.ReadAllBytes(bootTizip);
+            string text = Encoding.GetEncoding(28591).GetString(bytes) + "\n" + Encoding.Unicode.GetString(bytes)
+                + "\n" + (bytes.Length > 1 ? Encoding.Unicode.GetString(bytes, 1, bytes.Length - 1) : "");
+            var named = compileInfoKeys.Where(key => text.IndexOf(Path.GetFileNameWithoutExtension(key), StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            if (named.Count != 1)
+                throw new InvalidDataException("The boot project names " + named.Count + " of the " + compileInfoKeys.Count
+                    + " compile information files; XAE login needs exactly one.");
+            return named[0];
+        }
+
+        static void ZipServiceProject(string folder, string bootTizip, string destination)
+        {
+            var files = Inventory(folder).Keys
+                .Where(key => !key.Split('/').Any(part => Names.Equals(part, "_Boot") || Names.Equals(part, ".vs")))
+                .Where(key => !key.EndsWith(".bak", StringComparison.OrdinalIgnoreCase) && !Names.Equals(key.Split('/').Last(), "bai-sync-manifest.json"))
+                .ToList();
+            string compileInfo = BootCompileInfo(files.Where(IsCompileInfo).ToList(), bootTizip);
             using (var stream = new FileStream(destination, FileMode.CreateNew))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
-                // Boot is already a separate payload. Keep libraries, compiler information and
-                // TMC files for service; omit only the duplicate boot tree and IDE workspace.
-                foreach (var file in Inventory(folder)
-                    .Where(p => !p.Key.Split('/').Any(part => Names.Equals(part, "_Boot") || Names.Equals(part, ".vs")))
-                    .OrderBy(p => p.Key, StringComparer.Ordinal))
-                    zip.CreateEntryFromFile(Path.Combine(folder, file.Key), file.Key);
+                // Boot is already a separate payload. Keep libraries, the boot project's compiler
+                // information and TMC files for service; omit the duplicate boot tree, the IDE
+                // workspace, editor backups, bai's sync record and stale compiler information.
+                foreach (string key in files.Where(key => !IsCompileInfo(key) || key == compileInfo).OrderBy(key => key, StringComparer.Ordinal))
+                    zip.CreateEntryFromFile(Path.Combine(folder, key), key);
         }
 
         static void CopyTree(string from, string to)
@@ -235,7 +256,7 @@ namespace BeckhoffAutomationInterface.Release
             {
                 CopyTree(boot, Path.Combine(stage, "boot"));
                 File.Copy(tmc, Path.Combine(stage, @"boot\Plc\Port_851.tmc"), true);
-                ZipServiceProject(solution, Path.Combine(stage, "project.zip"));
+                ZipServiceProject(solution, Path.Combine(boot, @"Plc\Port_851_boot.tizip"), Path.Combine(stage, "project.zip"));
                 File.WriteAllText(Path.Combine(stage, "evidence.json"), Encode(record), new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(stage, "identity.expect.json"),
                     Encode(new Dictionary<string, object> { ["variants"] = new Dictionary<string, object> { [machine] = identity } }), new UTF8Encoding(false));
