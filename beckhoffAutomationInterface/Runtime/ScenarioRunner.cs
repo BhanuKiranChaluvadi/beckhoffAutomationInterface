@@ -598,20 +598,24 @@ namespace BeckhoffAutomationInterface.Runtime
             bool scenarioLimit = wait.Deadline == phase.Deadline;
             object last = null;
             bool observed = false;
+            // The window ended without a match: the last value read in time is the evidence.
+            ScenarioFailure NotReached()
+            {
+                Measured(step, last);
+                return new ScenarioFailure(ScenarioFailureKind.Expectation,
+                    string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.SymbolAsWritten,
+                        step.Condition.Text, Comparison.Quote(last), ScenarioNumbers.Seconds(wait.Deadline - wait.StartedAt),
+                        scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(phase.DurationS) : ""));
+            }
             while (true)
             {
-                if (wait.Expired)
-                {
-                    if (!observed) return PhaseTimeout(wait);
-                    Measured(step, last);
-                    return new ScenarioFailure(ScenarioFailureKind.Expectation,
-                        string.Format("{0}: expected {1}, actual {2} (after {3}{4})", step.SymbolAsWritten,
-                            step.Condition.Text, Comparison.Quote(last), ScenarioNumbers.Seconds(wait.Deadline - wait.StartedAt),
-                            scenarioLimit ? ", scenario timeout " + ScenarioNumbers.Seconds(phase.DurationS) : ""));
-                }
+                if (wait.Expired) return observed ? NotReached() : PhaseTimeout(wait);
                 ScenarioFailure problem = ReadValue(step, out object actual);
                 if (problem != null) return problem;
-                if (wait.Overrun) return new ScenarioFailure(ScenarioFailureKind.Deadline,
+                // A read that ended after the deadline is no evidence, neither for a pass nor for the
+                // failure. With an earlier read in time the window has its answer; without one, the
+                // step ran out of time.
+                if (wait.Overrun) return observed ? NotReached() : new ScenarioFailure(ScenarioFailureKind.Deadline,
                     "waitUntil timeout " + ScenarioNumbers.Seconds(wait.Deadline - wait.StartedAt));
                 if (step.Condition.Matches(actual)) return Measured(step, actual);
                 last = actual;

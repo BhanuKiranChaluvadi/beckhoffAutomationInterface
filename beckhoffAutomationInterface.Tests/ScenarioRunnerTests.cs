@@ -874,6 +874,27 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains(plc.Commands, c => c.StartsWith(@"{""command"":50,"));
         }
 
+        /// <summary>The last poll read starts before the step deadline and ends after it (reads of
+        /// 0.35 s: 0-0.35, 0.37-0.72, 0.74-1.09 with a 1 s timeout). That late value is no evidence,
+        /// neither for a pass nor for the failure; the mismatch read in time is, so the step fails as
+        /// an Expectation (a fault proof can use it), not as a Deadline. Seen on BeckhoffLib
+        /// acceptance 09 (2026-11-19): its fault failed at the expected waitUntil, reported as a deadline.</summary>
+        [Theory]
+        [InlineData(150)]   // still wrong when the late read ends
+        [InlineData(200)]   // right only after the deadline: still no pass
+        public void WaitUntil_AReadEndingAfterTheDeadline_FailsOnTheLastValueReadInTime(int late)
+        {
+            var plc = new FakePlc();
+            plc.ByTime["MAIN.flow"] = t => BitConverter.GetBytes(t < 1.0 ? 100 : late);
+            plc.CallSeconds = symbol => symbol == "MAIN.flow" ? 0.35 : 0;
+
+            ScenarioResult r = plc.Runner().RunSteps(Load(@"{ ""do"": ""waitUntil"", ""symbol"": ""MAIN.flow"", ""type"": ""DINT"", ""greaterThan"": 190, ""timeoutS"": 1 }"));
+
+            Assert.Equal(ScenarioStatus.Failed, r.Status);
+            Assert.Equal(ScenarioFailureKind.Expectation, r.Failure.Kind);
+            Assert.Contains("expected > 190, actual 100", r.Message);
+        }
+
         [Fact]
         public void Run_ATimedOutWaitUntil_RecordsTheLastValueRead()
         {
