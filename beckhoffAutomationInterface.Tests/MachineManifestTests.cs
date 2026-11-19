@@ -44,7 +44,8 @@ namespace BeckhoffAutomationInterface.Tests
             if (!File.Exists(file))
                 return;
             MachineManifest m = MachineManifest.Load(file);
-            Assert.Equal(new[] { "python", "Tools/checks/check_sources.py" }, m.PreCheck);
+            // -B: no __pycache__ in the release source snapshot (BeckhoffLib v2.1 follow-up T1).
+            Assert.Equal(new[] { "python", "-B", "Tools/checks/check_sources.py" }, m.PreCheck);
             MachineFamily f = m.FamilyOf("Google");
             Assert.Equal("NFLite", f.Plc);
             Assert.Equal(100000, f.SimulationGas.CycleTimeUs);
