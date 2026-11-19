@@ -38,3 +38,20 @@ Do not rewrite previously issued machine ZIPs or their hashes during cleanup. Ke
 tool directories, runtime locks, deployment records and worktrees with uncommitted changes.
 Local retention inventories and exact archive/file hashes are in
 `C:\bai\evidence\cleanup-20261107\`.
+
+## Slim bundle and package, 2026-11-19
+
+The SAS+UVM v2.1.0 bundle was 335 MB (esi.zip 150 MB, generated projects 106 MB, source clone
+48 MB); each package 15 MB with two 14 MB `.compileinfo` files and a 0.45 MB `evidence.json`.
+Owner decision (BeckhoffLib `tasks/release-slim/plan.md`): keep only what git, the bai pin and the
+TwinCAT install do not hold.
+
+- `1595bfc`: `project.zip` keeps the compile information that `Port_851_boot.tizip` names; no
+  `*.bak`, no `bai-sync-manifest.json`.
+- `4992287`: package schema 3, compact `evidence.json` (file lists as SHA-256); `package install`
+  and the TwinCAT/BSD helper take schema 2 and 3 (machines hold schema 2 packages).
+- `c1a86a0`: no `esi.zip` (the ESI inventory stays in `release.json`); after a passed build the
+  bundle keeps `release.json`, the packages and the build logs.
+
+Proof: release, artifact, installer and helper tests first failing, then passing; full suite 1266
+passed. The real build and the XAE login with the slim `project.zip` are the BeckhoffLib S6/S7 steps.
