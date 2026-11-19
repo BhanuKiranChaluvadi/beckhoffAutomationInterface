@@ -313,7 +313,7 @@ expected value. Exit code 0 = `VERIFY PASSED`. It needs no TwinCAT window.
 
 ```
 bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--variant <name>]
-         [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
+         [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--exclude-tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
          [--family <name>] [--manifest <file>]
 ```
 
@@ -325,6 +325,7 @@ bai test --target umrt|local|<AMS-Net-ID> --scenarios <file-or-folder> [--varian
 | `--variants-file`, `--variant` | Read the feature groups of the variant from `variants.xml`. If the file has one variant, `--variant` is not necessary. |
 | `--groups` | The feature groups, for example `PCV_MODBUS,SPECTROMETER_PLC`. Use it instead of `--variants-file`. |
 | `--tags` | Run only the scenarios that have one of these tags. |
+| `--exclude-tags` | Leave out the scenarios that have any of these tags, also when `--tags` selects them. A run with excluded tags is not a complete suite (`completeScenarioSuite` false in validation.json). |
 | `--junit` | Write the results as JUnit XML (one test case for each scenario). |
 | `--timeout-seconds` | The time for the PLC to go to Run, and for the machine to become idle before each scenario. Default: 60. |
 | `--family`, `--manifest` | The family whose enums give the numbers of the names in the scenarios (see "Scenario files"), and its `bai.machines.json`. Default: the family whose name is a folder of the `--scenarios` path (`Tests\Acceptance\NFPro`), and the first `bai.machines.json` above that path. Files with numbers only need no family. |
@@ -357,7 +358,7 @@ The tool cannot recover from a lost PLC connection. Check the runtime before you
 
 ```
 bai acceptance --target local|<AMS-Net-ID>|umrt --scenarios <file-or-folder> [--variant <name>]
-               [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
+               [--variants-file <variants.xml> | --groups <G1,G2>] [--tags <a,b>] [--exclude-tags <a,b>] [--junit <file>] [--timeout-seconds <s>]
                [--family <name>] [--manifest <file>]
 ```
 
@@ -435,8 +436,8 @@ Names: `TC3 ADS`, `TC3 IO`, `TC3 PLC`, `TC3 NC PTP`, `TC3 NC PTP Axis`, `TC3 Con
 
 ```
 bai machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>] [--manifest <file>] [--work <folder>]
-bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
-bai machine dev   <Machine> [--fresh] [--tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
+bai machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--exclude-tags <a,b>] [--junit <file>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
+bai machine dev   <Machine> [--fresh] [--tags <a,b>] [--exclude-tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]
 ```
 
 Run these commands in a PLC repository that has a `bai.machines.json` file. The tool finds the
