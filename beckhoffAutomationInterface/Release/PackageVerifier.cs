@@ -37,6 +37,10 @@ namespace BeckhoffAutomationInterface.Release
             if (entry.Length > 32 * 1024 * 1024) throw new InvalidDataException("JSON manifest is too large.");
             using (var reader = new StreamReader(entry.Open())) return Json(reader.ReadToEnd());
         }
+        /// <summary>The package carries identity.expect.json (the compiled build identity): schema 2 and
+        /// later (3 = compact evidence.json). Install and update need it.</summary>
+        internal static bool HasCompiledIdentity(Dictionary<string, object> manifest) => Number(manifest, "schemaVersion") >= 2;
+
         internal static Dictionary<string, object> Verify(string path, string expectedSha256 = null)
         {
             // Pin and parse the same locked file, including when an expected hash is supplied.
@@ -51,7 +55,8 @@ namespace BeckhoffAutomationInterface.Release
                     var manifest = ReadEntry(manifestEntry);
                     long schema = Number(manifest, "schemaVersion");
                     string kind = Text(manifest, "kind");
-                    if ((schema != 1 && schema != 2) || Text(manifest, "status") != "Packaged" ||
+                    // 1, 2: older packages (machines keep them for rollback); 3: compact evidence.json.
+                    if (schema < 1 || schema > 3 || Text(manifest, "status") != "Packaged" ||
                         (kind != "ReleaseCandidate" && kind != "DevelopmentValidation") ||
                         !(Field(manifest, "deploymentApproved") is bool approved) || approved)
                         throw new InvalidDataException("Invalid package manifest.");
@@ -69,7 +74,7 @@ namespace BeckhoffAutomationInterface.Release
                     if (files.Count != seen.Count + 1) throw new InvalidDataException("Package has unlisted files.");
                     foreach (var required in new[] { "boot/CurrentConfig.xml", "boot/CurrentProjectInfo.json", "boot/Plc/Port_851.app",
                         "boot/Plc/Port_851_boot.tizip", "boot/Plc/Port_851.crc", "boot/Plc/Port_851.tmc", "boot/Plc/Port_851.autostart", "project.zip", "evidence.json" }
-                        .Concat(schema == 2 ? new[] { "identity.expect.json" } : new string[0]))
+                        .Concat(schema >= 2 ? new[] { "identity.expect.json" } : new string[0]))
                         if (!seen.Contains(required)) throw new InvalidDataException("Missing required payload: " + required);
                     return manifest;
                 }

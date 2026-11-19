@@ -207,7 +207,7 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(Text(package, "sha256") + "  M1.zip\n", File.ReadAllText(zip + ".sha256"));
             var manifest = PackageVerifier.Verify(zip, Text(package, "sha256"));
             Assert.Equal("ReleaseCandidate", manifest["kind"]);
-            Assert.Equal(2, manifest["schemaVersion"]);
+            Assert.Equal(3, manifest["schemaVersion"]);
             Assert.Equal(10, Array(manifest, "files").Length);
             Assert.Equal("0x1234", First(manifest["safety"])["projectCrc"]);
             Assert.Equal("42", First(manifest["safety"])["serialNumber"]);
@@ -219,7 +219,23 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.Equal(5, checks.Count);
                 Assert.Equal(record["sourceCommit"], checks.Single(c => (string)c["symbol"] == "GVL_BuildInfo.sGitCommit")["equals"]);
                 Assert.NotNull(archive.GetEntry("project.zip"));
-                using (var reader = new StreamReader(archive.GetEntry("evidence.json").Open())) Assert.Equal("BuildPassed", Json(reader.ReadToEnd())["status"]);
+                // Compact evidence: each long inventory is replaced by the SHA-256 of its JSON in release.json.
+                Dictionary<string, object> evidence;
+                using (var reader = new StreamReader(archive.GetEntry("evidence.json").Open())) evidence = Json(reader.ReadToEnd());
+                Assert.Equal("BuildPassed", evidence["status"]);
+                Assert.Equal(record["sourceCommit"], evidence["sourceCommit"]);
+                var released = Read(Path.Combine(bundle, "release.json"));
+                string Digest(object value) => ProjectDrift.Digest(System.Text.Encoding.UTF8.GetBytes(Encode(value))).ToUpperInvariant();
+                foreach (string inventory in new[] { "sourceInputs", "baiFiles", "installedEsiFiles" })
+                {
+                    Assert.False(evidence.ContainsKey(inventory), inventory);
+                    Assert.Equal(Digest(released[inventory]), evidence[inventory + "Sha256"]);
+                }
+                var compactProject = First(evidence["projects"]);
+                Assert.False(compactProject.ContainsKey("artifacts"));
+                Assert.Equal(Digest(First(released["projects"])["artifacts"]), compactProject["artifactsSha256"]);
+                Assert.Equal(project["buildLogSha256"], compactProject["buildLogSha256"]);
+                Assert.True(archive.GetEntry("evidence.json").Length < 8 * 1024, "evidence.json stays small");
             }
 
             // A package cannot include its own staging folder.

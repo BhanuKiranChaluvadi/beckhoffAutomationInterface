@@ -47,12 +47,18 @@ namespace BeckhoffAutomationInterface.Tests
             return p;
         }
         [Theory]
-        [InlineData(1)] [InlineData(2)]
+        [InlineData(1)] [InlineData(2)] [InlineData(3)]
         public void PackageSupportsRetainedSchemas(int schema)
         {
             string p = Package(schema: schema);
             Assert.Equal(schema, Number(PackageVerifier.Verify(p, Hash(p)), "schemaVersion"));
         }
+        [Fact]
+        public void PackageRejectsAnUnknownSchema() => Assert.Throws<InvalidDataException>(() => PackageVerifier.Verify(Package(schema: 4)));
+        [Theory]
+        [InlineData(2)] [InlineData(3)]
+        public void PackageFromSchema2NeedsTheIdentity(int schema) =>
+            Assert.Contains("identity.expect.json", Assert.Throws<InvalidDataException>(() => PackageVerifier.Verify(Package("missing-identity", schema))).Message);
         [Theory]
         [InlineData("hash")] [InlineData("size")] [InlineData("fractional")] [InlineData("duplicate-record")]
         [InlineData("extra")] [InlineData("duplicate-entry")] [InlineData("traversal")] [InlineData("ads")]

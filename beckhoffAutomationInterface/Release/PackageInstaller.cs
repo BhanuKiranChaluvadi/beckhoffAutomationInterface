@@ -209,7 +209,7 @@ namespace BeckhoffAutomationInterface.Release
             if (project != null) BuildLocation.Assert(project, report);
             if (Directory.Exists(report) || File.Exists(report)) throw new IOException("Use a new report directory.");
             var package = PackageVerifier.Verify(q.Current, q.CurrentSha256);
-            if (Number(package, "schemaVersion") != 2) throw new InvalidDataException("Update gate requires a schema 2 package with compiled identity.");
+            if (!PackageVerifier.HasCompiledIdentity(package)) throw new InvalidDataException("Update gate requires a package with compiled identity (schema 2 or later).");
             if (!q.Rehearsal && Text(package, "kind") != "ReleaseCandidate") throw new InvalidDataException("Reconcile the installed development build before updating a machine.");
             string machine = Text(package, "machine");
             Directory.CreateDirectory(report);
@@ -276,7 +276,7 @@ namespace BeckhoffAutomationInterface.Release
         {
             var candidate = PackageVerifier.Verify(q.Package, q.PackageSha256);
             var current = q.Legacy ? null : PackageVerifier.Verify(q.Current, q.CurrentSha256);
-            if (Number(candidate, "schemaVersion") != 2 || (current != null && Text(candidate, "machine") != Text(current, "machine")))
+            if (!PackageVerifier.HasCompiledIdentity(candidate) || (current != null && Text(candidate, "machine") != Text(current, "machine")))
                 throw new InvalidDataException("Candidate identity/machine does not match the installed release.");
             return (candidate, current);
         }

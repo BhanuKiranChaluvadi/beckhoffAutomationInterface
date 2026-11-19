@@ -79,10 +79,11 @@ def extract_package(package, digest, stage):
             if not entry.is_dir():
                 entries[name] = entry
         manifest = json.loads(archive.read('release.json'))
-        if (manifest.get('schemaVersion') != 2 or manifest.get('status') != 'Packaged' or
+        # Schema 2 and 3 carry the compiled identity (3: compact evidence.json).
+        if (manifest.get('schemaVersion') not in (2, 3) or manifest.get('status') != 'Packaged' or
                 manifest.get('kind') != 'ReleaseCandidate' or manifest.get('deploymentApproved') is not False or
                 manifest.get('targetPlatform') != 'TwinCAT OS (x64)'):
-            raise ValueError('Expected a schema 2 OS x64 release candidate')
+            raise ValueError('Expected a schema 2 or 3 OS x64 release candidate')
         files = {item['path']: item for item in manifest['files']}
         if len(files) != len(manifest['files']) or set(entries) != set(files) | {'release.json'} or 'release.json' in files:
             raise ValueError('Package inventory is incomplete or duplicated')

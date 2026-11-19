@@ -34,8 +34,9 @@ payload = {'boot/CurrentConfig.xml': b'<TcBootProject Platform=""TwinCAT OS (x64
            'project.zip': b'fixture', 'evidence.json': b'{}'}
 for name in ('Port_851.app', 'Port_851.crc', 'Port_851.autostart', 'Port_851_boot.tizip', 'Port_851.tmc'):
     payload['boot/Plc/' + name] = b'new fixture ' + name.encode()
+SCHEMA = 3
 def write_package():
-    manifest = dict(schemaVersion=2, status='Packaged', kind='ReleaseCandidate', deploymentApproved=False,
+    manifest = dict(schemaVersion=SCHEMA, status='Packaged', kind='ReleaseCandidate', deploymentApproved=False,
                     targetPlatform='TwinCAT OS (x64)', machine='NFPro',
                     files=[dict(path=name, bytes=len(value), sha256=hashlib.sha256(value).hexdigest()) for name, value in payload.items()])
     with zipfile.ZipFile(package, 'w') as archive:
@@ -114,6 +115,20 @@ assert boot.complete(transaction)['state'] == 'Verified'
 boot.reserve(active, transaction)
 raises(FileExistsError, '', lambda: boot.reserve(active, root / 'second'))
 assert (root / 'plc-release.lock').read_text() == str(transaction.resolve())
+assert boot.inventory(active) == before
+");
+
+        [PythonFact]
+        public void InstallsSchema2AndCompactSchema3Packages() => Check(@"
+for SCHEMA in (2, 3):
+    write_package()
+    run = root / ('transaction-' + str(SCHEMA))
+    assert boot.install(package, boot.sha(package), active, run)['state'] == 'Installed'
+    assert boot.complete(run, rollback=True)['state'] == 'RolledBack'
+    assert boot.complete(run)['state'] == 'RollbackVerified'
+for SCHEMA in (1, 4):
+    write_package()
+    raises(ValueError, 'schema 2 or 3', lambda: boot.extract_package(package, boot.sha(package), root / ('stage-' + str(SCHEMA))))
 assert boot.inventory(active) == before
 ");
 

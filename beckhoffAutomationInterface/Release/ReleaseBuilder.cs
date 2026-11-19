@@ -214,10 +214,31 @@ namespace BeckhoffAutomationInterface.Release
             return Hash(output).ToUpperInvariant();
         }
 
+        static readonly string[] Inventories = { "sourceInputs", "baiFiles", "installedEsiFiles" };
+
+        static string InventoryDigest(object value)
+        {
+            using (var json = new MemoryStream(Encoding.UTF8.GetBytes(Encode(value)))) return Hash(json).ToUpperInvariant();
+        }
+
+        /// <summary>The release record for a package: each long file list (source, bai, ESI and the
+        /// generated project files) is replaced by the SHA-256 of its JSON in release.json.</summary>
+        internal static Dictionary<string, object> CompactEvidence(Dictionary<string, object> record)
+        {
+            var compact = new Dictionary<string, object>();
+            foreach (var field in record)
+                if (Inventories.Contains(field.Key)) compact[field.Key + "Sha256"] = InventoryDigest(field.Value);
+                else if (field.Key == "projects")
+                    compact[field.Key] = ((IEnumerable<Dictionary<string, object>>)field.Value).Select(project => project.ToDictionary(
+                        p => p.Key == "artifacts" ? "artifactsSha256" : p.Key, p => p.Key == "artifacts" ? InventoryDigest(p.Value) : p.Value)).ToList();
+                else compact[field.Key] = field.Value;
+            return compact;
+        }
+
         /// <summary>The verified machine package (packages/&lt;M&gt;.zip and its .sha256): compiled boot
-        /// files with the TMC, project.zip (the generated solution for service), evidence.json,
-        /// identity.expect.json (the compiled build identity). Schema 2; ReleaseCandidate only from
-        /// clean source.</summary>
+        /// files with the TMC, project.zip (the generated solution for service), evidence.json (the
+        /// compact release record), identity.expect.json (the compiled build identity). Schema 3;
+        /// ReleaseCandidate only from clean source.</summary>
         internal static Dictionary<string, object> Package(MachineLayout l, Dictionary<string, object> project, Dictionary<string, object> record, string outputDirectory)
         {
             string machine = l.Machine, platform = Text(project, "targetPlatform"), variant = Variant(l);
@@ -257,7 +278,7 @@ namespace BeckhoffAutomationInterface.Release
                 CopyTree(boot, Path.Combine(stage, "boot"));
                 File.Copy(tmc, Path.Combine(stage, @"boot\Plc\Port_851.tmc"), true);
                 ZipServiceProject(solution, Path.Combine(boot, @"Plc\Port_851_boot.tizip"), Path.Combine(stage, "project.zip"));
-                File.WriteAllText(Path.Combine(stage, "evidence.json"), Encode(record), new UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(stage, "evidence.json"), Encode(CompactEvidence(record)), new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(stage, "identity.expect.json"),
                     Encode(new Dictionary<string, object> { ["variants"] = new Dictionary<string, object> { [machine] = identity } }), new UTF8Encoding(false));
                 var safety = Directory.GetFiles(solution, "TargetSystemConfig.xml", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal).Select(file =>
@@ -268,7 +289,7 @@ namespace BeckhoffAutomationInterface.Release
                 }).ToList();
                 var manifest = new Dictionary<string, object>
                 {
-                    ["schemaVersion"] = 2, ["status"] = "Packaged", ["kind"] = kind, ["deploymentApproved"] = false,
+                    ["schemaVersion"] = 3, ["status"] = "Packaged", ["kind"] = kind, ["deploymentApproved"] = false,
                     ["machine"] = machine, ["targetPlatform"] = platform, ["sourceCommit"] = record["sourceCommit"], ["sourceTag"] = record["sourceTag"],
                     ["createdUtc"] = DateTime.UtcNow.ToString("o"),
                     ["plcCrcFileBase64"] = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(boot, @"Plc\Port_851.crc"))),

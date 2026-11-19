@@ -179,7 +179,7 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         /// <summary>A package whose Port_851.app holds the live values that the fake host reads.</summary>
-        string Package(string name, string platform = "TwinCAT OS (x64)", string kind = "ReleaseCandidate")
+        string Package(string name, string platform = "TwinCAT OS (x64)", string kind = "ReleaseCandidate", int schema = 3)
         {
             string stage = Path.Combine(work, "stage-" + name);
             Directory.CreateDirectory(Path.Combine(stage, "boot", "Plc"));
@@ -196,7 +196,7 @@ namespace BeckhoffAutomationInterface.Tests
             ZipFile.CreateFromDirectory(Service, Path.Combine(stage, "project.zip"));
             File.WriteAllText(Path.Combine(stage, "evidence.json"), "{\"scope\":\"synthetic installer fixture\"}");
             string metadata = Path.Combine(work, name + ".metadata.json");
-            File.WriteAllText(metadata, Encode(new Dictionary<string, object> { ["schemaVersion"] = 2, ["status"] = "Packaged", ["kind"] = kind,
+            File.WriteAllText(metadata, Encode(new Dictionary<string, object> { ["schemaVersion"] = schema, ["status"] = "Packaged", ["kind"] = kind,
                 ["deploymentApproved"] = false, ["machine"] = "NFPro", ["targetPlatform"] = platform }));
             string package = Path.Combine(work, name + ".zip");
             ArtifactArchives.CreatePackage(stage, metadata, package);
@@ -236,6 +236,24 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Equal(new[] { "online", "config", "confirm-config", "run", "identity" }, host.Steps);
             Assert.Equal("run", host.Mode);
             Assert.True(File.Exists(Path.Combine(host.Root, "evidence", PackageInstaller.BackupArchive + ".sha256")));
+        }
+
+        [Fact]
+        public void UpdateFromASchema2PackageToACompactSchema3Package()
+        {
+            // The machines hold schema 2 packages (v2.0.x); new packages are schema 3 (compact evidence).
+            string a = Package("a", "TwinCAT RT (x64)", schema: 2), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("b", a);
+            Assert.Equal("Installed", PackageInstaller.Install(Request(host, b, a), host)["status"]);
+            Assert.Equal("b", Read(Path.Combine(host.Boot, "Plc", "Port_851.app"))["GVL_BuildInfo.sGitCommit"]);
+        }
+
+        [Fact]
+        public void APackageWithoutCompiledIdentityCannotBeTheCurrentOne()
+        {
+            string a = Package("a", "TwinCAT RT (x64)", schema: 1), b = Package("b", "TwinCAT RT (x64)");
+            var host = Host("b", a);
+            Assert.Contains("compiled identity", Assert.Throws<InvalidDataException>(() => PackageInstaller.Install(Request(host, b, a), host)).Message);
         }
 
         /// <summary>A legacy request: no current package or service project.</summary>
