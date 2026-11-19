@@ -33,6 +33,14 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void TestAndDev_TakeExcludeTags()
+        {
+            Assert.Equal("heaters,slow", Parse("test", "Google", "--exclude-tags", "heaters,slow").ExcludeTags);
+            Assert.Equal("slow", Parse("dev", "Google", "--exclude-tags", "slow").ExcludeTags);
+            Assert.Null(Parse("test", "Google").ExcludeTags);
+        }
+
+        [Fact]
         public void Dev_TakesOneMachineAndTags()
         {
             MachineCommands.Request q = Parse("dev", "Google", "--tags", "ozone", "--fresh");
@@ -58,6 +66,7 @@ namespace BeckhoffAutomationInterface.Tests
         [InlineData(new[] { "run" }, "needs a mode")]
         [InlineData(new[] { "build", "--release", "--simulation" }, "never has SIMULATION")]
         [InlineData(new[] { "build", "--tags", "x" }, "does not take --tags")]
+        [InlineData(new[] { "build", "--exclude-tags", "x" }, "does not take --exclude-tags")]
         [InlineData(new[] { "build", "--junit", "x" }, "does not take --junit")]
         [InlineData(new[] { "test", "--release" }, "does not take --release")]
         [InlineData(new[] { "test", "--simulation" }, "does not take --simulation")]

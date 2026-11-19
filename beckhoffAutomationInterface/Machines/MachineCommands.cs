@@ -21,9 +21,9 @@ namespace BeckhoffAutomationInterface.Machines
         public const string Usage =
             "machine build [<Machine>...] [--fresh] [--release] [--simulation] [--parallel] [--platform <name>]\n" +
             "                [--manifest <file>] [--work <folder>]\n" +
-            "  machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--junit <file>] [--timeout-seconds <s>]\n" +
+            "  machine test  [<Machine>...] [--fresh] [--tags <a,b>] [--exclude-tags <a,b>] [--junit <file>] [--timeout-seconds <s>]\n" +
             "                [--manifest <file>] [--work <folder>]\n" +
-            "  machine dev   <Machine> [--fresh] [--tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]";
+            "  machine dev   <Machine> [--fresh] [--tags <a,b>] [--exclude-tags <a,b>] [--timeout-seconds <s>] [--manifest <file>] [--work <folder>]";
 
         /// <summary>The exit codes of 'machine'.</summary>
         internal enum Exit
@@ -44,11 +44,11 @@ namespace BeckhoffAutomationInterface.Machines
             public string Command;
             public List<string> Machines = new List<string>();
             public bool Fresh, Release, Simulation, Parallel;
-            public string Platform, Manifest, Work, Tags, JUnit, ResultFile;
+            public string Platform, Manifest, Work, Tags, ExcludeTags, JUnit, ResultFile;
             public int? TimeoutS;
         }
 
-        static readonly string[] Options = { "--platform", "--manifest", "--work", "--tags", "--junit", "--timeout-seconds", "--result" };
+        static readonly string[] Options = { "--platform", "--manifest", "--work", "--tags", "--exclude-tags", "--junit", "--timeout-seconds", "--result" };
         static readonly string[] Switches = { "--fresh", "--release", "--simulation", "--parallel" };
 
         /// <summary>args[0] = "machine". Throws ArgumentException on a command-line problem (pure).</summary>
@@ -71,6 +71,7 @@ namespace BeckhoffAutomationInterface.Machines
                         case "--manifest": q.Manifest = v; break;
                         case "--work": q.Work = v; break;
                         case "--tags": q.Tags = v; break;
+                        case "--exclude-tags": q.ExcludeTags = v; break;
                         case "--junit": q.JUnit = v; break;
                         case "--result": q.ResultFile = v; break;
                         case "--timeout-seconds":
@@ -94,7 +95,7 @@ namespace BeckhoffAutomationInterface.Machines
             }
 
             string[] buildOnly = { "--release", "--simulation", "--parallel", "--platform", "--result" };
-            string[] testOnly = { "--tags", "--junit", "--timeout-seconds" };
+            string[] testOnly = { "--tags", "--exclude-tags", "--junit", "--timeout-seconds" };
             string[] notForDev = buildOnly.Concat(new[] { "--junit" }).ToArray();
             string wrong = (q.Command == "build" ? testOnly : q.Command == "dev" ? notForDev : buildOnly).FirstOrDefault(o => args.Skip(2).Contains(o));
             if (wrong != null)
@@ -410,7 +411,7 @@ namespace BeckhoffAutomationInterface.Machines
                 row.Tests = "FAIL (scenarios changed during the run)";
             if (row.Tests.StartsWith("PASS"))
                 Console.WriteLine("{0}: Validation record: {1}", Now(), MachineChecks.WriteValidationRecord(l.ValidationRecord,
-                    l, q.Tags, executed, scenarios, identity, tmc, Process.GetCurrentProcess().MainModule.FileName));
+                    l, q.Tags, q.ExcludeTags, executed, scenarios, identity, tmc, Process.GetCurrentProcess().MainModule.FileName));
         }
 
         static string RunScenarios(Request q, MachineManifest manifest, MachineLayout l, bool several, out int executed)
@@ -427,6 +428,7 @@ namespace BeckhoffAutomationInterface.Machines
                 argv.AddRange(new[] { "--variants-file", Path.Combine(l.MachineFolder, "variants.xml"), "--variant", l.Machine });
             argv.AddRange(new[] { "--junit", junit });
             if (q.Tags != null) argv.AddRange(new[] { "--tags", q.Tags });
+            if (q.ExcludeTags != null) argv.AddRange(new[] { "--exclude-tags", q.ExcludeTags });
             if (q.TimeoutS != null) argv.AddRange(new[] { "--timeout-seconds", q.TimeoutS.Value.ToString() });
             int code = Runtime.RuntimeCommands.Test(argv.ToArray());
             if (code != 0)

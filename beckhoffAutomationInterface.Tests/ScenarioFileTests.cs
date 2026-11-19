@@ -199,6 +199,16 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void ByTags_ExcludedTagsDropScenarios_EvenThoseAnIncludedTagSelects()
+        {
+            var all = new[] { Make("quick", new[] { "smoke" }), Make("hot", new[] { "heaters", "smoke", "slow" }), Make("plain") };
+
+            Assert.Equal(new[] { "quick", "plain" }, ScenarioFilter.ByTags(all, new string[0], new[] { "SLOW" }).Select(s => s.Name));
+            Assert.Equal(new[] { "quick" }, ScenarioFilter.ByTags(all, new[] { "smoke" }, new[] { "heaters" }).Select(s => s.Name));
+            Assert.Equal(new[] { "quick", "hot", "plain" }, ScenarioFilter.ByTags(all, new string[0], new string[0]).Select(s => s.Name));
+        }
+
+        [Fact]
         public void SkipReason_RequiresMustBeASubsetOfTheGroups()
         {
             Scenario plain = Make("plain");

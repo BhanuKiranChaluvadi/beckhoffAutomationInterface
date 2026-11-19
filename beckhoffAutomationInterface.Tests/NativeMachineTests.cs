@@ -214,7 +214,7 @@ namespace BeckhoffAutomationInterface.Tests
             File.WriteAllText(tmc, "<TcModuleClass />");
             File.WriteAllText(bai, "exe");
             List<NativeProject.FileEntry> scenarios = NativeProject.Inventory(repo.Path_("Tests/Integration/Nat"));
-            string file = MachineChecks.WriteValidationRecord(l.ValidationRecord, l, null, 1, scenarios, new List<Dictionary<string, object>>(), tmc, bai);
+            string file = MachineChecks.WriteValidationRecord(l.ValidationRecord, l, null, null, 1, scenarios, new List<Dictionary<string, object>>(), tmc, bai);
             string record = File.ReadAllText(file);
             Assert.StartsWith("{\"status\":\"Passed\"", record);
             Assert.Contains("\"completeScenarioSuite\":true", record);
@@ -222,6 +222,23 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Contains("\"compiledTmcSha256\":\"" + NativeConfiguration.Sha256(tmc).ToUpperInvariant() + "\"", record);
             Assert.Contains("\"path\":\"one.json\"", record);
             Assert.Equal(NativeConfiguration.Sha256(file).ToUpperInvariant(), File.ReadAllText(file + ".sha256").Trim());
+        }
+
+        [Fact]
+        public void ValidationRecord_OfARunWithExcludedTags_NamesThemAndIsNotTheCompleteSuite()
+        {
+            var repo = Repo();
+            MachineLayout l = repo.Layout("Nat", simulation: true);
+            Directory.CreateDirectory(l.Dir);
+            string tmc = Path.Combine(l.Dir, "x.tmc"), bai = Path.Combine(l.Dir, "bai.exe");
+            File.WriteAllText(tmc, "<TcModuleClass />");
+            File.WriteAllText(bai, "exe");
+            List<NativeProject.FileEntry> scenarios = NativeProject.Inventory(repo.Path_("Tests/Integration/Nat"));
+            // Even when every scenario file happened to run, an exclusion makes the run partial.
+            string record = File.ReadAllText(MachineChecks.WriteValidationRecord(l.ValidationRecord, l, null, "slow", 1, scenarios,
+                new List<Dictionary<string, object>>(), tmc, bai));
+            Assert.Contains("\"excludeTags\":\"slow\"", record);
+            Assert.Contains("\"completeScenarioSuite\":false", record);
         }
     }
 }

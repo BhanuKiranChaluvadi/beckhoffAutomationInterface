@@ -142,7 +142,7 @@ namespace BeckhoffAutomationInterface.Machines
 
         /// <summary>The record of a passed 'machine test' (as validation.json of the PLC repository's
         /// NFPro test script) and its SHA-256 file. Returns the record file.</summary>
-        public static string WriteValidationRecord(string file, MachineLayout l, string tags, int executed,
+        public static string WriteValidationRecord(string file, MachineLayout l, string tags, string excludeTags, int executed,
             List<NativeProject.FileEntry> scenarios, List<Dictionary<string, object>> identity, string tmc, string bai)
         {
             int scenarioFiles = scenarios.Count(s => s.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
@@ -153,8 +153,9 @@ namespace BeckhoffAutomationInterface.Machines
                 ["machine"] = l.Machine,
                 ["executed"] = executed,
                 ["tags"] = tags,
+                ["excludeTags"] = excludeTags,
                 ["physicalDeployment"] = false,
-                ["completeScenarioSuite"] = string.IsNullOrEmpty(tags) && executed == scenarioFiles,
+                ["completeScenarioSuite"] = string.IsNullOrEmpty(tags) && string.IsNullOrEmpty(excludeTags) && executed == scenarioFiles,
                 ["project"] = l.Tsproj,
                 ["baiSha256"] = NativeConfiguration.Sha256(bai).ToUpperInvariant(),
                 ["compiledIdentity"] = identity,

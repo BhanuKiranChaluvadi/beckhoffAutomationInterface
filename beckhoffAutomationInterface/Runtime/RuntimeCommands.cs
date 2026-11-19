@@ -155,14 +155,14 @@ namespace BeckhoffAutomationInterface.Runtime
             string name = hardware ? "acceptance" : "test", word = hardware ? "ACCEPTANCE" : "TEST";
             CommandArgs a;
             string target, netId, variant;
-            List<string> groups = null, tags;
+            List<string> groups = null, tags, excludedTags;
             List<Scenario> selected;
             ScenarioNames names;
             int timeoutS;
             try
             {
                 a = CommandArgs.Parse(args,
-                    new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--junit", "--timeout-seconds",
+                    new[] { "--target", "--scenarios", "--variant", "--variants-file", "--groups", "--tags", "--exclude-tags", "--junit", "--timeout-seconds",
                         "--family", "--manifest" }, new string[0]);
                 if (a.Get("--target") == null || a.Get("--scenarios") == null)
                     throw new ArgumentException("'" + name + "' needs --target umrt|local|<AMS-Net-ID> and --scenarios <file or folder>.");
@@ -175,6 +175,7 @@ namespace BeckhoffAutomationInterface.Runtime
 
                 variant = a.Get("--variant");
                 tags = SplitList(a.Get("--tags"));
+                excludedTags = SplitList(a.Get("--exclude-tags"));
                 if (a.Get("--groups") != null)
                     groups = SplitList(a.Get("--groups"));
                 else if (a.Get("--variants-file") != null)
@@ -193,13 +194,14 @@ namespace BeckhoffAutomationInterface.Runtime
             try
             {
                 List<Scenario> all = ScenarioFile.LoadAll(a.Get("--scenarios"), problems, names);
-                selected = ScenarioFilter.ByTags(all, tags);
+                selected = ScenarioFilter.ByTags(all, tags, excludedTags);
                 if (hardware)
                     problems.AddRange(ScenarioRunner.HardwareProblems(selected));
                 if (problems.Count == 0 && selected.Count == 0)
                     problems.Add(all.Count == 0
                         ? "no scenario file (*.json) in " + a.Get("--scenarios")
-                        : string.Format("no scenario has the tag(s) {0} ({1} scenario(s) found)", string.Join(", ", tags), all.Count));
+                        : string.Format("no scenario left after --tags {0} and --exclude-tags {1} ({2} scenario(s) found)",
+                            tags.Count == 0 ? "(all)" : string.Join(",", tags), excludedTags.Count == 0 ? "(none)" : string.Join(",", excludedTags), all.Count));
             }
             catch (Exception ex) when (ex is ArgumentException || ex is System.IO.IOException || ex is UnauthorizedAccessException)
             {

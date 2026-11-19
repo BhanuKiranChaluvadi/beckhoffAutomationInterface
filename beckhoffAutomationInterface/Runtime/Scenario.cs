@@ -173,13 +173,14 @@ namespace BeckhoffAutomationInterface.Runtime
     /// (all of a scenario's "requires" must be in the machine's groups).</summary>
     static class ScenarioFilter
     {
-        /// <summary>Scenarios with at least one of the tags; all when no tag is given.</summary>
-        public static List<Scenario> ByTags(IEnumerable<Scenario> scenarios, IReadOnlyCollection<string> tags)
+        /// <summary>Scenarios with at least one of the tags; all when no tag is given.
+        /// Then a scenario with any of the excluded tags is dropped, even one that a tag selected.</summary>
+        public static List<Scenario> ByTags(IEnumerable<Scenario> scenarios, IReadOnlyCollection<string> tags,
+            IReadOnlyCollection<string> excludedTags = null)
         {
-            if (tags == null || tags.Count == 0)
-                return scenarios.ToList();
-            var wanted = new HashSet<string>(tags, StringComparer.OrdinalIgnoreCase);
-            return scenarios.Where(s => s.Tags.Any(wanted.Contains)).ToList();
+            var wanted = new HashSet<string>(tags ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            var dropped = new HashSet<string>(excludedTags ?? new string[0], StringComparer.OrdinalIgnoreCase);
+            return scenarios.Where(s => (wanted.Count == 0 || s.Tags.Any(wanted.Contains)) && !s.Tags.Any(dropped.Contains)).ToList();
         }
 
         /// <summary>Why the scenario cannot run on a machine with these feature groups, or null when

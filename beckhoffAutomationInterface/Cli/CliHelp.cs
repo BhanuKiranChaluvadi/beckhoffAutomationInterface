@@ -112,6 +112,7 @@ namespace BeckhoffAutomationInterface.Cli
             ["--variants-file"] = "variants.xml used to resolve feature groups.",
             ["--groups"] = "Comma-separated feature groups; alternative to --variants-file.",
             ["--tags"] = "Run scenarios matching these comma-separated tags.",
+            ["--exclude-tags"] = "Leave out scenarios with any of these comma-separated tags (also when --tags selects them).",
             ["--junit"] = "Write test results as JUnit XML.",
             ["--family"] = "Family whose ST enums give the numbers of the names in the scenarios (default: the family named in the scenario path).",
             ["--set"] = "Change the runtime state to config or run.",
