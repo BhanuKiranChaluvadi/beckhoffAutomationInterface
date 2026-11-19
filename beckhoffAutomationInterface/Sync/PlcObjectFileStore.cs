@@ -69,6 +69,10 @@ namespace BeckhoffAutomationInterface.Sync
             return Holds(path, group) ? path : null;
         }
 
+        /// <summary>Removes the stored file of this object, for example after XAE did not keep its
+        /// import: the next build then makes the object over COM.</summary>
+        public void Remove(IReadOnlyList<StPouSource> group) => File.Delete(PathOf(group));
+
         /// <summary>After a sync saved the project: stores each object file that the .plcproj
         /// names and that holds its texts. Returns how many files the store holds for them.</summary>
         public int PutSaved(IEnumerable<StPouSource> sources, string plcprojPath)

@@ -93,3 +93,20 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
   their 33 tests and `e2e/shared-conversion.ps1`. `PlcSourceUpdate` again uses the COM object sync
   (with the sync-manifest skip) for every project; `KeepSessionOpen` existed only for the file path.
 - Proof: build passes; 1231 xUnit tests pass. No XAE build ran.
+
+## 2026-11-19: shared object files from XAE (subtype 58)
+
+- Store (`PlcObjectFileStore`): key = source texts (no folder) + TwinCAT version of the .tsproj +
+  bai; a file is stored and returned only while it holds every source text.
+- Harvest: after each COM sync and save, `SyncManifest.SavedFiles` (the one list of verified files,
+  also used by the manifest) goes into the store.
+- Import (`PlcObjectImport`, `PouSyncEngine.Import`): objects not skipped, not in the .plcproj and
+  stored -> one `CreateChild(null, 58, null, string[])` per folder; save; every imported object must
+  be in its folder with all its texts, else the sync fails, names them and removes their files.
+- `PlcSourceUpdate` glue has no unit test (it needs a live XAE session); its decisions are in the
+  tested pure functions. The XAE spike is its test.
+- Known limit: if XAE always drops a file it saved itself, fresh builds alternate fail / COM build.
+- Open questions for the spike: does subtype 58 bring methods and properties, report an error for
+  a bad file, accept a sub-folder node, copy or link the file?
+- crapper/dryer do not support C# (checked 2026-11-18); mutator not run (it runs tests on XAE).
+- Proof: 1251 xUnit tests pass (19 new). No XAE build ran.

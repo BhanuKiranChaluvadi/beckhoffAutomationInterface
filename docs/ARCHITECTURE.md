@@ -6,6 +6,8 @@ BAI separates PLC source updates from project configuration and machine executio
 | --- | --- |
 | `PlcSourceObject` | Validating source identities and grouping a root with all its members. PLC identifiers match without case; source spelling still participates in content hashes. |
 | `PlcSourceUpdate` | Parsing, stale-object deletion, the COM object sync, and recording successful source updates. |
+| `PlcObjectFileStore` | Object files that XAE saved, by source texts, TwinCAT version and bai; stored and returned only while they hold every source text. |
+| `PlcObjectImport` | Which stored files a project imports (CreateChild subtype 58), and the proof from the saved project that each import is in its folder with all its texts. |
 | `SyncManifest` | Evidence that source text and the saved object file still match. It uses the source grouping and object identity rules of `PlcSourceObject`. |
 | `SyncPipeline` / `PipelineCompletion` | Ordering sync, diagnostic compilation, final file validation and successful continuation. |
 | `PipelineOutcome` | The authoritative sync/build/validation outcome. Machine decisions consume values; the CLI translates failures into an exit code. |

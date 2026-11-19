@@ -65,11 +65,12 @@ namespace BeckhoffAutomationInterface.Tests
             var imported = new[] { Item("FB_Dropped", "Lib/A"), Item("FB_Moved", "Lib/A"), Item("FB_Kept", "Lib/A") };
             var saved = new[] { Saved("FB_Moved", "FB_Moved.TcPOU"), Saved("FB_Kept", @"Lib\A\FB_Kept.TcPOU") };
 
-            List<string> missing = PlcObjectImport.Missing(imported, saved);
+            List<PlcObjectImport.Miss> missing = PlcObjectImport.Missing(imported, saved);
 
-            Assert.Equal(2, missing.Count);
-            Assert.Contains(missing, m => m.StartsWith("FB_Dropped ", StringComparison.Ordinal));
-            Assert.Contains(missing, m => m.StartsWith("FB_Moved ", StringComparison.Ordinal) && m.Contains("Lib/A"));
+            Assert.Equal(new[] { "FB_Dropped", "FB_Moved" }, missing.Select(m => m.Item.Name));
+            Assert.StartsWith("FB_Dropped ", missing[0].Text);
+            Assert.StartsWith("FB_Moved ", missing[1].Text);
+            Assert.Contains("Lib/A", missing[1].Text);
         }
 
         // ------------------------------------------------------------------ the COM calls

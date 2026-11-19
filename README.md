@@ -667,6 +667,25 @@ Exit code: 0 = pass, 1 = refused or failed (the record gives the reason), 2 = wr
   `package rollback`, `runtime-state --set` or `machine test` (only on UmRT_Default).
 - It never reads `--confirm-delete-io`, `--overwrite` or `--plc` from `.stconfig`.
 
+### Shared object files
+
+After each code sync of an owned project, bai keeps the object files that XAE saved
+(.TcPOU/.TcDUT/.TcGVL) for other projects on this PC. A project that lacks an object then
+imports the kept file with the Automation Interface (`CreateChild(null, 58, null, paths)`, one
+call per PLC folder) instead of building the object and its texts over COM. bai never writes
+these files itself.
+
+- Key: the source texts of the object with its methods and properties (not its folder), the
+  TwinCAT version that saved the project (`TcVersion` of the .tsproj) and the bai executable.
+  So one Lib object serves the NFLite machines, NFPro and the test projects.
+- A file is kept, and imported, only while it holds every source text.
+- After an import bai saves the project and checks each imported object: in its folder, with
+  all its texts. If XAE did not keep one, the sync fails, names the objects and removes their
+  files from the store; the next build makes them over COM.
+- Store: `%LOCALAPPDATA%\BeckhoffAutomationInterface\object-files`, or `BAI_OBJECT_FILES`.
+  Deleting it only loses the reuse.
+- Not for adopted projects (`--project`).
+
 ## 5. The source folder
 
 ### Layout

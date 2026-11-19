@@ -95,6 +95,18 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
+        public void ARemovedFileIsNotFound_AndRemovingAMissingFileIsHarmless()
+        {
+            string root = TestProjects.NewTempDir("bai_object_files");
+            Assert.True(Store(root).Put(Group(), SavedFile(Group())));
+
+            Store(root).Remove(Group());
+            Store(root).Remove(Group());
+
+            Assert.Null(Store(root).Find(Group()));
+        }
+
+        [Fact]
         public void StoringTheSameObjectAgainKeepsOneFile()
         {
             string root = TestProjects.NewTempDir("bai_object_files");

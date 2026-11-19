@@ -53,22 +53,30 @@ namespace BeckhoffAutomationInterface.Sync
 
         /// <summary>Each imported object that the saved project does not hold in its folder with
         /// all its texts (saved: SyncManifest.SavedFiles of the imported objects).</summary>
-        public static List<string> Missing(IEnumerable<Item> imported, IEnumerable<SyncManifest.SavedFile> saved)
+        public static List<Miss> Missing(IEnumerable<Item> imported, IEnumerable<SyncManifest.SavedFile> saved)
         {
             Dictionary<string, SyncManifest.SavedFile> byName = saved.ToDictionary(s => s.Name, PlcSourceObject.Names);
-            var missing = new List<string>();
+            var missing = new List<Miss>();
             foreach (Item item in imported)
             {
                 if (!byName.TryGetValue(item.Name, out SyncManifest.SavedFile file))
                 {
-                    missing.Add(item.Name + " (not in the saved project with all its texts)");
+                    missing.Add(new Miss(item, item.Name + " (not in the saved project with all its texts)"));
                     continue;
                 }
                 string folder = (Path.GetDirectoryName(file.Include) ?? "").Replace(Path.DirectorySeparatorChar, '/');
                 if (!string.Equals(folder, item.Folder ?? "", StringComparison.OrdinalIgnoreCase))
-                    missing.Add(item.Name + " (in '" + folder + "', expected '" + item.Folder + "')");
+                    missing.Add(new Miss(item, item.Name + " (in '" + folder + "', expected '" + item.Folder + "')"));
             }
             return missing;
+        }
+
+        /// <summary>An imported object that the saved project does not hold as planned, and why.</summary>
+        public sealed class Miss
+        {
+            public Miss(Item item, string text) { Item = item; Text = text; }
+            public Item Item { get; }
+            public string Text { get; }
         }
     }
 }

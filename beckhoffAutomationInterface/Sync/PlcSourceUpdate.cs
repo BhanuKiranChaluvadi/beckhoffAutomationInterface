@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using static BeckhoffAutomationInterface.Clock;
 using static BeckhoffAutomationInterface.ComInterop;
 using static BeckhoffAutomationInterface.ConsoleReport;
@@ -86,9 +87,13 @@ namespace BeckhoffAutomationInterface.Sync
                 : new List<string>();
 
             Console.WriteLine("{0}: Syncing {1} PLC object(s)...", Now(), desiredPous.Count);
-            // An object unchanged in the sync manifest is not read over COM.
             var syncEngine = new PouSyncEngine(_session.SysManager, _options.ProjectRootPath);
-            SyncReport syncReport = syncEngine.Sync(desiredPous, skip);
+            PlcObjectFileStore store = useManifest ? OpenStore() : null;
+            List<PlcObjectImport.Item> imported = store == null ? new List<PlcObjectImport.Item>() : ImportStored(store, syncEngine, desiredPous, skip);
+            var importedNames = new HashSet<string>(imported.Select(i => i.Name), PlcSourceObject.Names);
+            // An object unchanged in the sync manifest is not read over COM; an imported one is proven already.
+            SyncReport syncReport = syncEngine.Sync(desiredPous.Where(s => !importedNames.Contains(s.OwnerName ?? s.Name)).ToList(), skip);
+            syncReport.Created.AddRange(imported.Select(i => i.Folder.Length > 0 ? i.Folder + "/" + i.Name : i.Name));
             syncReport.Deleted.AddRange(deletedObjects);
 
             PrintLines("+ created  ", syncReport.Created);
@@ -101,9 +106,67 @@ namespace BeckhoffAutomationInterface.Sync
                 useManifest ? string.Format(", of which {0} not read: unchanged in the sync manifest", syncReport.Skipped) : "");
             if (useManifest)
                 RecordSyncManifest(desiredPous);
+            if (store != null)
+                StoreSavedFiles(store, desiredPous);
 
             // Record the known-names drift baseline (see the [drift] warning block above).
             KnownNamesTracker.Write(_options.KnownNamesPath, currentNames);
+        }
+
+        /// <summary>The shared object files for the TwinCAT version that saved this project; null
+        /// when the project names none (then nothing is imported or stored).</summary>
+        PlcObjectFileStore OpenStore()
+        {
+            string twinCat = PlcObjectFileStore.ProjectTwinCatVersion(_options.TsprojFilePath);
+            return twinCat == null ? null : new PlcObjectFileStore(PlcObjectFileStore.DefaultRoot, twinCat, SyncManifest.CurrentBai);
+        }
+
+        /// <summary>Imports the stored files of the objects the project lacks (PlcObjectImport),
+        /// then saves the project and proves each object is in its folder with all its texts.
+        /// Throws, naming the objects, when XAE did not keep one.</summary>
+        List<PlcObjectImport.Item> ImportStored(PlcObjectFileStore store, PouSyncEngine engine, List<StPouSource> desired, List<string> skip)
+        {
+            var none = new List<PlcObjectImport.Item>();
+            var noFiles = new Dictionary<string, string>();
+            if (PlcObjectImport.Plan(desired, skip, noFiles, store.Find).Count == 0)
+                return none;
+            _session.Project.Save(); // the .plcproj on disk must name every object the project has
+            Dictionary<string, string> projectFiles = SyncManifest.ReadProjectFiles(_options.PlcprojFilePath);
+            if (projectFiles == null)
+                return none;
+            List<PlcObjectImport.Item> plan = PlcObjectImport.Plan(desired, skip, projectFiles, store.Find);
+            if (plan.Count == 0)
+                return none;
+            Console.WriteLine("{0}: Importing {1} PLC object(s) from shared object files ({2})...", Now(), plan.Count, PlcObjectFileStore.DefaultRoot);
+            engine.Import(plan);
+            _session.Project.Save();
+            List<PlcObjectImport.Miss> missing = PlcObjectImport.Missing(plan, SyncManifest.SavedFiles(plan.SelectMany(i => i.Group), _options.PlcprojFilePath));
+            if (missing.Count > 0)
+            {
+                foreach (PlcObjectImport.Miss miss in missing)
+                    store.Remove(miss.Item.Group);
+                throw new InvalidOperationException(string.Format(
+                    "XAE did not keep {0} of {1} imported PLC object(s) as their source says. Their shared files are removed;" +
+                    " the next build of this project makes them over COM:\n    {2}",
+                    missing.Count, plan.Count, string.Join("\n    ", missing.Select(m => m.Text))));
+            }
+            Console.WriteLine("{0}: Import complete: {1} object(s) in their folders with all their texts.", Now(), plan.Count);
+            return plan;
+        }
+
+        /// <summary>After the save: keeps each object file that holds its texts for other projects.
+        /// A store that cannot be written only loses the reuse.</summary>
+        void StoreSavedFiles(PlcObjectFileStore store, List<StPouSource> desired)
+        {
+            try
+            {
+                int stored = store.PutSaved(desired, _options.PlcprojFilePath);
+                Console.WriteLine("{0}: Shared object files: {1} of {2} object(s) stored.", Now(), stored, SyncManifest.Groups(desired).Count);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                Console.WriteLine("{0}: WARNING: shared object files not stored ({1}); other projects build these objects over COM.", Now(), ex.Message);
+            }
         }
 
         /// <summary>After the code sync saved the project: records each object whose file the

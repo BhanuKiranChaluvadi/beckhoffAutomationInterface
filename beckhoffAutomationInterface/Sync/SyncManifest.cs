@@ -185,7 +185,7 @@ namespace BeckhoffAutomationInterface.Sync
             }
         }
 
-        static Dictionary<string, string> ReadProjectFiles(string plcprojPath)
+        internal static Dictionary<string, string> ReadProjectFiles(string plcprojPath)
         {
             try
             {
