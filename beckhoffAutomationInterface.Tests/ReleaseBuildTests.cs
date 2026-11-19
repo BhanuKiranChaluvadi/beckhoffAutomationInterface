@@ -178,28 +178,25 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.False((bool)record["deploymentApproved"]);
             Assert.Equal("Tag", record["sourceMode"]);
             Assert.Equal("v-test", record["sourceTag"]);
-            Assert.Equal(Hash(Path.Combine(bundle, "source.zip")).ToUpperInvariant(), record["sourceArchiveSha256"]);
+            // The source is identified by the hash of the git archive of the commit; the archive file is not kept.
+            string expectedSource = Path.Combine(scratch, "expected-source.zip");
+            Git("archive", "--format=zip", "--output=" + expectedSource, "v-test");
+            Assert.Equal(Hash(expectedSource).ToUpperInvariant(), record["sourceArchiveSha256"]);
             var project = First(record["projects"]);
             Assert.Equal("Vendor/Library/1.2.3.4/Library.compiled-library", First(project["libraryCache"])["path"]);
             Assert.Equal(Platform, project["targetPlatform"]);
             Assert.Equal(2, Array(record, "baiFiles").Length);
             Assert.Equal(new[] { "system/device.xml", "user/vendor.xml" }, Array(record, "installedEsiFiles").Select(f => (string)Object(f)["path"]));
-            Assert.False(Directory.Exists(Path.Combine(bundle, "esi")));
-            string esiArchive = Path.Combine(bundle, "esi.zip");
-            Assert.Equal(Hash(esiArchive).ToUpperInvariant(), record["esiArchiveSha256"]);
-            using (var catalog = ZipFile.OpenRead(esiArchive))
-            {
-                Assert.Equal(2, catalog.Entries.Count);
-                foreach (var file in Array(record, "installedEsiFiles").Select(Object))
-                {
-                    var entry = catalog.GetEntry(Text(file, "path"));
-                    Assert.NotNull(entry);
-                    Assert.Equal(Number(file, "bytes"), entry.Length);
-                    using (var content = entry.Open()) Assert.Equal(Text(file, "sha256"), Hash(content).ToUpperInvariant());
-                }
-            }
-            Assert.Equal(Hash(LockFile), Hash(Path.Combine(bundle, "libraries.lock.json")));
+            // No ESI archive: the inventory (path, bytes, SHA-256 per file) is the evidence.
+            Assert.False(record.ContainsKey("esiArchiveSha256"));
+            Assert.Equal(Hash(Path.Combine(Esi, "device.xml")).ToUpperInvariant(), Text(First(record["installedEsiFiles"]), "sha256").ToUpperInvariant());
             Assert.Equal(Hash(LockFile).ToUpperInvariant(), record["libraryLockSha256"]);
+            // After success the bundle keeps the record, the packages and the build logs only.
+            var kept = Directory.GetFiles(bundle, "*", SearchOption.AllDirectories)
+                .Select(f => f.Substring(bundle.Length + 1).Replace(Path.DirectorySeparatorChar, '/')).OrderBy(f => f, StringComparer.Ordinal).ToList();
+            Assert.Equal(new[] { "packages/M1.zip", "packages/M1.zip.sha256", "release.json" }, kept.Where(f => !f.EndsWith(".log")).ToArray());
+            Assert.Contains(kept, f => f.StartsWith("build/") && f.EndsWith("M1.log"));
+            Assert.All(kept.Where(f => f.EndsWith(".log")), f => Assert.StartsWith("build/", f));
             Assert.Equal(16, Array(project, "artifacts").Length);
 
             var package = First(record["packages"]);
@@ -238,33 +235,44 @@ namespace BeckhoffAutomationInterface.Tests
                 Assert.True(archive.GetEntry("evidence.json").Length < 8 * 1024, "evidence.json stays small");
             }
 
-            // A package cannot include its own staging folder.
-            var layout = new MachineLayout(MachineManifest.Load(Path.Combine(bundle, "source", MachineManifest.FileName)), "M1", false, Path.Combine(bundle, "build"));
-            Assert.Throws<InvalidOperationException>(() => ReleaseBuilder.Package(layout, project, record, Path.Combine(layout.Dir, "M1", "nested-package")));
-            // The cache must satisfy the manifest: a missing library, or a pinned version that differs.
-            foreach (string requirement in new[] { "Name='Missing' Version='*'", "Name='Library' Version='9.0.0.0'" })
-            {
-                File.WriteAllText(Path.Combine(layout.Src, "libraries.xml"), "<Libraries><Library Company='Vendor' " + requirement + "/></Libraries>");
-                Assert.Contains("does not satisfy manifest", Assert.Throws<InvalidDataException>(() => ReleaseBuilder.ProjectEvidence(layout, Version, Platform)).Message);
-            }
             Assert.Throws<IOException>(() => Release(Request("success")));
         }
 
         [Fact]
-        public void EsiArchiveKeepsDifferentFilesWithTheSameNameInBothScopes()
+        public void PackageAndProjectEvidenceRefuseBadInputsWhileTheProjectExists()
+        {
+            bool checkedInBuild = false;
+            ReleaseBuilder.Build(Request("checks"), (a, manifestFile, work, d, e, f, g) =>
+            {
+                int code = FakeCompile(a, manifestFile, work, d, e, f, g);
+                var layout = new MachineLayout(MachineManifest.Load(manifestFile), "M1", false, work);
+                var project = ReleaseBuilder.ProjectEvidence(layout, Version, Platform);
+                // A package cannot include its own staging folder.
+                Assert.Throws<InvalidOperationException>(() => ReleaseBuilder.Package(layout, project, new Dictionary<string, object>(), Path.Combine(layout.Dir, "M1", "nested-package")));
+                // The cache must satisfy the manifest: a missing library, or a pinned version that differs.
+                string libraries = Path.Combine(layout.Src, "libraries.xml"), original = File.ReadAllText(libraries);
+                foreach (string requirement in new[] { "Name='Missing' Version='*'", "Name='Library' Version='9.0.0.0'" })
+                {
+                    File.WriteAllText(libraries, "<Libraries><Library Company='Vendor' " + requirement + "/></Libraries>");
+                    Assert.Contains("does not satisfy manifest", Assert.Throws<InvalidDataException>(() => ReleaseBuilder.ProjectEvidence(layout, Version, Platform)).Message);
+                }
+                File.WriteAllText(libraries, original);
+                checkedInBuild = true;
+                return code;
+            });
+            Assert.True(checkedInBuild);
+        }
+
+        [Fact]
+        public void EsiInventoryKeepsDifferentFilesWithTheSameNameInBothScopes()
         {
             Write(Path.Combine(Esi, "vendor.xml"), new string('x', 1024 * 1024));
             var record = Release(Request("esi-scopes"));
-            using (var archive = ZipFile.OpenRead(Path.Combine(Bundle("esi-scopes"), "esi.zip")))
-            {
-                Assert.Equal(3, archive.Entries.Count);
-                using (var content = archive.GetEntry("system/vendor.xml").Open())
-                    Assert.Equal(Hash(Path.Combine(Esi, "vendor.xml")), Hash(content));
-                using (var content = archive.GetEntry("user/vendor.xml").Open())
-                    Assert.Equal(Hash(Path.Combine(UserEsi, "vendor.xml")), Hash(content));
-            }
-            Assert.True(new FileInfo(Path.Combine(Bundle("esi-scopes"), "esi.zip")).Length < 32 * 1024);
-            Assert.False(Directory.Exists(Path.Combine(Bundle("esi-scopes"), "esi")));
+            var files = Array(record, "installedEsiFiles").Select(Object).ToDictionary(f => Text(f, "path"), f => Text(f, "sha256").ToUpperInvariant());
+            Assert.Equal(3, files.Count);
+            Assert.Equal(Hash(Path.Combine(Esi, "vendor.xml")).ToUpperInvariant(), files["system/vendor.xml"]);
+            Assert.Equal(Hash(Path.Combine(UserEsi, "vendor.xml")).ToUpperInvariant(), files["user/vendor.xml"]);
+            Assert.False(File.Exists(Path.Combine(Bundle("esi-scopes"), "esi.zip")));
         }
 
         [Fact]
@@ -365,6 +373,8 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.ThrowsAny<Exception>(() => Release(Request("fail-" + defect), defect));
             var failed = Read(Path.Combine(Bundle("fail-" + defect), "release.json"));
             Assert.Equal("Failed", failed["status"]);
+            // A failed build keeps everything for the diagnosis.
+            Assert.True(Directory.Exists(Path.Combine(Bundle("fail-" + defect), "source")), "source kept");
             Assert.Matches(reason, Text(failed, "error"));
         }
 
@@ -454,13 +464,23 @@ namespace BeckhoffAutomationInterface.Tests
             repo.Write("Lib/new-file.txt", "untracked");
             File.Delete(repo.Path_("Tools/fixture.txt"));
             repo.Write("Tools/other.txt", "keeps the area");
-            var record = Release(Request("worktree", tag: null, workingTree: true));
+            bool overlaid = false;
+            var record = ReleaseBuilder.Build(Request("worktree", tag: null, workingTree: true), (a, manifestFile, work, d, e, f, g) =>
+            {
+                // The snapshot that the compile step builds: HEAD plus the working tree.
+                string source = Path.GetDirectoryName(manifestFile);
+                Assert.Contains("uncommitted", File.ReadAllText(Path.Combine(source, @"Lib\Math\F_Add.st")));
+                Assert.True(File.Exists(Path.Combine(source, @"Lib\new-file.txt")));
+                Assert.False(File.Exists(Path.Combine(source, @"Tools\fixture.txt")));
+                overlaid = true;
+                return FakeCompile(a, manifestFile, work, d, e, f, g);
+            });
+            Assert.True(overlaid);
             string bundle = Bundle("worktree");
             Assert.Equal("WorkingTree", record["sourceMode"]);
             Assert.True((bool)record["sourceDirty"]);
-            Assert.Contains("uncommitted", File.ReadAllText(Path.Combine(bundle, @"source\Lib\Math\F_Add.st")));
-            Assert.True(File.Exists(Path.Combine(bundle, @"source\Lib\new-file.txt")));
-            Assert.False(File.Exists(Path.Combine(bundle, @"source\Tools\fixture.txt")));
+            // After the build, the bundle keeps what git cannot give: the uncommitted changes.
+            Assert.False(Directory.Exists(Path.Combine(bundle, "source")));
             Assert.Contains("uncommitted", File.ReadAllText(Path.Combine(bundle, "working-tree.patch")));
             Assert.Contains("Lib/new-file.txt", File.ReadAllText(Path.Combine(bundle, "working-tree-changes.txt")));
             Assert.Equal("DevelopmentValidation", PackageVerifier.Verify(Path.Combine(bundle, "packages", "M1.zip"))["kind"]);
@@ -477,12 +497,14 @@ namespace BeckhoffAutomationInterface.Tests
         [Fact]
         public void LockCapturesTheBuiltLibraries()
         {
-            Release(Request("for-lock"));
+            // The lock comes from a machine build (the work of bai.machines.json), not from a release bundle.
+            string work = Path.Combine(scratch, "machine-work");
+            Assert.Equal(0, FakeCompile(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(repo.ManifestFile)), "tool", "bai.exe"), repo.ManifestFile, work, new[] { "M1" }, Platform, "v-test", false));
             string output = Path.Combine(scratch, "captured.lock.json");
-            var result = ReleaseBuilder.Lock(Path.Combine(Bundle("for-lock"), "source", MachineManifest.FileName), Path.Combine(Bundle("for-lock"), "build"), new[] { "M1" }, Version, null, output);
+            var result = ReleaseBuilder.Lock(repo.ManifestFile, work, new[] { "M1" }, Version, null, output);
             string Sha(Dictionary<string, object> baseline) => Text(First(Object(Array(baseline, "machines")[0])["libraries"]), "sha256").ToUpperInvariant();
             Assert.Equal(Sha(LibraryBaseline.ReadLock(LockFile, Hash(LockFile))), Sha(LibraryBaseline.ReadLock(output, Text(result, "sha256"))));
-            Assert.Throws<IOException>(() => ReleaseBuilder.Lock(Path.Combine(Bundle("for-lock"), "source", MachineManifest.FileName), Path.Combine(Bundle("for-lock"), "build"), new[] { "M1" }, Version, null, output));
+            Assert.Throws<IOException>(() => ReleaseBuilder.Lock(repo.ManifestFile, work, new[] { "M1" }, Version, null, output));
         }
     }
 }

@@ -34,11 +34,13 @@ namespace BeckhoffAutomationInterface.Release
     /// Source: --tag (the tag must name HEAD), HEAD (version = git describe; HEAD must be pushed),
     /// or --include-uncommitted (HEAD plus uncommitted and untracked files of the build inputs: a
     /// DevelopmentValidation package for a UmRT rehearsal, never for a machine). Without
-    /// --include-uncommitted the repository must be clean. Never activates a runtime. The bundle has
-    /// source.zip, a detached checkout, a private BAI copy, the generated projects and logs, the
-    /// installed ESI catalog in esi.zip, release.json and verified packages (compiled boot files and a
-    /// separate service solution archive). Resolved libraries must match the hashed lock, and
-    /// the TwinCAT/XAE archive must match the installed files before and after the build.
+    /// --include-uncommitted the repository must be clean. Never activates a runtime. The build uses a
+    /// detached checkout and a private BAI copy in the bundle; release.json records the hashes of the
+    /// source archive, bai, the installed ESI files and the library lock. After a passed build the
+    /// bundle keeps release.json, the verified packages (compiled boot files and a separate service
+    /// solution archive) and the build logs (Tidy); a failed build keeps everything. Resolved
+    /// libraries must match the hashed lock, and the TwinCAT/XAE archive must match the installed
+    /// files before and after the build.
     /// It does not prove hardware readiness or prepare a machine rollback backup.
     /// </summary>
     internal static class ReleaseBuilder
@@ -195,23 +197,25 @@ namespace BeckhoffAutomationInterface.Release
             }
         }
 
-        static string ArchiveEsi(List<(string Key, string Path)> roots, List<Dictionary<string, object>> expected, string output)
+        /// <summary>After a passed build the bundle keeps release.json, the packages, the build logs and
+        /// (development package) the working-tree record. The build inputs go: release.json identifies
+        /// them by hash (source archive, bai, ESI inventory, library lock, toolchain), and git, the bai
+        /// pin and the TwinCAT install hold them.</summary>
+        internal static void Tidy(string bundle)
         {
-            using (var stream = new FileStream(output, FileMode.CreateNew))
-            using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
-                foreach (var root in roots)
-                    foreach (var file in expected.Where(f => Text(f, "path").StartsWith(root.Key + "/", StringComparison.Ordinal)))
-                    {
-                        string name = Text(file, "path");
-                        ArtifactArchives.CopyEntry(zip, name, Path.Combine(root.Path, name.Substring(root.Key.Length + 1)), file);
-                    }
-            using (var zip = ZipFile.OpenRead(output))
-                SameFiles(expected, PackageVerifier.Entries(zip).Select(file =>
-                {
-                    using (var content = file.Value.Open()) return new Dictionary<string, object>
-                        { ["path"] = file.Key, ["bytes"] = file.Value.Length, ["sha256"] = Hash(content) };
-                }), "Retained ESI files");
-            return Hash(output).ToUpperInvariant();
+            foreach (string folder in new[] { "source", "tool" }.Select(f => Path.Combine(bundle, f)).Where(Directory.Exists))
+                BuildLocation.Delete(folder);
+            foreach (string file in new[] { "source.zip", "toolchain.zip", "libraries.lock.json" }.Select(f => Path.Combine(bundle, f)).Where(File.Exists))
+                File.Delete(file);
+            string build = Path.Combine(bundle, "build");
+            if (!Directory.Exists(build)) return;
+            foreach (string file in Directory.GetFiles(build, "*", SearchOption.AllDirectories).Where(f => !f.EndsWith(".log", StringComparison.OrdinalIgnoreCase)))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+                File.Delete(file);
+            }
+            foreach (string folder in Directory.GetDirectories(build, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+                if (!Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);
         }
 
         static readonly string[] Inventories = { "sourceInputs", "baiFiles", "installedEsiFiles" };
@@ -439,7 +443,6 @@ namespace BeckhoffAutomationInterface.Release
                 record["sourceInputs"] = sourceBefore;
                 record["baiFiles"] = toolBefore;
                 record["installedEsiFiles"] = esiBefore;
-                record["esiArchiveSha256"] = ArchiveEsi(esiRoots, esiBefore, Path.Combine(bundle, "esi.zip"));
                 Save();
 
                 string work = Path.Combine(bundle, "build"), snapshotManifest = Path.Combine(snapshot, MachineManifest.FileName);
@@ -460,6 +463,9 @@ namespace BeckhoffAutomationInterface.Release
                 record["packages"] = layouts.Select((l, i) => Package(l, projects[i], record, Path.Combine(bundle, "packages"))).ToList();
                 record["completedUtc"] = DateTime.UtcNow.ToString("o");
                 Save();
+                try { Tidy(bundle); }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                { Console.WriteLine("WARNING: the release passed, but the build inputs could not all be removed from {0}: {1}", bundle, ex.Message); }
                 Console.WriteLine("{0}: {1} built; evidence: {2}. Deployment checks remain open.", Now(),
                     dirty ? "Development package (uncommitted source; UmRT rehearsal only)" : "Release candidate " + version, recordPath);
                 return record;
