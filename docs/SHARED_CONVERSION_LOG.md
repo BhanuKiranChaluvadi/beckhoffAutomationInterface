@@ -110,3 +110,23 @@ Pending acceptance (only when authorized): run the conversion regressions and a 
   a bad file, accept a sub-folder node, copy or link the file?
 - crapper/dryer do not support C# (checked 2026-11-18); mutator not run (it runs tests on XAE).
 - Proof: 1251 xUnit tests pass (19 new). No XAE build ran.
+
+## 2026-11-19: XAE spike (owner go; builds only, no UmRT)
+
+bai d1b5643, dev PC (TwinCAT 4026.24), own work folder and store, `machine build --fresh --simulation`.
+
+| Build | Code sync | Total | Result |
+|---|---|---|---|
+| 1 Google, empty store (all COM) | 12:53 (2026 created) | 16:53 | PASS, 193/193 links, 546/546 stored |
+| 2 NFPro, Lib from the store | 2:51 (478 imported in 46 s) | 6:36 | PASS, 436/436 links, 536/536 stored |
+| 3 Google, everything from the store | 1:50 (544 imported in 52 s) | 5:52 | PASS, 193/193 links |
+
+- Subtype 58 brings METHODs and PROPERTYs with the .TcPOU (proof: every imported object holds all
+  its texts), accepts a sub-folder node (proof: every object in its folder), and copies the file
+  into the project (no .plcproj entry outside the project folder).
+- Not tested: the error for a bad file (the store never offers one: it checks every text first).
+- Finding: in build 3 the COM create of MAIN took 54 s: it collides with the template's MAIN and
+  FindDescendantByName walks the whole tree (about 2500 items after the import). A direct lookup of
+  POUs^MAIN would save about 55 s per fresh build.
+- Not run: activation and scenarios (UmRT); the texts are proven equal to the source and the
+  compile passed.
