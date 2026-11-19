@@ -105,6 +105,13 @@ namespace BeckhoffAutomationInterface.Sync
             return true;
         }
 
+        /// <summary>The text of an object file as XAE saves it (UTF-8, with or without a byte order mark).</summary>
+        internal static string FileText(byte[] bytes)
+        {
+            using (var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+                return reader.ReadToEnd();
+        }
+
         static bool HasSection(string file, string text)
         {
             if (text.Length == 0)
@@ -153,10 +160,7 @@ namespace BeckhoffAutomationInterface.Sync
                 byte[] bytes = ReadObjectFile(plcprojPath, files, g.Value[0]);
                 if (bytes == null)
                     continue;
-                string text;
-                using (var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
-                    text = reader.ReadToEnd();
-                if (FileHoldsTexts(text, g.Value))
+                if (FileHoldsTexts(FileText(bytes), g.Value))
                     manifest.Entries[g.Key] = new Entry(SourceHash(g.Value), Sha256(bytes));
             }
             return manifest;
