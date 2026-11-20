@@ -31,7 +31,7 @@ transaction = root / 'transaction'
 package = root / 'candidate.zip'
 payload = {'boot/CurrentConfig.xml': b'<TcBootProject Platform=""TwinCAT OS (x64)""/>',
            'boot/CurrentProjectInfo.json': b'{}', 'identity.expect.json': b'{}',
-           'project.zip': b'fixture', 'evidence.json': b'{}'}
+           'project.zip': b'fixture', 'evidence.json': b'{}', 'README.md': b'roles'}
 for name in ('Port_851.app', 'Port_851.crc', 'Port_851.autostart', 'Port_851_boot.tizip', 'Port_851.tmc'):
     payload['boot/Plc/' + name] = b'new fixture ' + name.encode()
 SCHEMA = 3

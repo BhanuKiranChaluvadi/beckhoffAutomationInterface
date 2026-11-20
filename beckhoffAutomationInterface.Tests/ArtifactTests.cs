@@ -151,6 +151,39 @@ namespace BeckhoffAutomationInterface.Tests
             Assert.Throws<IOException>(() => ArtifactArchives.CreatePackage(payload, metadataPath, output));
             Assert.Throws<IOException>(() => ArtifactArchives.CreatePackage(payload, metadataPath, Path.Combine(payload, "bad.zip")));
         }
+        /// <summary>The package says what each part is for (README.md, written by BAI from the package
+        /// record); it is a listed file, so verify checks it like the others.</summary>
+        [Fact]
+        public void PackageCreationWritesTheReadmeOfThePartsFromTheRecord()
+        {
+            // The repack of a built package: its payload without release.json, its record without files.
+            string payload = Path.Combine(root, "payload"); ZipFile.ExtractToDirectory(Package(schema: 3), payload);
+            File.Delete(Path.Combine(payload, "release.json"));
+            string metadata = Write("metadata.json", "{\"schemaVersion\":3,\"status\":\"Packaged\",\"kind\":\"ReleaseCandidate\",\"deploymentApproved\":false,"
+                + "\"machine\":\"UVM\",\"sourceTag\":\"v2.1.0\",\"sourceCommit\":\"7a9daef93814039f07f47c6bc920bb887e43abe0\"}");
+            string output = Path.Combine(root, "UVM.zip");
+            var record = ArtifactArchives.CreatePackage(payload, metadata, output);
+            var manifest = PackageVerifier.Verify(output, Text(record, "sha256"));
+            Assert.Contains(Array(manifest, "files").Select(Object), f => Text(f, "path") == "README.md");
+            string readme;
+            using (var zip = ZipFile.OpenRead(output))
+            using (var reader = new StreamReader(zip.GetEntry("README.md").Open())) readme = reader.ReadToEnd();
+            Assert.Contains("UVM", readme);
+            Assert.Contains("v2.1.0", readme);
+            Assert.Contains("7a9daef93814039f07f47c6bc920bb887e43abe0", readme);
+            foreach (string part in new[] { "`boot/`", "`identity.expect.json`", "`project.zip`", "`evidence.json`", "`release.json`" })
+                Assert.Contains(part, readme);
+            Assert.Contains("not a deployment approval", readme);
+            Assert.False(File.Exists(Path.Combine(root, "payload", "README.md")), "the payload folder is not changed");
+        }
+        [Fact]
+        public void PackageCreationRefusesAReadmeInThePayload()
+        {
+            Write("payload/README.md", "own text");
+            string metadata = Write("metadata.json", "{\"schemaVersion\":3,\"status\":\"Packaged\",\"kind\":\"ReleaseCandidate\",\"deploymentApproved\":false}");
+            Assert.Contains("README.md", Assert.Throws<InvalidDataException>(() =>
+                ArtifactArchives.CreatePackage(Path.Combine(root, "payload"), metadata, Path.Combine(root, "readme.zip"))).Message);
+        }
         [Fact]
         public void FailedPackageCreationDoesNotPublishAnArchive()
         {

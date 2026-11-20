@@ -205,7 +205,7 @@ namespace BeckhoffAutomationInterface.Tests
             var manifest = PackageVerifier.Verify(zip, Text(package, "sha256"));
             Assert.Equal("ReleaseCandidate", manifest["kind"]);
             Assert.Equal(3, manifest["schemaVersion"]);
-            Assert.Equal(10, Array(manifest, "files").Length);
+            Assert.Equal(11, Array(manifest, "files").Length);   // with README.md
             Assert.Equal("0x1234", First(manifest["safety"])["projectCrc"]);
             Assert.Equal("42", First(manifest["safety"])["serialNumber"]);
             using (var archive = ZipFile.OpenRead(zip))

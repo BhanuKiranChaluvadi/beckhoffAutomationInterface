@@ -33,13 +33,45 @@ namespace BeckhoffAutomationInterface.Release
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             return output + "." + Guid.NewGuid().ToString("N") + ".partial";
         }
+        internal const string ReadmeName = "README.md";
+
+        static string ReadmeField(Dictionary<string, object> metadata, string key) =>
+            metadata.TryGetValue(key, out object value) && value is string text && text.Length > 0 ? text : "-";
+
+        /// <summary>What each part of a machine package is for, from its record (release.json without
+        /// the file list). BAI writes it into every package; a payload must not bring its own.</summary>
+        internal static string PackageReadme(Dictionary<string, object> metadata) => string.Join("\n", new[]
+        {
+            "# Machine package " + ReadmeField(metadata, "machine") + " " + ReadmeField(metadata, "sourceTag"),
+            "",
+            "Commit " + ReadmeField(metadata, "sourceCommit") + ". Kind: " + ReadmeField(metadata, "kind") + ".",
+            "This package is not a deployment approval: the machine checks and the acceptance remain.",
+            "",
+            "| Part | What it is | Who uses it | Copy to the IPC |",
+            "|---|---|---|---|",
+            "| `boot/` | The compiled PLC program and I/O configuration. TwinCAT starts it. | `bai package install` | Yes: into the TwinCAT Boot folder |",
+            "| `identity.expect.json` | The values that the running PLC must show after the install (tag, commit, machine). | `bai package install`, `bai verify` | No |",
+            "| `project.zip` | The XAE service solution: open the .sln to log in, watch values and debug. The baseline of `bai package drift`. | Service | No: a service PC |",
+            "| `evidence.json` | The build record: tools, inputs and checks, as SHA-256 values. | Audit | No |",
+            "| `release.json` | This package: machine, commit, PLC and safety CRCs, the SHA-256 of every file. | `bai package verify` | No |",
+            "| `" + ReadmeName + "` | This file. | People | No |",
+            "",
+            "Check the package before use: `bai package verify --package <file>.zip --sha256 <hash from <file>.zip.sha256>`.",
+            "",
+        });
+
         internal static Dictionary<string, object> CreatePackage(string directory, string metadataFile, string output)
         {
             var metadata = Read(metadataFile);
             // Release policy remains with the caller. BAI owns packaging/integrity and never grants deployment approval.
             if (metadata.ContainsKey("files")) throw new InvalidDataException("Metadata must not supply an inventory; BAI captures it.");
-            var files = Inventory(directory);
-            if (files.ContainsKey("release.json")) throw new InvalidDataException("Payload must not contain release.json.");
+            var payload = Inventory(directory);
+            if (payload.ContainsKey("release.json")) throw new InvalidDataException("Payload must not contain release.json.");
+            if (payload.ContainsKey(ReadmeName)) throw new InvalidDataException("Payload must not contain " + ReadmeName + "; BAI writes it from the package record.");
+            byte[] readme = new UTF8Encoding(false).GetBytes(PackageReadme(metadata));
+            var files = new Dictionary<string, Dictionary<string, object>>(payload, Names);
+            using (var content = new MemoryStream(readme))
+                files[ReadmeName] = new Dictionary<string, object> { ["path"] = ReadmeName, ["bytes"] = (long)readme.Length, ["sha256"] = Hash(content) };
             metadata["files"] = files.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Value).ToArray();
             string temporary = Temporary(output, directory);
             try
@@ -47,10 +79,13 @@ namespace BeckhoffAutomationInterface.Release
                 using (var stream = new FileStream(temporary, FileMode.CreateNew))
                 using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
                 {
-                    foreach (var file in files.OrderBy(p => p.Key, StringComparer.Ordinal)) CopyEntry(zip, file.Key, Path.Combine(directory, file.Key), file.Value);
+                    foreach (var file in files.OrderBy(p => p.Key, StringComparer.Ordinal))
+                        if (file.Key == ReadmeName)
+                            using (var entry = zip.CreateEntry(ReadmeName, CompressionLevel.Fastest).Open()) entry.Write(readme, 0, readme.Length);
+                        else CopyEntry(zip, file.Key, Path.Combine(directory, file.Key), file.Value);
                     WriteEntry(zip, "release.json", metadata);
                 }
-                Same(files, Inventory(directory));
+                Same(payload, Inventory(directory));
                 PackageVerifier.Verify(temporary);
                 string hash = Hash(temporary);
                 File.Move(temporary, output);

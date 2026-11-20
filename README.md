@@ -586,7 +586,7 @@ bai esi install|verify --system-esi <folder> --required-esi <folder> --user-esi 
 
 | Command | What it does |
 |---|---|
-| `package create` | Makes a PLC package ZIP from a payload folder (`boot\`, `project.zip`, `evidence.json`, and `identity.expect.json` for schema 2 and 3). The metadata JSON has the package fields but no `files` field. `status` must be `Packaged` and `deploymentApproved` must be false. The tool writes the inventory and `release.json`, then verifies the package. |
+| `package create` | Makes a PLC package ZIP from a payload folder (`boot\`, `project.zip`, `evidence.json`, and `identity.expect.json` for schema 2 and 3). BAI also writes `README.md` into the package: the role of each part, from the metadata (machine, tag, commit, kind); the payload must not contain one. The metadata JSON has the package fields but no `files` field. `status` must be `Packaged` and `deploymentApproved` must be false. The tool writes the inventory and `release.json`, then verifies the package. |
 | `package verify` | Checks a schema 1, 2 or 3 package (3: compact `evidence.json`): the inventory, sizes, SHA256 hashes, boot files and identity data. It refuses unlisted files, duplicate names, links and unsafe paths. Without `--sha256`, it checks only the internal integrity. A pass is not a deployment approval. |
 | `libraries lock` | Reads the compiled TMC (platform and variant) and records all `_Libraries` files, also the dependencies, in a new lock file. The project must have one PLC. Omit `--variant` for a project with no variants. `--library-list` also checks the names and versions of `libraries.xml`. |
 | `libraries verify` | Compares the project with an approved lock file. Never make an approved lock file again only to pass a check. |
