@@ -28,6 +28,10 @@ namespace BeckhoffAutomationInterface.Sync
         /// log — shows which conditional-compilation branch was compiled.</summary>
         public List<string> PragmaMessages { get; } = new List<string>();
 
+        /// <summary>TwinCAT's count line of the Build pane ("Build complete -- 0 errors,
+        /// 3 warnings : ..."); null when the pane has none.</summary>
+        public string Summary { get; set; }
+
         /// <summary>A failed build with no error: the last lines of the Build output pane. The
         /// cause is then outside the PLC code (I/O, task or safety configuration).</summary>
         public List<string> OutputTail { get; } = new List<string>();
@@ -136,6 +140,10 @@ namespace BeckhoffAutomationInterface.Sync
 
             string paneText = ReadBuildOutputPane(dte);
             report.PragmaMessages.AddRange(BuildOutputParser.ParsePragmaMessages(paneText));
+            report.Summary = BuildOutputParser.ParseSummary(paneText);
+            List<BuildError> warnings = ChooseWarnings(new List<BuildError>(report.Warnings), BuildOutputParser.ParseWarnings(paneText));
+            report.Warnings.Clear();
+            report.Warnings.AddRange(warnings);
 
             if (ShouldUseOutputPane(report))
             {
@@ -157,6 +165,12 @@ namespace BeckhoffAutomationInterface.Sync
             List<string> lines = (text ?? "").Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Trim().Length > 0).ToList();
             return lines.Skip(Math.Max(0, lines.Count - count)).ToList();
         }
+
+        /// <summary>The Build pane's warnings when it has any: the pane holds every compiler
+        /// message, the DTE error list can be empty or blank when the XAE window is hidden.
+        /// Else the error list's warnings.</summary>
+        internal static List<BuildError> ChooseWarnings(List<BuildError> fromErrorList, List<BuildError> fromPane) =>
+            fromPane.Count > 0 ? fromPane : fromErrorList;
 
         /// <summary>A failed build whose error list has no usable text (empty, or only
         /// blank descriptions — seen when the XAE window is hidden) falls back to the

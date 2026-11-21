@@ -866,6 +866,8 @@ namespace BeckhoffAutomationInterface
                     e.FileName = _session.Shadow.ToOriginalPath(e.FileName);
             foreach (string message in buildReport.PragmaMessages)
                 Console.WriteLine("    [PLC MESSAGE] {0}", message);
+            if (buildReport.Summary != null)
+                Console.WriteLine("    [TwinCAT] {0}", buildReport.Summary);
             result.Passed = buildReport.Success;
             result.ErrorCount = buildReport.Errors.Count;
 

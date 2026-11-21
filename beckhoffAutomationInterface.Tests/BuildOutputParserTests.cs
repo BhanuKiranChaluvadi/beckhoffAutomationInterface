@@ -85,5 +85,52 @@ namespace BeckhoffAutomationInterface.Tests
         {
             Assert.False(BuildRunner.ShouldUseOutputPane(new BuildReport { Succeeded = true }));
         }
+
+        const string PassedWithWarnings =
+            "------ Build started: Application: Unit.UnitPlc -------\r\n" +
+            @"C:\Unit\UnitPlc\POUs\FB_Writer.TcPOU(41) : warning: C0195: Implicit conversion from signed Type 'INT' to unsigned Type 'UDINT' : Possible change of sign" + "\r\n" +
+            @"C:\Unit\UnitPlc\POUs\MAIN.TcPOU(9) : warning: C0373: VARIANT CHECK: MachineA branch compiled" + "\r\n" +
+            @"C:\Unit\UnitPlc\POUs\F_Text.TcPOU(7) : warning: C0130: Lost information in conversion from 'LREAL' to 'REAL'" + "\r\n" +
+            "Build complete -- 0 errors, 3 warnings : Ready for download\r\n";
+
+        [Fact]
+        public void ParsesWarningLines_WithoutPragmaMessages()   // the error list can be empty when XAE is hidden
+        {
+            var warnings = BuildOutputParser.ParseWarnings(PassedWithWarnings);
+
+            Assert.Equal(2, warnings.Count);
+            Assert.Equal(@"C:\Unit\UnitPlc\POUs\FB_Writer.TcPOU", warnings[0].FileName);
+            Assert.Equal(41, warnings[0].Line);
+            Assert.StartsWith("C0195: Implicit conversion", warnings[0].Description);
+            Assert.Equal("Medium", warnings[0].Level);
+            Assert.Equal("C0130: Lost information in conversion from 'LREAL' to 'REAL'", warnings[1].Description);
+            Assert.DoesNotContain(warnings, w => w.Description.Contains("VARIANT CHECK"));
+        }
+
+        [Fact]
+        public void ParsesNoWarnings_FromErrorsOrEmptyText()
+        {
+            Assert.Empty(BuildOutputParser.ParseWarnings(null));
+            Assert.Empty(BuildOutputParser.ParseWarnings(RealOutput));   // its only warning is a pragma message
+        }
+
+        [Fact]
+        public void Summary_IsTheLastBuildCompleteLine()
+        {
+            Assert.Equal("Build complete -- 0 errors, 3 warnings : Ready for download", BuildOutputParser.ParseSummary(PassedWithWarnings));
+            Assert.Equal("Build complete -- 2 errors, 1 warnings : No download possible", BuildOutputParser.ParseSummary(RealOutput));
+            Assert.Null(BuildOutputParser.ParseSummary("Typify code...\r\n"));
+            Assert.Null(BuildOutputParser.ParseSummary(null));
+        }
+
+        [Fact]
+        public void PaneWarnings_ReplaceTheErrorList_WhenThePaneHasAny()
+        {
+            var fromList = new System.Collections.Generic.List<BuildError> { new BuildError { Description = "" } };
+            var fromPane = BuildOutputParser.ParseWarnings(PassedWithWarnings);
+
+            Assert.Same(fromPane, BuildRunner.ChooseWarnings(fromList, fromPane));
+            Assert.Same(fromList, BuildRunner.ChooseWarnings(fromList, new System.Collections.Generic.List<BuildError>()));
+        }
     }
 }

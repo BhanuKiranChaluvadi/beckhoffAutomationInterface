@@ -227,6 +227,10 @@ bai build <project> [--plc <name>] [--clean] [--variant <name> | --all-variants]
 - The tool builds a temporary copy of the project folder. Your project files do not change.
 - Each error shows the `.st` file and line. For a project without `.st` source, it shows the
   compiler text.
+- Each compiler warning (`[WARN]`) shows the `.st` file and line too. They come from the Build
+  output, which has every message also when the XAE window is hidden. `[TwinCAT]` shows
+  TwinCAT's own count line (`Build complete -- 0 errors, 0 warnings`). A warning does not fail
+  the build.
 - A build that does not finish in 15 minutes stops with `TIMEOUT`. The tool closes the shell.
 - Exit code 0 = `BUILD PASSED`. Exit code 1 = errors, a failed variant, or a timeout.
 
