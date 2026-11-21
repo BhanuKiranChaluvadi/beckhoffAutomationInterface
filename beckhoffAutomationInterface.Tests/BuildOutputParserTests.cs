@@ -124,12 +124,26 @@ namespace BeckhoffAutomationInterface.Tests
         }
 
         [Fact]
-        public void PaneWarnings_ReplaceTheErrorList_WhenThePaneHasAny()
+        public void PaneWarnings_ReplaceTheErrorList_WhenTheListMissesOrBlanksSome()   // hidden XAE window
         {
-            var fromList = new System.Collections.Generic.List<BuildError> { new BuildError { Description = "" } };
+            var blank = new System.Collections.Generic.List<BuildError> { new BuildError { Description = "" } };
             var fromPane = BuildOutputParser.ParseWarnings(PassedWithWarnings);
 
-            Assert.Same(fromPane, BuildRunner.ChooseWarnings(fromList, fromPane));
+            Assert.Same(fromPane, BuildRunner.ChooseWarnings(blank, fromPane));
+            Assert.Same(fromPane, BuildRunner.ChooseWarnings(new System.Collections.Generic.List<BuildError>(), fromPane));
+        }
+
+        [Fact]
+        public void ErrorListWarnings_AreKept_WhenTheyHaveAllTheText()   // their file names map to the .st line
+        {
+            var fromList = new System.Collections.Generic.List<BuildError>
+            {
+                new BuildError { Description = "C0195: a", FileName = "FB_Writer.TcPOU@_Put (Impl)", Line = 3 },
+                new BuildError { Description = "C0130: b", FileName = "F_Text.TcPOU (Impl)", Line = 7 },
+            };
+            var fromPane = BuildOutputParser.ParseWarnings(PassedWithWarnings);
+
+            Assert.Same(fromList, BuildRunner.ChooseWarnings(fromList, fromPane));
             Assert.Same(fromList, BuildRunner.ChooseWarnings(fromList, new System.Collections.Generic.List<BuildError>()));
         }
     }

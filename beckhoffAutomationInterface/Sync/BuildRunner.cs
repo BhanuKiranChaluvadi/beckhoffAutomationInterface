@@ -166,11 +166,13 @@ namespace BeckhoffAutomationInterface.Sync
             return lines.Skip(Math.Max(0, lines.Count - count)).ToList();
         }
 
-        /// <summary>The Build pane's warnings when it has any: the pane holds every compiler
-        /// message, the DTE error list can be empty or blank when the XAE window is hidden.
-        /// Else the error list's warnings.</summary>
+        /// <summary>The error list's warnings when it has all of them with text: its file names
+        /// carry the section ("MAIN.TcPOU (Impl)", "@Method") that maps a line to the .st
+        /// file. Else the Build pane's warnings: the pane has every compiler message, also
+        /// when the XAE window is hidden and the list is empty or blank, but its lines have
+        /// no section, so their .st line is only approximate.</summary>
         internal static List<BuildError> ChooseWarnings(List<BuildError> fromErrorList, List<BuildError> fromPane) =>
-            fromPane.Count > 0 ? fromPane : fromErrorList;
+            fromErrorList.Count(w => !string.IsNullOrWhiteSpace(w.Description)) >= fromPane.Count ? fromErrorList : fromPane;
 
         /// <summary>A failed build whose error list has no usable text (empty, or only
         /// blank descriptions — seen when the XAE window is hidden) falls back to the
