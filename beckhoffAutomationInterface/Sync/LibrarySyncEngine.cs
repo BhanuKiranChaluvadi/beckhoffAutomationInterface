@@ -115,7 +115,7 @@ namespace BeckhoffAutomationInterface.Sync
         {
             var report = new LibrarySyncReport();
 
-            var existing = new List<(string DisplayName, string Name, string Version, string Company, bool IsImplicit)>();
+            var existing = new List<(ITcPlcLibRef Ref, string DisplayName, string Name, string Version, string Company, bool IsImplicit)>();
             ITcPlcReferences references = libManager.References;
             // NOTE: unlike ITcSmTreeItem.Child (1-based), ITcPlcReferences is 0-based.
             for (int i = 0; i < references.Count; i++)
@@ -124,8 +124,8 @@ namespace BeckhoffAutomationInterface.Sync
                 string displayName = libRef.Name;
                 bool parsed = TryParseDisplayName(displayName, out string name, out string version, out string company, out bool isImplicit);
                 existing.Add(parsed
-                    ? (displayName, name, version, company, isImplicit)
-                    : (displayName, displayName, (string)null, (string)null, isImplicit));
+                    ? (libRef, displayName, name, version, company, isImplicit)
+                    : (libRef, displayName, displayName, (string)null, (string)null, isImplicit));
             }
 
             foreach (LibraryReference lib in desired)
@@ -163,12 +163,27 @@ namespace BeckhoffAutomationInterface.Sync
                 string key = $"{e.Name}|{e.Version}|{e.Company}";
                 if (!desiredKeys.Contains(key))
                 {
-                    libManager.RemoveReference(e.Name, e.Version, e.Company);
+                    Remove(libManager, e.Ref, e.Name, e.Version, e.Company);
                     report.Removed.Add(e.DisplayName);
                 }
             }
 
             return report;
+        }
+
+        /// <summary>Removes one reference the way TwinCAT knows it. LIVE FINDING (2026-11-21,
+        /// BeckhoffLib removed Tc3_JsonXml from a kept project): a "*" library is a
+        /// placeholder reference, and RemoveReference(name, "*", company) fails with
+        /// "Specified library ... not found!". A placeholder is removed by its placeholder
+        /// name alone; a fixed library by its own name, version and distributor.</summary>
+        static void Remove(ITcPlcLibraryManager libManager, ITcPlcLibRef libRef, string name, string version, string company)
+        {
+            if (libRef is ITcPlcPlaceholderRef placeholder)
+                libManager.RemoveReference(placeholder.PlaceholderName, "", "");
+            else if (libRef is ITcPlcLibrary library)
+                libManager.RemoveReference(name, library.Version, library.Distributor);
+            else
+                libManager.RemoveReference(name, version, company);
         }
     }
 }
